@@ -18,6 +18,9 @@ logger = logging.getLogger(__name__)
 # Initialize the OpenAI client
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
+# Optional: path to your cookies file (if required for age-restricted videos)
+COOKIES_FILE = os.environ.get("YOUTUBE_COOKIES")  # e.g., "/path/to/your/cookies.txt"
+
 # ----------------------------
 # Embedded HTML Templates
 # ----------------------------
@@ -288,10 +291,13 @@ def extract_video_id(url):
 def fetch_transcript(video_id, language="en"):
     """
     Retrieve the transcript using youtube_transcript_api by listing available transcripts
-    and selecting the auto-generated transcript if available.
+    and selecting the auto-generated transcript if available. If a cookies file is specified,
+    it is passed along to handle age-restricted or other protected videos.
     """
     try:
-        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+        # If a cookies file is provided, pass it to the API
+        cookies = COOKIES_FILE if COOKIES_FILE else None
+        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id, cookies=cookies)
         # Log available transcripts for debugging
         available = [(t.language, t.language_code, t.is_generated) for t in transcript_list]
         logger.debug("Available transcripts: %s", available)
@@ -371,7 +377,7 @@ def index():
             return redirect(url_for("index"))
         transcript = fetch_transcript(video_id)
         if not transcript:
-            flash("Could not retrieve transcript. Make sure the video has captions available.")
+            flash("Could not retrieve transcript. Make sure the video has captions available and check cookies if needed.")
             return redirect(url_for("index"))
         cards = get_anki_cards(transcript)
         if not cards:
