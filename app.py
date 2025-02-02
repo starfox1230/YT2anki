@@ -3,7 +3,7 @@ import re
 import json
 import logging
 from flask import Flask, request, redirect, url_for, flash, render_template_string
-from youtube_transcript_api import YouTubeTranscriptApi
+from pytube import YouTube
 
 # Updated OpenAI API import and initialization using the new formatting.
 from openai import OpenAI  # Ensure you have the correct version installed
@@ -17,9 +17,6 @@ logger = logging.getLogger(__name__)
 
 # Initialize the OpenAI client
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-
-# Optional: path to your cookies file (if required for age-restricted videos)
-COOKIES_FILE = os.environ.get("YOUTUBE_COOKIES")  # e.g., "/path/to/your/cookies.txt"
 
 # ----------------------------
 # Embedded HTML Templates
@@ -288,33 +285,48 @@ def extract_video_id(url):
         return match.group(1)
     return None
 
-def fetch_transcript(video_id, language="en"):
+def fetch_transcript(url, language="en"):
     """
-    Retrieve the transcript using youtube_transcript_api by listing available transcripts
-    and selecting the auto-generated transcript if available. If a cookies file is specified,
-    it is passed along to handle age-restricted or other protected videos.
+    Retrieve the transcript using pytube.
+    This function uses the YouTube object to get the caption track in SRT format,
+    then parses out the actual text (removing indices and timestamps).
     """
     try:
-        # If a cookies file is provided, pass it to the API
-        cookies = COOKIES_FILE if COOKIES_FILE else None
-        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id, cookies=cookies)
-        # Log available transcripts for debugging
-        available = [(t.language, t.language_code, t.is_generated) for t in transcript_list]
-        logger.debug("Available transcripts: %s", available)
+        yt = YouTube(url)
+        # Try to get the caption in the desired language
+        if language in yt.captions:
+            caption = yt.captions[language]
+        else:
+            # Fallback: use the first available caption track
+            if yt.captions:
+                caption = list(yt.captions.values())[0]
+            else:
+                logger.error("No captions available for this video.")
+                return None
 
-        # Try to select the auto-generated transcript first
-        try:
-            transcript_obj = transcript_list.find_generated_transcript([language])
-        except Exception as gen_err:
-            logger.debug("Generated transcript not found: %s", gen_err)
-            # Fallback: try to select any transcript (manual or generated)
-            transcript_obj = transcript_list.find_transcript([language])
-        transcript_data = transcript_obj.fetch()
-        transcript_text = " ".join([entry["text"] for entry in transcript_data])
+        srt_captions = caption.generate_srt_captions()
+        transcript_text = parse_srt(srt_captions)
         return transcript_text
     except Exception as e:
-        logger.error("Transcript error: %s", e)
+        logger.error("Error fetching transcript using pytube: %s", e)
         return None
+
+def parse_srt(srt_text):
+    """
+    Parse SRT captions and return a plain text transcript.
+    This function removes numeric indices and timestamp lines.
+    """
+    lines = srt_text.splitlines()
+    transcript_lines = []
+    timestamp_pattern = re.compile(r'\d{2}:\d{2}:\d{2},\d{3}')
+    for line in lines:
+        line = line.strip()
+        # Skip if the line is a number or a timestamp line
+        if line.isdigit() or timestamp_pattern.search(line):
+            continue
+        if line:
+            transcript_lines.append(line)
+    return " ".join(transcript_lines)
 
 def get_anki_cards(transcript):
     """
@@ -375,9 +387,10 @@ def index():
         if not video_id:
             flash("Invalid YouTube URL.")
             return redirect(url_for("index"))
-        transcript = fetch_transcript(video_id)
+        # Use the full URL for pytube
+        transcript = fetch_transcript(url)
         if not transcript:
-            flash("Could not retrieve transcript. Make sure the video has captions available and check cookies if needed.")
+            flash("Could not retrieve transcript. Make sure the video has captions available.")
             return redirect(url_for("index"))
         cards = get_anki_cards(transcript)
         if not cards:
