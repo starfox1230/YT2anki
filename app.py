@@ -291,7 +291,8 @@ def fetch_transcript(video_id, language="en"):
     Returns the combined transcript as one string.
     """
     try:
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=[language])
+        transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=["en", "en-US"])
+        """Previous merhod: transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=[language]) """
         transcript_text = " ".join([entry["text"] for entry in transcript_list])
         return transcript_text
     except Exception as e:
