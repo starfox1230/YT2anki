@@ -117,10 +117,11 @@ ANKI_HTML = """
 # Helper Functions
 # ----------------------------
 
-def chunk_text(text, max_size):
+def chunk_text(text, max_size, min_size=100):
     """
     Splits text into chunks of up to max_size characters.
-    Tries to break at the last space before max_size so that words aren't split.
+    If a chunk is shorter than min_size and there is a previous chunk,
+    it is merged with the previous chunk.
     """
     chunks = []
     start = 0
@@ -130,14 +131,18 @@ def chunk_text(text, max_size):
             last_space = text.rfind(" ", start, end)
             if last_space != -1:
                 end = last_space
-        chunks.append(text[start:end])
+        chunk = text[start:end]
+        if chunks and len(chunk) < min_size:
+            chunks[-1] += chunk
+        else:
+            chunks.append(chunk)
         start = end
     return chunks
 
 def get_anki_cards_for_chunk(transcript_chunk):
     """
     Calls the OpenAI API with a transcript chunk and returns a list of Anki flashcards.
-    A timeout of 15 seconds is set to prevent excessively long waits.
+    A timeout of 15 seconds is set for the API call.
     """
     prompt = f"""
 You are an expert at creating study flashcards. Given the transcript below, generate a list of Anki cloze deletion flashcards.
@@ -156,7 +161,7 @@ Transcript:
             ],
             temperature=0.7,
             max_tokens=2000,
-            timeout=15  # Set a 15-second timeout for the API call
+            timeout=15
         )
         result_text = response.choices[0].message.content.strip()
         logger.debug("Raw API response for chunk: %s", result_text)
@@ -184,7 +189,7 @@ Transcript:
         flash("OpenAI API error for a chunk: " + str(e))
         return []
 
-def get_all_anki_cards(transcript, max_chunk_size=3000):
+def get_all_anki_cards(transcript, max_chunk_size=2000):
     """
     Breaks the transcript into chunks and processes each chunk to generate Anki cards.
     Returns a combined list of all flashcards.
