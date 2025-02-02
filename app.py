@@ -2,122 +2,23 @@ import os
 import re
 import json
 import logging
-import requests
 from flask import Flask, request, redirect, url_for, flash, render_template_string
 from openai import OpenAI
 
+# Initialize Flask app
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "default-secret-key")
 
+# Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+# Initialize OpenAI client
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-# ----------------------------
-# Helper Functions (Improved)
-# ----------------------------
-
-def preprocess_transcript(text):
-    """Clean transcript with enhanced preprocessing."""
-    text = re.sub(r'\d{2}:\d{2}:\d{2}[.,]\d{3}', '', text)  # Remove timestamps
-    text = re.sub(r'#.*(?:\n|$)', '', text)  # Remove metadata lines starting with #
-    return re.sub(r'\s+', ' ', text).strip()  # Normalize whitespace
-
-def chunk_transcript(transcript, max_chunk_size=1500):
-    """Split transcript into context-preserving chunks based on original line structure."""
-    lines = transcript.splitlines()
-    chunks = []
-    current_chunk = []
-    current_length = 0
-
-    for line in lines:
-        line_length = len(line)
-        if current_length + line_length > max_chunk_size and current_chunk:
-            chunks.append("\n".join(current_chunk))
-            current_chunk = []
-            current_length = 0
-        current_chunk.append(line)
-        current_length += line_length
-
-    if current_chunk:
-        chunks.append("\n".join(current_chunk))
-    return chunks
-
-def parse_json_response(response_text):
-    """Robust JSON parsing with error recovery."""
-    try:
-        return json.loads(response_text)
-    except json.JSONDecodeError:
-        pass  # Proceed to fallback parsing
-
-    # Attempt to extract JSON array and fix common issues
-    start = response_text.find('[')
-    end = response_text.rfind(']')
-    if start == -1 or end == -1:
-        return []
-
-    json_str = response_text[start:end+1]
-    json_str = re.sub(r'(?<!\\)".*?(?<!\\)"', lambda m: m.group(0).replace('\n', '\\n'), json_str)
-    json_str = re.sub(r',\s*]', ']', json_str)  # Remove trailing commas
-
-    try:
-        return json.loads(json_str)
-    except json.JSONDecodeError as e:
-        logger.error(f"JSON parse failed: {str(e)}")
-        return []
-
-def get_anki_cards_for_chunk(chunk):
-    """Generate flashcards for a transcript chunk with enhanced error handling."""
-    prompt = f"""Generate Anki cloze cards from this transcript excerpt. Use format: {{c1::answer}}.
-Output ONLY a JSON array of strings. No commentary. Transcript:\n\"\"\"{chunk}\"\"\""""
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a flashcard creation expert."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            max_tokens=2000
-        )
-        result = response.choices[0].message.content
-        cards = parse_json_response(result)
-        
-        if not isinstance(cards, list):
-            raise ValueError("Invalid response format")
-            
-        return [card for card in cards if isinstance(card, str)]
-
-    except Exception as e:
-        logger.error(f"API Error: {str(e)}")
-        return []
-
-# ----------------------------
-# Core Processing
-# ----------------------------
-
-def process_transcript(transcript):
-    """Main processing pipeline with context-aware chunking."""
-    chunks = chunk_transcript(transcript)
-    all_cards = []
-    
-    for idx, chunk in enumerate(chunks):
-        logger.debug(f"Processing chunk {idx+1}/{len(chunks)}")
-        cleaned = preprocess_transcript(chunk)
-        if not cleaned:
-            continue
-            
-        cards = get_anki_cards_for_chunk(cleaned)
-        if cards:
-            all_cards.extend(cards)
-            
-    return all_cards
-# Add this section back to your code (before the routes)
-# ----------------------------
-# Embedded HTML Templates
-# ----------------------------
+# ======================
+# HTML Templates
+# ======================
 
 INDEX_HTML = """
 <!DOCTYPE html>
@@ -126,10 +27,14 @@ INDEX_HTML = """
   <meta charset="UTF-8">
   <title>Transcript to Anki Cards</title>
   <style>
-    body { background-color: #1E1E20; color: #D7DEE9; font-family: Arial, sans-serif; text-align: center; padding-top: 50px; }
-    textarea { width: 80%; height: 200px; padding: 10px; font-size: 16px; }
-    input[type="submit"] { padding: 10px 20px; font-size: 16px; margin-top: 10px; }
-    .flash { color: red; }
+    body { background-color: #1E1E20; color: #D7DEE9; 
+           font-family: Arial, sans-serif; text-align: center; padding-top: 50px; }
+    textarea { width: 80%; height: 200px; padding: 10px; font-size: 16px; 
+               background: #2F2F31; color: #D7DEE9; border: 1px solid #4A4A4F; }
+    input[type="submit"] { padding: 10px 20px; font-size: 16px; margin-top: 10px; 
+                           background: #6BB0F5; border: none; border-radius: 4px; 
+                           color: #1E1E20; cursor: pointer; }
+    .flash { color: #FF6B6B; margin: 10px auto; width: 80%; }
     a { color: #6BB0F5; text-decoration: none; }
     a:hover { text-decoration: underline; }
   </style>
@@ -137,7 +42,10 @@ INDEX_HTML = """
 <body>
   <h1>Transcript to Anki Cards</h1>
   <p>
-    Don't have a transcript? Use the <a href="https://tactiq.io/tools/youtube-transcript" target="_blank">Tactiq.io transcript tool</a> to generate one.
+    Don't have a transcript? Use the 
+    <a href="https://tactiq.io/tools/youtube-transcript" target="_blank">
+      Tactiq.io transcript tool
+    </a> to generate one.
   </p>
   {% with messages = get_flashed_messages() %}
     {% if messages %}
@@ -163,79 +71,168 @@ ANKI_HTML = """
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Anki Cloze Review</title>
   <style>
-    html { overflow: scroll; overflow-x: hidden; }
-    #kard { padding: 0px; max-width: 700px; margin: 20px auto; word-wrap: break-word; }
-    .card { font-family: helvetica; font-size: 20px; text-align: center; color: #D7DEE9; line-height: 1.6em; background-color: #2F2F31; padding: 20px; border-radius: 5px; }
-    /* Additional styling omitted for brevity */
+    :root {
+      --bg-color: #2F2F31;
+      --text-color: #D7DEE9;
+      --accent-color: #6BB0F5;
+      --border-color: #4A4A4F;
+    }
+    
+    body { background-color: #1E1E20; color: var(--text-color); 
+           margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+    
+    #kard { max-width: 700px; margin: 20px auto; padding: 20px;
+            background: var(--bg-color); border-radius: 8px; }
+    
+    .cloze { color: var(--accent-color); cursor: pointer;
+             border-bottom: 1px dashed var(--accent-color); }
+    
+    #controls { text-align: center; margin: 20px 0; }
+    
+    button { padding: 10px 20px; margin: 0 10px; border: none;
+             border-radius: 4px; cursor: pointer; }
+    
+    #savedCardsText { width: 80%; height: 150px; margin: 20px auto;
+                      background: var(--bg-color); color: var(--text-color);
+                      padding: 10px; border: 1px solid var(--border-color); }
   </style>
 </head>
-<body class="mobile">
-  <div id="progress">Card <span id="current">0</span> of <span id="total">0</span></div>
-  <div id="kard" class="card">
-    <div class="tags"></div>
+<body>
+  <div id="kard">
     <div id="cardContent"></div>
   </div>
+  
   <div id="controls">
-    <button id="discardButton" class="controlButton discard">Discard</button>
-    <button id="saveButton" class="controlButton save">Save</button>
+    <button id="showAnswer">Show Answer</button>
+    <button id="nextCard">Next Card</button>
   </div>
-  <div id="undoContainer">
-    <button id="undoButton" class="controlButton undo">Undo</button>
-  </div>
+
   <div id="savedCardsContainer">
-    <h3 style="text-align:center;">Saved Cards</h3>
+    <h3>Saved Cards</h3>
     <textarea id="savedCardsText" readonly></textarea>
-    <div style="text-align:center;">
-      <button id="copyButton">Copy Saved Cards</button>
-    </div>
+    <button id="copyButton">Copy to Clipboard</button>
   </div>
+
   <script>
     const cards = {{ cards_json|safe }};
-  </script>
-  {% raw %}
-  <script>
-    // JavaScript for interactive card generation remains unchanged.
-    function processCloze(text, target) {
-      return text.replace(/{{c(\\d+)::(.*?)}}/g, function(match, clozeNum, answer) {
-        if (clozeNum === target) {
-          return '<span class="cloze" data-answer="' + answer.replace(/"/g, '&quot;') + '">[...]</span>';
-        } else {
-          return answer;
-        }
-      });
+    let currentCardIndex = 0;
+    let savedCards = [];
+
+    function updateCardDisplay() {
+      if (currentCardIndex < cards.length) {
+        document.getElementById('cardContent').innerHTML = 
+          cards[currentCardIndex].replace(/{c1::(.*?)}/g, '<span class="cloze">[...]</span>');
+      }
     }
-    // ... rest of your JS code (generateInteractiveCards, showCard, etc.) ...
+
+    document.getElementById('showAnswer').addEventListener('click', () => {
+      document.getElementById('cardContent').innerHTML = 
+        cards[currentCardIndex].replace(/{c1::(.*?)}/g, '<span class="answer">$1</span>');
+    });
+
+    document.getElementById('nextCard').addEventListener('click', () => {
+      if (currentCardIndex < cards.length - 1) {
+        currentCardIndex++;
+        updateCardDisplay();
+      }
+    });
+
+    document.getElementById('copyButton').addEventListener('click', () => {
+      navigator.clipboard.writeText(savedCards.join('\n'));
+    });
+
+    // Initialize first card
+    updateCardDisplay();
   </script>
-  {% endraw %}
 </body>
 </html>
 """
-# ----------------------------
-# Flask Routes (Unchanged)
-# ----------------------------
 
-@app.route("/", methods=["GET", "POST"])
-def index():
-    if request.method == "POST":
-        if not (transcript := request.form.get("transcript")):
-            flash("Please paste a transcript")
-            return redirect(url_for("index"))
+# ======================
+# Processing Functions
+# ======================
 
-        cards = process_transcript(transcript)
+def preprocess_transcript(text):
+    """Clean and normalize transcript text."""
+    text = re.sub(r'\d{2}:\d{2}:\d{2}[.,]\d{3}', '', text)  # Remove timestamps
+    text = re.sub(r'#.*(?:\n|$)', '', text)  # Remove comment lines
+    return re.sub(r'\s+', ' ', text).strip()
+
+def chunk_text(text, max_size=1500):
+    """Split text into context-aware chunks."""
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+    chunks = []
+    current_chunk = []
+    
+    for sentence in sentences:
+        if sum(len(s) for s in current_chunk) + len(sentence) > max_size:
+            chunks.append(' '.join(current_chunk))
+            current_chunk = []
+        current_chunk.append(sentence)
+    
+    if current_chunk:
+        chunks.append(' '.join(current_chunk))
+    return chunks
+
+def generate_flashcards(chunk):
+    """Generate flashcards using OpenAI API."""
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[{
+                "role": "system",
+                "content": "Generate Anki cloze deletion flashcards. Use format: {c1::answer}. Return ONLY a JSON array of strings."
+            }, {
+                "role": "user",
+                "content": f"Transcript chunk:\n{chunk}"
+            }],
+            temperature=0.7,
+            max_tokens=2000
+        )
         
-        if not cards:
-            flash("No cards generated - check transcript format")
-            return redirect(url_for("index"))
+        content = response.choices[0].message.content
+        return json.loads(content)
+        
+    except Exception as e:
+        logger.error(f"API Error: {str(e)}")
+        return []
+
+# ======================
+# Flask Routes
+# ======================
+
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    if request.method == 'POST':
+        transcript = request.form.get('transcript', '')
+        
+        if not transcript:
+            flash('Please provide a transcript')
+            return redirect(url_for('index'))
             
-        try:
-            return render_template_string(ANKI_HTML, cards_json=json.dumps(cards))
-        except Exception as e:
-            logger.error(f"Rendering error: {str(e)}")
-            flash("Error generating output")
+        cleaned = preprocess_transcript(transcript)
+        chunks = chunk_text(cleaned)
+        all_cards = []
+        
+        for chunk in chunks:
+            try:
+                cards = generate_flashcards(chunk)
+                if isinstance(cards, list):
+                    all_cards.extend(cards)
+            except Exception as e:
+                logger.error(f"Processing error: {str(e)}")
+                
+        if not all_cards:
+            flash('Could not generate any flashcards')
+            return redirect(url_for('index'))
             
+        return render_template_string(ANKI_HTML, cards_json=json.dumps(all_cards))
+    
     return render_template_string(INDEX_HTML)
 
-# HTML templates remain unchanged from original
+# ======================
+# Application Startup
+# ======================
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
