@@ -290,19 +290,24 @@ def fetch_transcript(url, language="en"):
     Retrieve the transcript using pytube.
     This function uses the YouTube object to get the caption track in SRT format,
     then parses out the actual text (removing indices and timestamps).
+    It checks for both manually provided captions (e.g. "en")
+    and auto-generated captions (e.g. "a.en").
     """
     try:
         yt = YouTube(url)
-        # Try to get the caption in the desired language
+        caption = None
+        # Try to get manual captions first.
         if language in yt.captions:
             caption = yt.captions[language]
+        # If not found, try auto-generated captions (key usually "a.<lang>")
+        elif f"a.{language}" in yt.captions:
+            caption = yt.captions[f"a.{language}"]
+        # Fallback: if any caption is available, use the first one.
+        elif yt.captions:
+            caption = list(yt.captions.values())[0]
         else:
-            # Fallback: use the first available caption track
-            if yt.captions:
-                caption = list(yt.captions.values())[0]
-            else:
-                logger.error("No captions available for this video.")
-                return None
+            logger.error("No captions available for this video.")
+            return None
 
         srt_captions = caption.generate_srt_captions()
         transcript_text = parse_srt(srt_captions)
