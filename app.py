@@ -137,6 +137,7 @@ def chunk_text(text, max_size):
 def get_anki_cards_for_chunk(transcript_chunk):
     """
     Calls the OpenAI API with a transcript chunk and returns a list of Anki flashcards.
+    A timeout of 15 seconds is set to prevent excessively long waits.
     """
     prompt = f"""
 You are an expert at creating study flashcards. Given the transcript below, generate a list of Anki cloze deletion flashcards.
@@ -154,19 +155,18 @@ Transcript:
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
-            max_tokens=2000
+            max_tokens=2000,
+            timeout=15  # Set a 15-second timeout for the API call
         )
         result_text = response.choices[0].message.content.strip()
-        # Log the raw API response for debugging.
         logger.debug("Raw API response for chunk: %s", result_text)
-
         try:
             cards = json.loads(result_text)
             if isinstance(cards, list):
                 return cards
         except Exception as parse_err:
             logger.error("JSON parsing error for chunk: %s", parse_err)
-            # Attempt to extract the JSON substring manually.
+            # Fallback: attempt to extract JSON substring manually.
             start_idx = result_text.find('[')
             end_idx = result_text.rfind(']')
             if start_idx != -1 and end_idx != -1:
@@ -177,7 +177,6 @@ Transcript:
                         return cards
                 except Exception as e:
                     logger.error("Fallback JSON parsing failed for chunk: %s", e)
-        # If parsing fails, flash the raw response for debugging.
         flash("Failed to generate Anki cards for a chunk. API response: " + result_text)
         return []
     except Exception as e:
@@ -185,7 +184,7 @@ Transcript:
         flash("OpenAI API error for a chunk: " + str(e))
         return []
 
-def get_all_anki_cards(transcript, max_chunk_size=4000):
+def get_all_anki_cards(transcript, max_chunk_size=3000):
     """
     Breaks the transcript into chunks and processes each chunk to generate Anki cards.
     Returns a combined list of all flashcards.
