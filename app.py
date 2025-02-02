@@ -178,7 +178,7 @@ def generate_flashcards(chunk):
     """Generate flashcards using OpenAI API."""
     try:
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o-mini",
             messages=[{
                 "role": "system",
                 "content": "Generate Anki cloze deletion flashcards. Use format: {c1::answer}. Return ONLY a JSON array of strings."
