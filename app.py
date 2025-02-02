@@ -120,7 +120,7 @@ ANKI_HTML = """
 def chunk_text(text, max_size):
     """
     Splits text into chunks of up to max_size characters.
-    Tries to break at a space so as not to cut words in half.
+    Tries to break at the last space before max_size so that words aren't split.
     """
     chunks = []
     start = 0
@@ -166,7 +166,7 @@ Transcript:
                 return cards
         except Exception as parse_err:
             logger.error("JSON parsing error for chunk: %s", parse_err)
-            # Try to extract the JSON substring manually.
+            # Attempt to extract the JSON substring manually.
             start_idx = result_text.find('[')
             end_idx = result_text.rfind(']')
             if start_idx != -1 and end_idx != -1:
@@ -177,7 +177,7 @@ Transcript:
                         return cards
                 except Exception as e:
                     logger.error("Fallback JSON parsing failed for chunk: %s", e)
-        # Flash the raw API response for debugging purposes.
+        # If parsing fails, flash the raw response for debugging.
         flash("Failed to generate Anki cards for a chunk. API response: " + result_text)
         return []
     except Exception as e:
