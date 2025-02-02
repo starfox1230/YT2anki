@@ -1,5 +1,4 @@
 import os
-import re
 import json
 import logging
 import requests
@@ -98,7 +97,6 @@ ANKI_HTML = """
   {% raw %}
   <script>
     // JavaScript for interactive card generation remains unchanged.
-    // (Use your existing JavaScript code.)
     function processCloze(text, target) {
       return text.replace(/{{c(\\d+)::(.*?)}}/g, function(match, clozeNum, answer) {
         if (clozeNum === target) {
@@ -127,14 +125,14 @@ def get_anki_cards(transcript):
     prompt = f"""
 You are an expert at creating study flashcards. Given the transcript below, generate a list of Anki cloze deletion flashcards.
 Each flashcard should be a string containing a question and its answer in the format: {{c1::answer}}.
-Output ONLY a valid JSON array of strings (each string is one flashcard) with no additional commentary.
+Output ONLY a valid JSON array of strings with no additional commentary, markdown formatting, or extra text.
 
 Transcript:
 \"\"\"{transcript}\"\"\"
 """
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",  # Or your preferred model
+            model="gpt-4o-mini",  # Using your preferred model.
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": prompt}
@@ -142,12 +140,17 @@ Transcript:
             temperature=0.7,
             max_tokens=2000
         )
-        result_text = response.choices[0].message.content
+        result_text = response.choices[0].message.content.strip()
+        # Suggestion 1: Log the raw API response for debugging.
+        logger.debug("Raw API response: %s", result_text)
+
         try:
             cards = json.loads(result_text)
             if isinstance(cards, list):
                 return cards
-        except Exception:
+        except Exception as parse_err:
+            logger.error("JSON parsing error: %s", parse_err)
+            # Try to extract the JSON substring manually.
             start = result_text.find('[')
             end = result_text.rfind(']')
             if start != -1 and end != -1:
@@ -156,11 +159,14 @@ Transcript:
                     cards = json.loads(json_str)
                     if isinstance(cards, list):
                         return cards
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error("Fallback JSON parsing failed: %s", e)
+        # Suggestion 4: Flash the raw API response so you can debug it.
+        flash("Failed to generate Anki cards. API response: " + result_text)
         return None
     except Exception as e:
         logger.error("OpenAI API error: %s", e)
+        flash("OpenAI API error: " + str(e))
         return None
 
 # ----------------------------
@@ -176,7 +182,6 @@ def index():
             return redirect(url_for("index"))
         cards = get_anki_cards(transcript)
         if not cards:
-            flash("Failed to generate Anki cards from the transcript.")
             return redirect(url_for("index"))
         cards_json = json.dumps(cards)
         return render_template_string(ANKI_HTML, cards_json=cards_json)
