@@ -39,7 +39,7 @@ INDEX_HTML = """
 <body>
   <h1>Transcript to Anki Cards</h1>
   <p>
-    Don't have a transcript? Use the <a href="https://tactiq.io" target="_blank">Tactiq.io</a> service to generate one.
+    Don't have a transcript? Use the <a href="https://tactiq.io/tools/youtube-transcript" target="_blank">Tactiq.io transcript tool</a> to generate one.
   </p>
   {% with messages = get_flashed_messages() %}
     {% if messages %}
@@ -114,13 +114,29 @@ ANKI_HTML = """
 """
 
 # ----------------------------
-# Helper Function
+# Helper Functions
 # ----------------------------
 
-def get_anki_cards(transcript):
+def chunk_text(text, max_size):
     """
-    Build a prompt for ChatGPT that instructs it to generate Anki cloze deletion flashcards.
-    Expects output as a JSON array of strings formatted with cloze deletions.
+    Splits text into chunks of up to max_size characters.
+    Tries to break at a space so as not to cut words in half.
+    """
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + max_size
+        if end < len(text):
+            last_space = text.rfind(" ", start, end)
+            if last_space != -1:
+                end = last_space
+        chunks.append(text[start:end])
+        start = end
+    return chunks
+
+def get_anki_cards_for_chunk(transcript_chunk):
+    """
+    Calls the OpenAI API with a transcript chunk and returns a list of Anki flashcards.
     """
     prompt = f"""
 You are an expert at creating study flashcards. Given the transcript below, generate a list of Anki cloze deletion flashcards.
@@ -128,7 +144,7 @@ Each flashcard should be a string containing a question and its answer in the fo
 Output ONLY a valid JSON array of strings with no additional commentary, markdown formatting, or extra text.
 
 Transcript:
-\"\"\"{transcript}\"\"\"
+\"\"\"{transcript_chunk}\"\"\"
 """
     try:
         response = client.chat.completions.create(
@@ -141,33 +157,46 @@ Transcript:
             max_tokens=2000
         )
         result_text = response.choices[0].message.content.strip()
-        # Suggestion 1: Log the raw API response for debugging.
-        logger.debug("Raw API response: %s", result_text)
+        # Log the raw API response for debugging.
+        logger.debug("Raw API response for chunk: %s", result_text)
 
         try:
             cards = json.loads(result_text)
             if isinstance(cards, list):
                 return cards
         except Exception as parse_err:
-            logger.error("JSON parsing error: %s", parse_err)
+            logger.error("JSON parsing error for chunk: %s", parse_err)
             # Try to extract the JSON substring manually.
-            start = result_text.find('[')
-            end = result_text.rfind(']')
-            if start != -1 and end != -1:
-                json_str = result_text[start:end+1]
+            start_idx = result_text.find('[')
+            end_idx = result_text.rfind(']')
+            if start_idx != -1 and end_idx != -1:
+                json_str = result_text[start_idx:end_idx+1]
                 try:
                     cards = json.loads(json_str)
                     if isinstance(cards, list):
                         return cards
                 except Exception as e:
-                    logger.error("Fallback JSON parsing failed: %s", e)
-        # Suggestion 4: Flash the raw API response so you can debug it.
-        flash("Failed to generate Anki cards. API response: " + result_text)
-        return None
+                    logger.error("Fallback JSON parsing failed for chunk: %s", e)
+        # Flash the raw API response for debugging purposes.
+        flash("Failed to generate Anki cards for a chunk. API response: " + result_text)
+        return []
     except Exception as e:
-        logger.error("OpenAI API error: %s", e)
-        flash("OpenAI API error: " + str(e))
-        return None
+        logger.error("OpenAI API error for chunk: %s", e)
+        flash("OpenAI API error for a chunk: " + str(e))
+        return []
+
+def get_all_anki_cards(transcript, max_chunk_size=4000):
+    """
+    Breaks the transcript into chunks and processes each chunk to generate Anki cards.
+    Returns a combined list of all flashcards.
+    """
+    chunks = chunk_text(transcript, max_chunk_size)
+    all_cards = []
+    for i, chunk in enumerate(chunks):
+        logger.debug("Processing chunk %d/%d", i+1, len(chunks))
+        cards = get_anki_cards_for_chunk(chunk)
+        all_cards.extend(cards)
+    return all_cards
 
 # ----------------------------
 # Flask Routes
@@ -180,8 +209,10 @@ def index():
         if not transcript:
             flash("Please paste a transcript.")
             return redirect(url_for("index"))
-        cards = get_anki_cards(transcript)
+        # Process transcript in chunks
+        cards = get_all_anki_cards(transcript)
         if not cards:
+            flash("Failed to generate any Anki cards.")
             return redirect(url_for("index"))
         cards_json = json.dumps(cards)
         return render_template_string(ANKI_HTML, cards_json=cards_json)
