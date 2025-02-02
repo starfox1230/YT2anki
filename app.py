@@ -6,7 +6,7 @@ from flask import Flask, request, redirect, url_for, flash, render_template_stri
 from youtube_transcript_api import YouTubeTranscriptApi
 
 # Updated OpenAI API import and initialization using the new formatting.
-from openai import OpenAI  # Make sure you have the correct version installed
+from openai import OpenAI  # Ensure you have the correct version installed
 
 app = Flask(__name__)
 app.secret_key = "your-secret-key"  # Replace with a secure secret
@@ -287,13 +287,24 @@ def extract_video_id(url):
 
 def fetch_transcript(video_id, language="en"):
     """
-    Retrieve the transcript using youtube_transcript_api.
-    Returns the combined transcript as one string.
+    Retrieve the transcript using youtube_transcript_api by listing available transcripts
+    and selecting the auto-generated transcript if available.
     """
     try:
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=["en", "en-US"])
-        """Previous merhod: transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=[language]) """
-        transcript_text = " ".join([entry["text"] for entry in transcript_list])
+        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+        # Log available transcripts for debugging
+        available = [(t.language, t.language_code, t.is_generated) for t in transcript_list]
+        logger.debug("Available transcripts: %s", available)
+
+        # Try to select the auto-generated transcript first
+        try:
+            transcript_obj = transcript_list.find_generated_transcript([language])
+        except Exception as gen_err:
+            logger.debug("Generated transcript not found: %s", gen_err)
+            # Fallback: try to select any transcript (manual or generated)
+            transcript_obj = transcript_list.find_transcript([language])
+        transcript_data = transcript_obj.fetch()
+        transcript_text = " ".join([entry["text"] for entry in transcript_data])
         return transcript_text
     except Exception as e:
         logger.error("Transcript error: %s", e)
