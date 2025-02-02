@@ -29,10 +29,7 @@ def preprocess_transcript(text):
     """
     # Remove timestamps of the form 00:00:00.160 or 00:00:00,160
     text_no_timestamps = re.sub(r'\d{2}:\d{2}:\d{2}[.,]\d{3}', '', text)
-    # Optionally, remove lines that are just metadata (like "# ..." lines) if desired.
-    # Uncomment the following line if you want to remove lines starting with '#'
-    # text_no_metadata = "\n".join(line for line in text_no_timestamps.splitlines() if not line.strip().startswith("#"))
-    # For now, we simply normalize whitespace.
+    # Normalize whitespace
     cleaned_text = re.sub(r'\s+', ' ', text_no_timestamps)
     return cleaned_text.strip()
 
@@ -56,6 +53,7 @@ def chunk_text(text, max_size, min_size=100):
         else:
             chunks.append(chunk)
         start = end
+    logger.debug("Total number of chunks after splitting: %d", len(chunks))
     return chunks
 
 def get_anki_cards_for_chunk(transcript_chunk):
@@ -110,17 +108,20 @@ Transcript:
 
 def get_all_anki_cards(transcript, max_chunk_size=2000):
     """
-    Preprocesses the transcript to remove timestamps, splits it into chunks,
-    and processes each chunk to generate Anki cards.
+    Preprocesses the transcript to remove timestamps and normalize whitespace,
+    splits it into chunks, and processes each chunk to generate Anki cards.
     Returns a combined list of all flashcards.
     """
     cleaned_transcript = preprocess_transcript(transcript)
+    logger.debug("Cleaned transcript: %s", cleaned_transcript[:200])  # log first 200 characters for brevity
     chunks = chunk_text(cleaned_transcript, max_chunk_size)
     all_cards = []
     for i, chunk in enumerate(chunks):
         logger.debug("Processing chunk %d/%d", i+1, len(chunks))
         cards = get_anki_cards_for_chunk(chunk)
+        logger.debug("Chunk %d produced %d cards.", i+1, len(cards))
         all_cards.extend(cards)
+    logger.debug("Total flashcards generated: %d", len(all_cards))
     return all_cards
 
 # ----------------------------
@@ -198,21 +199,28 @@ ANKI_HTML = """
     </div>
   </div>
   <script>
+    // The cards variable is rendered from the server.
     const cards = {{ cards_json|safe }};
+    console.log("Flashcards:", cards);
+    // Your existing JavaScript code should use the 'cards' variable to display the flashcards.
   </script>
   {% raw %}
   <script>
-    // JavaScript for interactive card generation remains unchanged.
-    function processCloze(text, target) {
-      return text.replace(/{{c(\\d+)::(.*?)}}/g, function(match, clozeNum, answer) {
-        if (clozeNum === target) {
-          return '<span class="cloze" data-answer="' + answer.replace(/"/g, '&quot;') + '">[...]</span>';
-        } else {
-          return answer;
-        }
-      });
+    // Example function: iterates over flashcards and displays them.
+    function displayCards() {
+      const cardContent = document.getElementById("cardContent");
+      if (!cards || cards.length === 0) {
+        cardContent.innerHTML = "<p>No cards generated.</p>";
+      } else {
+        let html = "";
+        cards.forEach((card, index) => {
+          html += `<p>Card ${index + 1}: ${card}</p>`;
+        });
+        cardContent.innerHTML = html;
+      }
+      document.getElementById("total").textContent = cards.length;
     }
-    // ... rest of your JS code (generateInteractiveCards, showCard, etc.) ...
+    displayCards();
   </script>
   {% endraw %}
 </body>
@@ -230,9 +238,9 @@ def index():
         if not transcript:
             flash("Please paste a transcript.")
             return redirect(url_for("index"))
-        # Pre-process the transcript to remove timestamps and normalize whitespace
-        # Then process transcript in chunks and generate Anki cards.
+        # Preprocess and generate Anki cards from the transcript.
         cards = get_all_anki_cards(transcript)
+        logger.debug("Final flashcards list: %s", cards)
         if not cards:
             flash("Failed to generate any Anki cards.")
             return redirect(url_for("index"))
@@ -245,4 +253,5 @@ def index():
 # ----------------------------
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Bind to port 10000 as recommended by Render
+    app.run(debug=True, port=10000)
