@@ -2,10 +2,11 @@ import os
 import re
 import json
 import logging
+import requests
 from flask import Flask, request, redirect, url_for, flash, render_template_string
-from pytube import YouTube
+import yt_dlp
 
-# Updated OpenAI API import and initialization using the new formatting.
+# Updated OpenAI API import and initialization.
 from openai import OpenAI  # Ensure you have the correct version installed
 
 app = Flask(__name__)
@@ -29,26 +30,10 @@ INDEX_HTML = """
   <meta charset="UTF-8">
   <title>YouTube to Anki Cards</title>
   <style>
-    body {
-      background-color: #1E1E20;
-      color: #D7DEE9;
-      font-family: Arial, sans-serif;
-      text-align: center;
-      padding-top: 50px;
-    }
-    input[type="text"] {
-      width: 400px;
-      padding: 10px;
-      font-size: 16px;
-    }
-    input[type="submit"] {
-      padding: 10px 20px;
-      font-size: 16px;
-      margin-top: 10px;
-    }
-    .flash {
-      color: red;
-    }
+    body { background-color: #1E1E20; color: #D7DEE9; font-family: Arial, sans-serif; text-align: center; padding-top: 50px; }
+    input[type="text"] { width: 400px; padding: 10px; font-size: 16px; }
+    input[type="submit"] { padding: 10px 20px; font-size: 16px; margin-top: 10px; }
+    .flash { color: red; }
   </style>
 </head>
 <body>
@@ -285,37 +270,6 @@ def extract_video_id(url):
         return match.group(1)
     return None
 
-def fetch_transcript(url, language="en"):
-    """
-    Retrieve the transcript using pytube.
-    This function uses the YouTube object to get the caption track in SRT format,
-    then parses out the actual text (removing indices and timestamps).
-    It checks for both manually provided captions (e.g. "en")
-    and auto-generated captions (e.g. "a.en").
-    """
-    try:
-        yt = YouTube(url)
-        caption = None
-        # Try to get manual captions first.
-        if language in yt.captions:
-            caption = yt.captions[language]
-        # If not found, try auto-generated captions (key usually "a.<lang>")
-        elif f"a.{language}" in yt.captions:
-            caption = yt.captions[f"a.{language}"]
-        # Fallback: if any caption is available, use the first one.
-        elif yt.captions:
-            caption = list(yt.captions.values())[0]
-        else:
-            logger.error("No captions available for this video.")
-            return None
-
-        srt_captions = caption.generate_srt_captions()
-        transcript_text = parse_srt(srt_captions)
-        return transcript_text
-    except Exception as e:
-        logger.error("Error fetching transcript using pytube: %s", e)
-        return None
-
 def parse_srt(srt_text):
     """
     Parse SRT captions and return a plain text transcript.
@@ -332,6 +286,51 @@ def parse_srt(srt_text):
         if line:
             transcript_lines.append(line)
     return " ".join(transcript_lines)
+
+def fetch_transcript(video_url, language="en"):
+    """
+    Retrieve the transcript using yt_dlp.
+    This function uses yt_dlp to extract video information and then looks for manual subtitles.
+    If not available, it falls back to auto-generated captions.
+    It downloads the subtitle file (in SRT format) and then parses it into plain text.
+    """
+    ydl_opts = {
+        'skip_download': True,
+        'writesubtitles': True,
+        'subtitleslangs': [language],
+        'subtitlesformat': 'srt',
+        'quiet': True,
+    }
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(video_url, download=False)
+    except Exception as e:
+        logger.error("yt_dlp extraction error: %s", e)
+        return None
+
+    transcript_url = None
+    # Try manual subtitles first.
+    if 'subtitles' in info and language in info['subtitles']:
+        transcript_url = info['subtitles'][language][0]['url']
+    # Otherwise, try auto-generated subtitles.
+    elif 'automatic_captions' in info and language in info['automatic_captions']:
+        transcript_url = info['automatic_captions'][language][0]['url']
+
+    if not transcript_url:
+        logger.error("No captions available for this video.")
+        return None
+
+    try:
+        r = requests.get(transcript_url)
+        if r.status_code != 200:
+            logger.error("Failed to download transcript: HTTP %s", r.status_code)
+            return None
+        srt_text = r.text
+        transcript_text = parse_srt(srt_text)
+        return transcript_text
+    except Exception as e:
+        logger.error("Error downloading transcript: %s", e)
+        return None
 
 def get_anki_cards(transcript):
     """
@@ -360,8 +359,7 @@ Transcript:
             cards = json.loads(result_text)
             if isinstance(cards, list):
                 return cards
-        except Exception as e:
-            # Try to extract JSON manually if necessary
+        except Exception:
             start = result_text.find('[')
             end = result_text.rfind(']')
             if start != -1 and end != -1:
@@ -370,7 +368,7 @@ Transcript:
                     cards = json.loads(json_str)
                     if isinstance(cards, list):
                         return cards
-                except:
+                except Exception:
                     pass
         return None
     except Exception as e:
@@ -384,16 +382,15 @@ Transcript:
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
-        url = request.form.get("youtube_url")
-        if not url:
+        video_url = request.form.get("youtube_url")
+        if not video_url:
             flash("Please enter a YouTube URL.")
             return redirect(url_for("index"))
-        video_id = extract_video_id(url)
+        video_id = extract_video_id(video_url)
         if not video_id:
             flash("Invalid YouTube URL.")
             return redirect(url_for("index"))
-        # Use the full URL for pytube
-        transcript = fetch_transcript(url)
+        transcript = fetch_transcript(video_url)
         if not transcript:
             flash("Could not retrieve transcript. Make sure the video has captions available.")
             return redirect(url_for("index"))
