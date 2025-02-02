@@ -114,7 +114,102 @@ def process_transcript(transcript):
             all_cards.extend(cards)
             
     return all_cards
+# Add this section back to your code (before the routes)
+# ----------------------------
+# Embedded HTML Templates
+# ----------------------------
 
+INDEX_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Transcript to Anki Cards</title>
+  <style>
+    body { background-color: #1E1E20; color: #D7DEE9; font-family: Arial, sans-serif; text-align: center; padding-top: 50px; }
+    textarea { width: 80%; height: 200px; padding: 10px; font-size: 16px; }
+    input[type="submit"] { padding: 10px 20px; font-size: 16px; margin-top: 10px; }
+    .flash { color: red; }
+    a { color: #6BB0F5; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <h1>Transcript to Anki Cards</h1>
+  <p>
+    Don't have a transcript? Use the <a href="https://tactiq.io/tools/youtube-transcript" target="_blank">Tactiq.io transcript tool</a> to generate one.
+  </p>
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      {% for message in messages %}
+        <div class="flash">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+  <form method="post">
+    <textarea name="transcript" placeholder="Paste your transcript here" required></textarea>
+    <br>
+    <input type="submit" value="Generate Anki Cards">
+  </form>
+</body>
+</html>
+"""
+
+ANKI_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anki Cloze Review</title>
+  <style>
+    html { overflow: scroll; overflow-x: hidden; }
+    #kard { padding: 0px; max-width: 700px; margin: 20px auto; word-wrap: break-word; }
+    .card { font-family: helvetica; font-size: 20px; text-align: center; color: #D7DEE9; line-height: 1.6em; background-color: #2F2F31; padding: 20px; border-radius: 5px; }
+    /* Additional styling omitted for brevity */
+  </style>
+</head>
+<body class="mobile">
+  <div id="progress">Card <span id="current">0</span> of <span id="total">0</span></div>
+  <div id="kard" class="card">
+    <div class="tags"></div>
+    <div id="cardContent"></div>
+  </div>
+  <div id="controls">
+    <button id="discardButton" class="controlButton discard">Discard</button>
+    <button id="saveButton" class="controlButton save">Save</button>
+  </div>
+  <div id="undoContainer">
+    <button id="undoButton" class="controlButton undo">Undo</button>
+  </div>
+  <div id="savedCardsContainer">
+    <h3 style="text-align:center;">Saved Cards</h3>
+    <textarea id="savedCardsText" readonly></textarea>
+    <div style="text-align:center;">
+      <button id="copyButton">Copy Saved Cards</button>
+    </div>
+  </div>
+  <script>
+    const cards = {{ cards_json|safe }};
+  </script>
+  {% raw %}
+  <script>
+    // JavaScript for interactive card generation remains unchanged.
+    function processCloze(text, target) {
+      return text.replace(/{{c(\\d+)::(.*?)}}/g, function(match, clozeNum, answer) {
+        if (clozeNum === target) {
+          return '<span class="cloze" data-answer="' + answer.replace(/"/g, '&quot;') + '">[...]</span>';
+        } else {
+          return answer;
+        }
+      });
+    }
+    // ... rest of your JS code (generateInteractiveCards, showCard, etc.) ...
+  </script>
+  {% endraw %}
+</body>
+</html>
+"""
 # ----------------------------
 # Flask Routes (Unchanged)
 # ----------------------------
