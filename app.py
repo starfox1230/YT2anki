@@ -174,14 +174,14 @@ Transcript:
 """
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",  # Your chosen model.
+            model="gpt-4o",  # Your chosen model.
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
             max_tokens=2000,
-            timeout=15
+            timeout=60
         )
         result_text = response.choices[0].message.content.strip()
         logger.debug("Raw API response for chunk: %s", result_text)
@@ -212,7 +212,7 @@ Transcript:
         flash("OpenAI API error for a chunk: " + str(e))
         return []
 
-def get_all_anki_cards(transcript, max_chunk_size=2000):
+def get_all_anki_cards(transcript, max_chunk_size=4000):
     """
     Preprocesses the transcript, splits it into chunks, and processes each chunk to generate Anki cards.
     Returns a combined list of all flashcards.
