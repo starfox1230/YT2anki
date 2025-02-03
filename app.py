@@ -106,7 +106,7 @@ def get_anki_cards_for_chunk(transcript_chunk, user_preferences=""):
     7. Using Cloze Deletion for Definitions
        • Definitions should follow the “is defined as” structure for clarity.
              Example: "A {{c1::pneumothorax}} is defined as {{c2::air in the pleural space}}."
-
+    
     8. Formatting Output in HTML for Readability
        • Use line breaks (<br><br>) to properly space question and answer.
              Example:
@@ -119,7 +119,7 @@ def get_anki_cards_for_chunk(transcript_chunk, user_preferences=""):
        • Ensure only one correct answer per deletion.
        • Focus on college-level or expert-level knowledge.
        • Use HTML formatting for better display.
-
+    
     FEATURE REQUEST – User-Directed Card Generation:
        • Additionally, include the following user preference in your instructions:
          "User Request: <user_preferences>"
@@ -129,7 +129,6 @@ def get_anki_cards_for_chunk(transcript_chunk, user_preferences=""):
 
     Remember: Output ONLY a valid JSON array of strings, with no extra commentary.
     """
-    # Append the user preference to the prompt if provided.
     user_instr = ""
     if user_preferences.strip():
         user_instr = f'\nUser Request: {user_preferences.strip()}\nIf no content relevant to the user request is found in this chunk, output a dummy card in the format: "User request not found in {{c1::this chunk}}."'
@@ -201,12 +200,10 @@ Transcript:
         try:
             cards = json.loads(result_text)
             if isinstance(cards, list):
-                # Fix the cloze formatting in each card.
                 cards = [fix_cloze_formatting(card) for card in cards]
                 return cards
         except Exception as parse_err:
             logger.error("JSON parsing error for chunk: %s", parse_err)
-            # Fallback: attempt to extract JSON substring manually.
             start_idx = result_text.find('[')
             end_idx = result_text.rfind(']')
             if start_idx != -1 and end_idx != -1:
@@ -286,7 +283,7 @@ INDEX_HTML = """
 """
 
 # The review page uses your provided demo styling and interactive behavior.
-# Note the inline JavaScript is wrapped in raw/endraw so that the regex literal and curly braces are not misinterpreted.
+# The inline JavaScript is wrapped in raw/endraw tags so that regex literals and curly braces are not misinterpreted.
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -297,8 +294,10 @@ ANKI_HTML = """
   <style>
     /* Provided Styling */
     html { overflow: scroll; overflow-x: hidden; }
-    #kard { padding: 0px 0px; max-width: 700px; margin: 20px auto; word-wrap: break-word; }
+    #kard { padding: 0px 0px; max-width: 700px; margin: 20px auto; word-wrap: break-word; position: relative; }
     .card { font-family: helvetica; font-size: 20px; text-align: center; color: #D7DEE9; line-height: 1.6em; background-color: #2F2F31; padding: 20px; border-radius: 5px; }
+    /* Edit mode styling for textarea */
+    #editArea { width: 100%; height: 150px; font-size: 20px; padding: 10px; }
     /* Cloze deletions styled in MediumSeaGreen. In display, they will show as square brackets with an ellipsis. */
     .cloze, .cloze b, .cloze u, .cloze i { font-weight: bold; color: MediumSeaGreen !important; cursor: pointer; }
     #extra, #extra i { font-size: 15px; color:#D7DEE9; font-style: italic; }
@@ -321,11 +320,14 @@ ANKI_HTML = """
     /* Additional layout styling */
     body { background-color: #1E1E20; margin: 0; padding: 0; }
     #progress { text-align: center; font-family: helvetica; color: #A6ABB9; margin-top: 10px; }
-    /* The control buttons are hidden until a card is revealed */
-    #controls { display: none; justify-content: space-between; max-width: 700px; margin: 20px auto; padding: 0 10px; }
+    /* Control buttons container */
+    #controls { display: flex; justify-content: space-between; max-width: 700px; margin: 20px auto; padding: 0 10px; }
     .controlButton { padding: 10px 20px; font-size: 16px; border: none; color: #fff; border-radius: 5px; cursor: pointer; flex: 1; margin: 0 5px; }
     .discard { background-color: red; }
     .save { background-color: green; }
+    .edit { background-color: #FFA500; } /* Orange for Edit */
+    .saveEdit { background-color: green; }
+    .cancelEdit { background-color: gray; }
     /* Undo button: use a distinctive blue */
     .undo { background-color: #4A90E2; }
     /* Saved cards output styling */
@@ -344,10 +346,16 @@ ANKI_HTML = """
     <div class="tags"></div>
     <div id="cardContent"><!-- Processed card content will be injected here --></div>
   </div>
-  <!-- Controls (hidden until the card is revealed) -->
+  <!-- Controls for non-edit mode -->
   <div id="controls">
     <button id="discardButton" class="controlButton discard">Discard</button>
     <button id="saveButton" class="controlButton save">Save</button>
+    <button id="editButton" class="controlButton edit">Edit</button>
+  </div>
+  <!-- Controls for edit mode (hidden by default) -->
+  <div id="editControls" style="display:none; justify-content: space-between; max-width: 700px; margin: 20px auto; padding: 0 10px;">
+    <button id="saveEditButton" class="controlButton saveEdit">Save Edit</button>
+    <button id="cancelEditButton" class="controlButton cancelEdit">Cancel Edit</button>
   </div>
   <!-- Undo Button (always visible) -->
   <div id="undoContainer">
@@ -369,11 +377,7 @@ ANKI_HTML = """
      * Build Interactive Cards from Generated Notes *
      **********************/
     let interactiveCards = [];
-    // Generate interactive card objects from a note.
-    // Each object has:
-    // - target: the cloze number to hide (e.g. "1" or "2")
-    // - displayText: the processed text for display (with target cloze(s) hidden)
-    // - exportText: the original note text (with proper curly braces) to be saved for later.
+    // Each card object: { target, displayText, exportText }
     function generateInteractiveCards(cardText) {
       const regex = /{{c(\d+)::(.*?)}}/g;
       const numbers = new Set();
@@ -381,21 +385,16 @@ ANKI_HTML = """
       while ((m = regex.exec(cardText)) !== null) {
         numbers.add(m[1]);
       }
-      // If no cloze deletion is found, return the card as is.
       if (numbers.size === 0) {
         return [{ target: null, displayText: cardText, exportText: cardText }];
       }
       const cardsForNote = [];
-      // For each unique cloze number, generate a separate interactive card.
       Array.from(numbers).sort().forEach(num => {
         const display = processCloze(cardText, num);
         cardsForNote.push({ target: num, displayText: display, exportText: cardText });
       });
       return cardsForNote;
     }
-    // Process a card’s text so that:
-    // - For each cloze deletion matching the target number, replace it with a clickable span that initially shows "[...]"
-    // - For all other cloze deletions, simply reveal the answer.
     function processCloze(text, target) {
       return text.replace(/{{c(\d+)::(.*?)}}/g, function(match, clozeNum, answer) {
         if (clozeNum === target) {
@@ -405,14 +404,14 @@ ANKI_HTML = """
         }
       });
     }
-    // Build the full interactive cards array.
     cards.forEach(cardText => {
       interactiveCards = interactiveCards.concat(generateInteractiveCards(cardText));
     });
     let currentIndex = 0;
     let savedCards = [];
-    // This history stack will save snapshots of state so that an undo can revert an action.
     let historyStack = [];
+    let inEditMode = false; // Track edit mode
+    let originalCardText = ""; // Save original card text for canceling edits
 
     /*********************
      * Element Selectors *
@@ -422,13 +421,16 @@ ANKI_HTML = """
     const cardContentEl = document.getElementById("cardContent");
     const discardButton = document.getElementById("discardButton");
     const saveButton = document.getElementById("saveButton");
+    const editButton = document.getElementById("editButton");
+    const editControls = document.getElementById("editControls");
+    const saveEditButton = document.getElementById("saveEditButton");
+    const cancelEditButton = document.getElementById("cancelEditButton");
     const controlsEl = document.getElementById("controls");
+    const undoButton = document.getElementById("undoButton");
     const savedCardsContainer = document.getElementById("savedCardsContainer");
     const savedCardsText = document.getElementById("savedCardsText");
     const copyButton = document.getElementById("copyButton");
-    const undoButton = document.getElementById("undoButton");
     totalEl.textContent = interactiveCards.length;
-    // A helper to disable the undo button when there is no history.
     function updateUndoButtonState() {
       undoButton.disabled = historyStack.length === 0;
     }
@@ -437,13 +439,10 @@ ANKI_HTML = """
     /***************************
      * Global Reveal on Touch *
      ***************************/
-    // When the user taps anywhere in the card area (except the control buttons), reveal all hidden clozes.
     cardContentEl.addEventListener("click", function(e) {
-      // Only reveal if controls are not yet visible.
       if (!controlsEl.style.display || controlsEl.style.display === "none") {
         const clozes = document.querySelectorAll("#cardContent .cloze");
         clozes.forEach(span => {
-          // Replace the placeholder "[...]" with the actual answer.
           span.innerHTML = span.getAttribute("data-answer");
         });
         controlsEl.style.display = "flex";
@@ -454,8 +453,9 @@ ANKI_HTML = """
      * Card Display Functions *
      ***************************/
     function showCard() {
-      // Hide controls until the card is revealed (via tap)
-      controlsEl.style.display = "none";
+      if (!inEditMode) {
+        controlsEl.style.display = "flex";
+      }
       currentEl.textContent = currentIndex + 1;
       cardContentEl.innerHTML = interactiveCards[currentIndex].displayText;
     }
@@ -471,7 +471,6 @@ ANKI_HTML = """
       document.getElementById("kard").style.display = "none";
       controlsEl.style.display = "none";
       document.getElementById("progress").textContent = "Review complete!";
-      // When finished, join saved cards with a newline (each note is one field in the cloze format)
       savedCardsText.value = savedCards.join("\\n");
       savedCardsContainer.style.display = "block";
     }
@@ -479,22 +478,49 @@ ANKI_HTML = """
     /***********************
      * Button Event Listeners *
      ***********************/
-    // Prevent clicks on the buttons from propagating to the cardContent (which would trigger a reveal).
     discardButton.addEventListener("click", function(e) {
       e.stopPropagation();
-      // Save snapshot of the current state before moving on.
       historyStack.push({ currentIndex: currentIndex, savedCards: savedCards.slice() });
       updateUndoButtonState();
       nextCard();
     });
     saveButton.addEventListener("click", function(e) {
       e.stopPropagation();
-      // Save snapshot of the current state before moving on.
       historyStack.push({ currentIndex: currentIndex, savedCards: savedCards.slice() });
       updateUndoButtonState();
-      // Save the original note text.
       savedCards.push(interactiveCards[currentIndex].exportText);
       nextCard();
+    });
+    editButton.addEventListener("click", function(e) {
+      e.stopPropagation();
+      if (!inEditMode) enterEditMode();
+    });
+    function enterEditMode() {
+      inEditMode = true;
+      originalCardText = interactiveCards[currentIndex].exportText;
+      // Replace card content with a textarea pre-filled with the current export text.
+      cardContentEl.innerHTML = '<textarea id="editArea">' + interactiveCards[currentIndex].exportText + '</textarea>';
+      // Hide main controls and show edit-specific controls.
+      controlsEl.style.display = "none";
+      editControls.style.display = "flex";
+    }
+    saveEditButton.addEventListener("click", function(e) {
+      e.stopPropagation();
+      const editedText = document.getElementById("editArea").value;
+      // Update the current card object with the edited text.
+      interactiveCards[currentIndex].exportText = editedText;
+      interactiveCards[currentIndex].displayText = editedText;
+      // Exit edit mode and display the updated card.
+      inEditMode = false;
+      editControls.style.display = "none";
+      showCard();
+    });
+    cancelEditButton.addEventListener("click", function(e) {
+      e.stopPropagation();
+      // Revert any changes and exit edit mode.
+      inEditMode = false;
+      editControls.style.display = "none";
+      showCard();
     });
     undoButton.addEventListener("click", function(e) {
       e.stopPropagation();
@@ -505,9 +531,8 @@ ANKI_HTML = """
       let snapshot = historyStack.pop();
       currentIndex = snapshot.currentIndex;
       savedCards = snapshot.savedCards.slice();
-      // Restore card display and progress elements without overwriting the span elements.
       document.getElementById("kard").style.display = "block";
-      controlsEl.style.display = "none";
+      controlsEl.style.display = "flex";
       savedCardsContainer.style.display = "none";
       cardContentEl.innerHTML = interactiveCards[currentIndex].displayText;
       currentEl.textContent = currentIndex + 1;
@@ -544,7 +569,6 @@ def index():
             flash("Please paste a transcript.")
             return redirect(url_for("index"))
         user_preferences = request.form.get("preferences", "")
-        # Preprocess and generate Anki cards from the transcript.
         cards = get_all_anki_cards(transcript, user_preferences)
         logger.debug("Final flashcards list: %s", cards)
         if not cards:
@@ -559,5 +583,4 @@ def index():
 # ----------------------------
 
 if __name__ == "__main__":
-    # Bind to port 10000 as recommended by Render
     app.run(debug=True, port=10000)
