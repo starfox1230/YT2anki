@@ -57,20 +57,18 @@ def fix_cloze_formatting(card):
     """
     Ensures that cloze deletions in the card use exactly two curly braces on each side.
     If the API returns a card like "{c1::...}" then this function converts it to "{{c1::...}}".
-    This is done only if the expected double braces are not already present.
     """
-    # If we do not see a double opening brace, replace all occurrences of "{c" with "{{c"
+    # If double opening braces are missing, add them.
     if "{{" not in card:
         card = card.replace("{c", "{{c")
-    # Replace any single closing brace that is not already doubled.
+    # Ensure that the closing braces are doubled.
     card = re.sub(r'(?<!})}(?!})', '}}', card)
     return card
 
 def get_anki_cards_for_chunk(transcript_chunk):
     """
     Calls the OpenAI API with a transcript chunk and returns a list of Anki cloze deletion flashcards.
-    A timeout of 15 seconds is set for the API call.
-    The API is instructed to output only a valid JSON array of strings where each string is a complete,
+    The API is instructed to output only a valid JSON array of strings, each string formatted as a complete,
     self-contained cloze deletion using the exact format: {{c1::...}}.
     """
     prompt = f"""
@@ -102,7 +100,7 @@ Transcript:
         try:
             cards = json.loads(result_text)
             if isinstance(cards, list):
-                # Post-process each card to fix cloze formatting if needed.
+                # Fix the cloze formatting in each card.
                 cards = [fix_cloze_formatting(card) for card in cards]
                 return cards
         except Exception as parse_err:
@@ -183,8 +181,8 @@ INDEX_HTML = """
 </html>
 """
 
-# This review page uses your provided demo styling and interactive behavior.
-# The generated cards from ChatGPT (as a JSON array) are injected into the page.
+# The review page uses your provided demo styling and interactive behavior.
+# Note the inline JavaScript is wrapped in raw/endraw so that the regex literal and curly braces are not misinterpreted.
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -260,15 +258,12 @@ ANKI_HTML = """
     </div>
   </div>
   <script>
-    /**********************
-     * Input Cards Array *
-     **********************/
-    // The generated cards (each as a cloze deletion string) are injected from the server.
+    // Inject the generated cards from the backend.
     const cards = {{ cards_json|safe }};
-
-    /**********************************************
+{% raw %}
+    /**********************
      * Build Interactive Cards from Generated Notes *
-     **********************************************/
+     **********************/
     let interactiveCards = [];
     // Generate interactive card objects from a note.
     // Each object has:
@@ -276,7 +271,7 @@ ANKI_HTML = """
     // - displayText: the processed text for display (with target cloze(s) hidden)
     // - exportText: the original note text (with proper curly braces) to be saved for later.
     function generateInteractiveCards(cardText) {
-      const regex = /{{c(\\d+)::(.*?)}}/g;
+      const regex = /{{c(\d+)::(.*?)}}/g;
       const numbers = new Set();
       let m;
       while ((m = regex.exec(cardText)) !== null) {
@@ -298,7 +293,7 @@ ANKI_HTML = """
     // - For each cloze deletion matching the target number, replace it with a clickable span that initially shows "[...]"
     // - For all other cloze deletions, simply reveal the answer.
     function processCloze(text, target) {
-      return text.replace(/{{c(\\d+)::(.*?)}}/g, function(match, clozeNum, answer) {
+      return text.replace(/{{c(\d+)::(.*?)}}/g, function(match, clozeNum, answer) {
         if (clozeNum === target) {
           return '<span class="cloze" data-answer="' + answer.replace(/"/g, '&quot;') + '">[...]</span>';
         } else {
@@ -427,6 +422,7 @@ ANKI_HTML = """
      * Start the Review *
      ***********************/
     showCard();
+{% endraw %}
   </script>
 </body>
 </html>
