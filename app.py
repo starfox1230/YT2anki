@@ -58,7 +58,7 @@ def chunk_text(text, max_size, min_size=100):
 
 def get_anki_cards_for_chunk(transcript_chunk):
     """
-    Calls the OpenAI API with a transcript chunk and returns a list of Anki flashcards.
+    Calls the OpenAI API with a transcript chunk and returns a list of Anki cloze deletion flashcards.
     A timeout of 15 seconds is set for the API call.
     """
     prompt = f"""
@@ -164,6 +164,7 @@ INDEX_HTML = """
 </html>
 """
 
+# Note: This template now shows one card at a time with Previous/Next navigation.
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -172,57 +173,58 @@ ANKI_HTML = """
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Anki Cloze Review</title>
   <style>
-    html { overflow: scroll; overflow-x: hidden; }
-    #kard { padding: 0px; max-width: 700px; margin: 20px auto; word-wrap: break-word; }
-    .card { font-family: helvetica; font-size: 20px; text-align: center; color: #D7DEE9; line-height: 1.6em; background-color: #2F2F31; padding: 20px; border-radius: 5px; }
-    /* Additional styling omitted for brevity */
+    html { overflow: hidden; }
+    body { background-color: #1E1E20; color: #D7DEE9; font-family: Arial, sans-serif; text-align: center; padding: 30px; }
+    #kard { margin: 20px auto; padding: 20px; max-width: 700px; background-color: #2F2F31; border-radius: 5px; }
+    #kard p { font-size: 24px; }
+    #progress { margin-bottom: 20px; font-size: 18px; }
+    .controlButton { padding: 10px 20px; margin: 5px; font-size: 16px; cursor: pointer; }
+    #controls { margin-top: 20px; }
   </style>
 </head>
-<body class="mobile">
+<body>
   <div id="progress">Card <span id="current">0</span> of <span id="total">0</span></div>
-  <div id="kard" class="card">
-    <div class="tags"></div>
-    <div id="cardContent"></div>
+  <div id="kard">
+    <div id="cardContent"><p>Loading...</p></div>
   </div>
   <div id="controls">
-    <button id="discardButton" class="controlButton discard">Discard</button>
-    <button id="saveButton" class="controlButton save">Save</button>
-  </div>
-  <div id="undoContainer">
-    <button id="undoButton" class="controlButton undo">Undo</button>
-  </div>
-  <div id="savedCardsContainer">
-    <h3 style="text-align:center;">Saved Cards</h3>
-    <textarea id="savedCardsText" readonly></textarea>
-    <div style="text-align:center;">
-      <button id="copyButton">Copy Saved Cards</button>
-    </div>
+    <button id="prevButton" class="controlButton">Previous</button>
+    <button id="nextButton" class="controlButton">Next</button>
   </div>
   <script>
     // The cards variable is rendered from the server.
     const cards = {{ cards_json|safe }};
-    console.log("Flashcards:", cards);
-    // Your existing JavaScript code should use the 'cards' variable to display the flashcards.
-  </script>
-  {% raw %}
-  <script>
-    // Example function: iterates over flashcards and displays them.
-    function displayCards() {
+    let currentCardIndex = 0;
+
+    function showCard(index) {
+      if (index < 0 || index >= cards.length) return;
       const cardContent = document.getElementById("cardContent");
-      if (!cards || cards.length === 0) {
-        cardContent.innerHTML = "<p>No cards generated.</p>";
-      } else {
-        let html = "";
-        cards.forEach((card, index) => {
-          html += `<p>Card ${index + 1}: ${card}</p>`;
-        });
-        cardContent.innerHTML = html;
-      }
-      document.getElementById("total").textContent = cards.length;
+      // Format the card nicely. You could further process cloze deletion syntax if desired.
+      cardContent.innerHTML = `<p><strong>Card ${index + 1}:</strong> ${cards[index]}</p>`;
+      document.getElementById("current").textContent = index + 1;
     }
-    displayCards();
+
+    function nextCard() {
+      if (currentCardIndex < cards.length - 1) {
+        currentCardIndex++;
+        showCard(currentCardIndex);
+      }
+    }
+
+    function prevCard() {
+      if (currentCardIndex > 0) {
+        currentCardIndex--;
+        showCard(currentCardIndex);
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+      document.getElementById("total").textContent = cards.length;
+      showCard(currentCardIndex);
+      document.getElementById("nextButton").addEventListener("click", nextCard);
+      document.getElementById("prevButton").addEventListener("click", prevCard);
+    });
   </script>
-  {% endraw %}
 </body>
 </html>
 """
