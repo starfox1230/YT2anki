@@ -53,29 +53,42 @@ def chunk_text(text, max_size, min_size=100):
     logger.debug("Total number of chunks after splitting: %d", len(chunks))
     return chunks
 
+def fix_cloze_formatting(card):
+    """
+    Ensures that cloze deletions in the card use exactly two curly braces on each side.
+    If the API returns a card like "{c1::...}" then this function converts it to "{{c1::...}}".
+    This is done only if the expected double braces are not already present.
+    """
+    # If we do not see a double opening brace, replace all occurrences of "{c" with "{{c"
+    if "{{" not in card:
+        card = card.replace("{c", "{{c")
+    # Replace any single closing brace that is not already doubled.
+    card = re.sub(r'(?<!})}(?!})', '}}', card)
+    return card
+
 def get_anki_cards_for_chunk(transcript_chunk):
     """
     Calls the OpenAI API with a transcript chunk and returns a list of Anki cloze deletion flashcards.
     A timeout of 15 seconds is set for the API call.
-    The API is instructed to output only a JSON array of strings, each string formatted as a complete
-    cloze deletion card in the form: {{c1::...}} with no extra numbering or text.
+    The API is instructed to output only a valid JSON array of strings where each string is a complete,
+    self-contained cloze deletion using the exact format: {{c1::...}}.
     """
     prompt = f"""
-You are an expert at creating study flashcards in Anki using cloze deletion format.
-Given the transcript below, generate a list of flashcards. Each flashcard should be a complete,
-self-contained sentence (or sentence fragment) containing a cloze deletion formatted exactly as follows:
+You are an expert at creating study flashcards in Anki using cloze deletion.
+Given the transcript below, generate a list of flashcards.
+Each flashcard should be a complete, self-contained sentence (or sentence fragment) containing a cloze deletion formatted exactly as:
   {{c1::hidden text}}
 Ensure that:
 - You use double curly braces for the cloze deletion.
-- You do not include any extra numbering, labels, or commentary.
-- Output ONLY a valid JSON array of strings with no markdown or additional text.
+- Do not include any extra numbering, labels, or commentary.
+- Output ONLY a valid JSON array of strings with no markdown formatting or additional text.
 
 Transcript:
 \"\"\"{transcript_chunk}\"\"\"
 """
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",  # Using your preferred model.
+            model="gpt-4o-mini",  # Your chosen model.
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": prompt}
@@ -89,6 +102,8 @@ Transcript:
         try:
             cards = json.loads(result_text)
             if isinstance(cards, list):
+                # Post-process each card to fix cloze formatting if needed.
+                cards = [fix_cloze_formatting(card) for card in cards]
                 return cards
         except Exception as parse_err:
             logger.error("JSON parsing error for chunk: %s", parse_err)
@@ -100,6 +115,7 @@ Transcript:
                 try:
                     cards = json.loads(json_str)
                     if isinstance(cards, list):
+                        cards = [fix_cloze_formatting(card) for card in cards]
                         return cards
                 except Exception as e:
                     logger.error("Fallback JSON parsing failed for chunk: %s", e)
@@ -167,7 +183,8 @@ INDEX_HTML = """
 </html>
 """
 
-# The review page now displays one card at a time without extra numbering or prefixes.
+# This review page uses your provided demo styling and interactive behavior.
+# The generated cards from ChatGPT (as a JSON array) are injected into the page.
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -176,57 +193,240 @@ ANKI_HTML = """
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Anki Cloze Review</title>
   <style>
-    html { overflow: hidden; }
-    body { background-color: #1E1E20; color: #D7DEE9; font-family: Arial, sans-serif; text-align: center; padding: 30px; }
-    #kard { margin: 20px auto; padding: 20px; max-width: 700px; background-color: #2F2F31; border-radius: 5px; }
-    #kard p { font-size: 24px; }
-    #progress { margin-bottom: 20px; font-size: 18px; }
-    .controlButton { padding: 10px 20px; margin: 5px; font-size: 16px; cursor: pointer; }
-    #controls { margin-top: 20px; }
+    /* Provided Styling */
+    html { overflow: scroll; overflow-x: hidden; }
+    #kard { padding: 0px 0px; max-width: 700px; margin: 20px auto; word-wrap: break-word; }
+    .card { font-family: helvetica; font-size: 20px; text-align: center; color: #D7DEE9; line-height: 1.6em; background-color: #2F2F31; padding: 20px; border-radius: 5px; }
+    /* Cloze deletions styled in MediumSeaGreen. In display, they will show as square brackets with an ellipsis. */
+    .cloze, .cloze b, .cloze u, .cloze i { font-weight: bold; color: MediumSeaGreen !important; cursor: pointer; }
+    #extra, #extra i { font-size: 15px; color:#D7DEE9; font-style: italic; }
+    #list { color: #A6ABB9; font-size: 10px; width: 100%; text-align: center; }
+    .tags { color: #A6ABB9; opacity: 0; font-size: 10px; text-align: center; text-transform: uppercase; position: fixed; padding: 0px; top:0; right: 0; }
+    img { display: block; max-width: 100%; max-height: none; margin-left: auto; margin: 10px auto; }
+    img:active { width: 100%; }
+    tr { font-size: 12px; }
+    /* Accent Colors */
+    b { color: #C695C6 !important; }
+    u { text-decoration: none; color: #5EB3B3; }
+    i { color: IndianRed; }
+    a { color: LightBlue !important; text-decoration: none; font-size: 14px; font-style: normal; }
+    ::-webkit-scrollbar { background: #fff; width: 0px; }
+    ::-webkit-scrollbar-thumb { background: #bbb; }
+    /* Mobile styling */
+    .mobile .card { color: #D7DEE9; background-color: #2F2F31; }
+    .iphone .card img { max-width: 100%; max-height: none; }
+    .mobile .card img:active { width: inherit; max-height: none; }
+    /* Additional layout styling */
+    body { background-color: #1E1E20; margin: 0; padding: 0; }
+    #progress { text-align: center; font-family: helvetica; color: #A6ABB9; margin-top: 10px; }
+    /* The control buttons are hidden until a card is revealed */
+    #controls { display: none; justify-content: space-between; max-width: 700px; margin: 20px auto; padding: 0 10px; }
+    .controlButton { padding: 10px 20px; font-size: 16px; border: none; color: #fff; border-radius: 5px; cursor: pointer; flex: 1; margin: 0 5px; }
+    .discard { background-color: red; }
+    .save { background-color: green; }
+    /* Undo button: use a distinctive blue */
+    .undo { background-color: #4A90E2; }
+    /* Saved cards output styling */
+    #savedCardsContainer { max-width: 700px; margin: 20px auto; font-family: helvetica; color: #D7DEE9; display: none; }
+    #savedCardsText { width: 100%; height: 200px; padding: 10px; font-size: 16px; background-color: #2F2F31; color: #D7DEE9; border: none; border-radius: 5px; resize: none; }
+    #copyButton { margin-top: 10px; padding: 10px 20px; font-size: 16px; background-color: #4A90E2; color: #fff; border: none; border-radius: 5px; cursor: pointer; }
+    /* Undo container styling */
+    #undoContainer { max-width: 700px; margin: 20px auto; text-align: center; }
   </style>
 </head>
-<body>
+<body class="mobile">
+  <!-- Progress Tracker -->
   <div id="progress">Card <span id="current">0</span> of <span id="total">0</span></div>
-  <div id="kard">
-    <div id="cardContent"><p>Loading...</p></div>
+  <!-- Card Display -->
+  <div id="kard" class="card">
+    <div class="tags"></div>
+    <div id="cardContent"><!-- Processed card content will be injected here --></div>
   </div>
+  <!-- Controls (hidden until the card is revealed) -->
   <div id="controls">
-    <button id="prevButton" class="controlButton">Previous</button>
-    <button id="nextButton" class="controlButton">Next</button>
+    <button id="discardButton" class="controlButton discard">Discard</button>
+    <button id="saveButton" class="controlButton save">Save</button>
+  </div>
+  <!-- Undo Button (always visible) -->
+  <div id="undoContainer">
+    <button id="undoButton" class="controlButton undo">Undo</button>
+  </div>
+  <!-- Saved Cards Output -->
+  <div id="savedCardsContainer">
+    <h3 style="text-align:center;">Saved Cards</h3>
+    <textarea id="savedCardsText" readonly></textarea>
+    <div style="text-align:center;">
+      <button id="copyButton">Copy Saved Cards</button>
+    </div>
   </div>
   <script>
-    // The cards variable is rendered from the server.
+    /**********************
+     * Input Cards Array *
+     **********************/
+    // The generated cards (each as a cloze deletion string) are injected from the server.
     const cards = {{ cards_json|safe }};
-    let currentCardIndex = 0;
 
-    function showCard(index) {
-      if (index < 0 || index >= cards.length) return;
-      const cardContent = document.getElementById("cardContent");
-      // Render the card text directly without additional labels.
-      cardContent.innerHTML = `<p>${cards[index]}</p>`;
-      document.getElementById("current").textContent = index + 1;
-    }
-
-    function nextCard() {
-      if (currentCardIndex < cards.length - 1) {
-        currentCardIndex++;
-        showCard(currentCardIndex);
+    /**********************************************
+     * Build Interactive Cards from Generated Notes *
+     **********************************************/
+    let interactiveCards = [];
+    // Generate interactive card objects from a note.
+    // Each object has:
+    // - target: the cloze number to hide (e.g. "1" or "2")
+    // - displayText: the processed text for display (with target cloze(s) hidden)
+    // - exportText: the original note text (with proper curly braces) to be saved for later.
+    function generateInteractiveCards(cardText) {
+      const regex = /{{c(\\d+)::(.*?)}}/g;
+      const numbers = new Set();
+      let m;
+      while ((m = regex.exec(cardText)) !== null) {
+        numbers.add(m[1]);
       }
-    }
-
-    function prevCard() {
-      if (currentCardIndex > 0) {
-        currentCardIndex--;
-        showCard(currentCardIndex);
+      // If no cloze deletion is found, return the card as is.
+      if (numbers.size === 0) {
+        return [{ target: null, displayText: cardText, exportText: cardText }];
       }
+      const cardsForNote = [];
+      // For each unique cloze number, generate a separate interactive card.
+      Array.from(numbers).sort().forEach(num => {
+        const display = processCloze(cardText, num);
+        cardsForNote.push({ target: num, displayText: display, exportText: cardText });
+      });
+      return cardsForNote;
     }
-
-    document.addEventListener("DOMContentLoaded", function() {
-      document.getElementById("total").textContent = cards.length;
-      showCard(currentCardIndex);
-      document.getElementById("nextButton").addEventListener("click", nextCard);
-      document.getElementById("prevButton").addEventListener("click", prevCard);
+    // Process a card’s text so that:
+    // - For each cloze deletion matching the target number, replace it with a clickable span that initially shows "[...]"
+    // - For all other cloze deletions, simply reveal the answer.
+    function processCloze(text, target) {
+      return text.replace(/{{c(\\d+)::(.*?)}}/g, function(match, clozeNum, answer) {
+        if (clozeNum === target) {
+          return '<span class="cloze" data-answer="' + answer.replace(/"/g, '&quot;') + '">[...]</span>';
+        } else {
+          return answer;
+        }
+      });
+    }
+    // Build the full interactive cards array.
+    cards.forEach(cardText => {
+      interactiveCards = interactiveCards.concat(generateInteractiveCards(cardText));
     });
+    let currentIndex = 0;
+    let savedCards = [];
+    // This history stack will save snapshots of state so that an undo can revert an action.
+    let historyStack = [];
+
+    /*********************
+     * Element Selectors *
+     *********************/
+    const currentEl = document.getElementById("current");
+    const totalEl = document.getElementById("total");
+    const cardContentEl = document.getElementById("cardContent");
+    const discardButton = document.getElementById("discardButton");
+    const saveButton = document.getElementById("saveButton");
+    const controlsEl = document.getElementById("controls");
+    const savedCardsContainer = document.getElementById("savedCardsContainer");
+    const savedCardsText = document.getElementById("savedCardsText");
+    const copyButton = document.getElementById("copyButton");
+    const undoButton = document.getElementById("undoButton");
+    totalEl.textContent = interactiveCards.length;
+    // A helper to disable the undo button when there is no history.
+    function updateUndoButtonState() {
+      undoButton.disabled = historyStack.length === 0;
+    }
+    updateUndoButtonState();
+
+    /***************************
+     * Global Reveal on Touch *
+     ***************************/
+    // When the user taps anywhere in the card area (except the control buttons), reveal all hidden clozes.
+    cardContentEl.addEventListener("click", function(e) {
+      // Only reveal if controls are not yet visible.
+      if (!controlsEl.style.display || controlsEl.style.display === "none") {
+        const clozes = document.querySelectorAll("#cardContent .cloze");
+        clozes.forEach(span => {
+          // Replace the placeholder "[...]" with the actual answer.
+          span.innerHTML = span.getAttribute("data-answer");
+        });
+        controlsEl.style.display = "flex";
+      }
+    });
+
+    /***************************
+     * Card Display Functions *
+     ***************************/
+    function showCard() {
+      // Hide controls until the card is revealed (via tap)
+      controlsEl.style.display = "none";
+      currentEl.textContent = currentIndex + 1;
+      cardContentEl.innerHTML = interactiveCards[currentIndex].displayText;
+    }
+    function nextCard() {
+      currentIndex++;
+      if (currentIndex >= interactiveCards.length) {
+        finish();
+      } else {
+        showCard();
+      }
+    }
+    function finish() {
+      document.getElementById("kard").style.display = "none";
+      controlsEl.style.display = "none";
+      document.getElementById("progress").textContent = "Review complete!";
+      // When finished, join saved cards with a newline (each note is one field in the cloze format)
+      savedCardsText.value = savedCards.join("\\n");
+      savedCardsContainer.style.display = "block";
+    }
+
+    /***********************
+     * Button Event Listeners *
+     ***********************/
+    // Prevent clicks on the buttons from propagating to the cardContent (which would trigger a reveal).
+    discardButton.addEventListener("click", function(e) {
+      e.stopPropagation();
+      // Save snapshot of the current state before moving on.
+      historyStack.push({ currentIndex: currentIndex, savedCards: savedCards.slice() });
+      updateUndoButtonState();
+      nextCard();
+    });
+    saveButton.addEventListener("click", function(e) {
+      e.stopPropagation();
+      // Save snapshot of the current state before moving on.
+      historyStack.push({ currentIndex: currentIndex, savedCards: savedCards.slice() });
+      updateUndoButtonState();
+      // Save the original note text.
+      savedCards.push(interactiveCards[currentIndex].exportText);
+      nextCard();
+    });
+    undoButton.addEventListener("click", function(e) {
+      e.stopPropagation();
+      if (historyStack.length === 0) {
+        alert("No actions to undo.");
+        return;
+      }
+      let snapshot = historyStack.pop();
+      currentIndex = snapshot.currentIndex;
+      savedCards = snapshot.savedCards.slice();
+      // Restore card display and progress elements without overwriting the span elements.
+      document.getElementById("kard").style.display = "block";
+      controlsEl.style.display = "none";
+      savedCardsContainer.style.display = "none";
+      cardContentEl.innerHTML = interactiveCards[currentIndex].displayText;
+      currentEl.textContent = currentIndex + 1;
+      updateUndoButtonState();
+    });
+    copyButton.addEventListener("click", function() {
+      savedCardsText.select();
+      document.execCommand("copy");
+      copyButton.textContent = "Copied!";
+      setTimeout(function() {
+        copyButton.textContent = "Copy Saved Cards";
+      }, 2000);
+    });
+
+    /***********************
+     * Start the Review *
+     ***********************/
+    showCard();
   </script>
 </body>
 </html>
