@@ -65,14 +65,14 @@ def fix_cloze_formatting(card):
     card = re.sub(r'(?<!})}(?!})', '}}', card)
     return card
 
-def get_anki_cards_for_chunk(transcript_chunk):
+def get_anki_cards_for_chunk(transcript_chunk, user_preferences=""):
     """
     Calls the OpenAI API with a transcript chunk and returns a list of Anki cloze deletion flashcards.
     The API is instructed to output only a valid JSON array of strings, each string formatted as a complete,
     self-contained cloze deletion using the exact format: {{c1::...}}.
     
     Additional formatting instructions:
-    
+
     2. Formatting Cloze Deletions Properly
        • Cloze deletions should be written in the format:
          {{c1::hidden text}}
@@ -93,9 +93,9 @@ def get_anki_cards_for_chunk(transcript_chunk):
 
     5. Choosing Between Fill-in-the-Blank vs. Q&A Style
        • Fill-in-the-blank format works well for quick fact recall:
-           {{c1::Canberra}} is the capital of {{c2::Australia}}.
+             {{c1::Canberra}} is the capital of {{c2::Australia}}.
        • Q&A-style cloze deletions work better for some questions:
-           What is the capital of Australia?<br><br>{{c1::Canberra}}
+             What is the capital of Australia?<br><br>{{c1::Canberra}}
        • Use line breaks (<br><br>) so the answer appears on a separate line.
 
     6. Avoiding Overly General or Basic Facts
@@ -105,12 +105,12 @@ def get_anki_cards_for_chunk(transcript_chunk):
 
     7. Using Cloze Deletion for Definitions
        • Definitions should follow the “is defined as” structure for clarity.
-         Example: "A {{c1::pneumothorax}} is defined as {{c2::air in the pleural space}}."
+             Example: "A {{c1::pneumothorax}} is defined as {{c2::air in the pleural space}}."
 
     8. Formatting Output in HTML for Readability
        • Use line breaks (<br><br>) to properly space question and answer.
-         Example:
-         What is the capital of Australia?<br><br>{{c1::Canberra}}
+             Example:
+             What is the capital of Australia?<br><br>{{c1::Canberra}}
        • This keeps the cloze deletion on a separate line, improving readability.
 
     9. Summary of Key Rules
@@ -118,10 +118,22 @@ def get_anki_cards_for_chunk(transcript_chunk):
        • Use different C-numbers for unrelated deletions.
        • Ensure only one correct answer per deletion.
        • Focus on college-level or expert-level knowledge.
-       • Use HTML formatting for better display for question-based cloze deletions.
+       • Use HTML formatting for better display.
+
+    FEATURE REQUEST – User-Directed Card Generation:
+       • Additionally, include the following user preference in your instructions:
+         "User Request: <user_preferences>"
+       • If the user’s preference is provided, generate cards that focus on that content.
+       • If a particular chunk does not contain content relevant to the user’s request, output a dummy card in the following format:
+         "User request not found in {{c1::this chunk}}."
 
     Remember: Output ONLY a valid JSON array of strings, with no extra commentary.
     """
+    # Append the user preference to the prompt if provided.
+    user_instr = ""
+    if user_preferences.strip():
+        user_instr = f'\nUser Request: {user_preferences.strip()}\nIf no content relevant to the user request is found in this chunk, output a dummy card in the format: "User request not found in {{c1::this chunk}}."'
+    
     prompt = f"""
 You are an expert at creating study flashcards in Anki using cloze deletion.
 Given the transcript below, generate a list of flashcards.
@@ -167,6 +179,7 @@ Follow these formatting instructions exactly:
    • Ensure only one correct answer per deletion.
    • Focus on college-level or expert-level knowledge.
    • Use HTML formatting for better display.
+{user_instr}
 Ensure you output ONLY a valid JSON array of strings, with no additional commentary or markdown.
     
 Transcript:
@@ -212,7 +225,7 @@ Transcript:
         flash("OpenAI API error for a chunk: " + str(e))
         return []
 
-def get_all_anki_cards(transcript, max_chunk_size=4000):
+def get_all_anki_cards(transcript, user_preferences="", max_chunk_size=4000):
     """
     Preprocesses the transcript, splits it into chunks, and processes each chunk to generate Anki cards.
     Returns a combined list of all flashcards.
@@ -223,7 +236,7 @@ def get_all_anki_cards(transcript, max_chunk_size=4000):
     all_cards = []
     for i, chunk in enumerate(chunks):
         logger.debug("Processing chunk %d/%d", i+1, len(chunks))
-        cards = get_anki_cards_for_chunk(chunk)
+        cards = get_anki_cards_for_chunk(chunk, user_preferences)
         logger.debug("Chunk %d produced %d cards.", i+1, len(cards))
         all_cards.extend(cards)
     logger.debug("Total flashcards generated: %d", len(all_cards))
@@ -241,7 +254,8 @@ INDEX_HTML = """
   <title>Transcript to Anki Cards</title>
   <style>
     body { background-color: #1E1E20; color: #D7DEE9; font-family: Arial, sans-serif; text-align: center; padding-top: 50px; }
-    textarea { width: 80%; height: 200px; padding: 10px; font-size: 16px; }
+    textarea, input[type="text"] { width: 80%; padding: 10px; font-size: 16px; margin-bottom: 10px; }
+    textarea { height: 200px; }
     input[type="submit"] { padding: 10px 20px; font-size: 16px; margin-top: 10px; }
     .flash { color: red; }
     a { color: #6BB0F5; text-decoration: none; }
@@ -262,6 +276,8 @@ INDEX_HTML = """
   {% endwith %}
   <form method="post">
     <textarea name="transcript" placeholder="Paste your transcript here" required></textarea>
+    <br>
+    <input type="text" name="preferences" placeholder="Enter your card preferences (optional)">
     <br>
     <input type="submit" value="Generate Anki Cards">
   </form>
@@ -527,8 +543,9 @@ def index():
         if not transcript:
             flash("Please paste a transcript.")
             return redirect(url_for("index"))
+        user_preferences = request.form.get("preferences", "")
         # Preprocess and generate Anki cards from the transcript.
-        cards = get_all_anki_cards(transcript)
+        cards = get_all_anki_cards(transcript, user_preferences)
         logger.debug("Final flashcards list: %s", cards)
         if not cards:
             flash("Failed to generate any Anki cards.")
