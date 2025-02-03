@@ -2,7 +2,6 @@ import os
 import re
 import json
 import logging
-import requests
 from flask import Flask, request, redirect, url_for, flash, render_template_string
 
 # Updated OpenAI API import and initialization.
@@ -27,9 +26,7 @@ def preprocess_transcript(text):
     Remove common timestamp patterns (e.g. "00:00:00.160" or "00:00:00,160")
     and normalize whitespace.
     """
-    # Remove timestamps of the form 00:00:00.160 or 00:00:00,160
     text_no_timestamps = re.sub(r'\d{2}:\d{2}:\d{2}[.,]\d{3}', '', text)
-    # Normalize whitespace
     cleaned_text = re.sub(r'\s+', ' ', text_no_timestamps)
     return cleaned_text.strip()
 
@@ -60,11 +57,18 @@ def get_anki_cards_for_chunk(transcript_chunk):
     """
     Calls the OpenAI API with a transcript chunk and returns a list of Anki cloze deletion flashcards.
     A timeout of 15 seconds is set for the API call.
+    The API is instructed to output only a JSON array of strings, each string formatted as a complete
+    cloze deletion card in the form: {{c1::...}} with no extra numbering or text.
     """
     prompt = f"""
-You are an expert at creating study flashcards. Given the transcript below, generate a list of Anki cloze deletion flashcards.
-Each flashcard should be a string containing a question and its answer in the format: {{c1::answer}}.
-Output ONLY a valid JSON array of strings with no additional commentary, markdown formatting, or extra text.
+You are an expert at creating study flashcards in Anki using cloze deletion format.
+Given the transcript below, generate a list of flashcards. Each flashcard should be a complete,
+self-contained sentence (or sentence fragment) containing a cloze deletion formatted exactly as follows:
+  {{c1::hidden text}}
+Ensure that:
+- You use double curly braces for the cloze deletion.
+- You do not include any extra numbering, labels, or commentary.
+- Output ONLY a valid JSON array of strings with no markdown or additional text.
 
 Transcript:
 \"\"\"{transcript_chunk}\"\"\"
@@ -108,12 +112,11 @@ Transcript:
 
 def get_all_anki_cards(transcript, max_chunk_size=2000):
     """
-    Preprocesses the transcript to remove timestamps and normalize whitespace,
-    splits it into chunks, and processes each chunk to generate Anki cards.
+    Preprocesses the transcript, splits it into chunks, and processes each chunk to generate Anki cards.
     Returns a combined list of all flashcards.
     """
     cleaned_transcript = preprocess_transcript(transcript)
-    logger.debug("Cleaned transcript: %s", cleaned_transcript[:200])  # log first 200 characters for brevity
+    logger.debug("Cleaned transcript (first 200 chars): %s", cleaned_transcript[:200])
     chunks = chunk_text(cleaned_transcript, max_chunk_size)
     all_cards = []
     for i, chunk in enumerate(chunks):
@@ -164,7 +167,7 @@ INDEX_HTML = """
 </html>
 """
 
-# Note: This template now shows one card at a time with Previous/Next navigation.
+# The review page now displays one card at a time without extra numbering or prefixes.
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -199,8 +202,8 @@ ANKI_HTML = """
     function showCard(index) {
       if (index < 0 || index >= cards.length) return;
       const cardContent = document.getElementById("cardContent");
-      // Format the card nicely. You could further process cloze deletion syntax if desired.
-      cardContent.innerHTML = `<p><strong>Card ${index + 1}:</strong> ${cards[index]}</p>`;
+      // Render the card text directly without additional labels.
+      cardContent.innerHTML = `<p>${cards[index]}</p>`;
       document.getElementById("current").textContent = index + 1;
     }
 
