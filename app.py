@@ -70,23 +70,111 @@ def get_anki_cards_for_chunk(transcript_chunk):
     Calls the OpenAI API with a transcript chunk and returns a list of Anki cloze deletion flashcards.
     The API is instructed to output only a valid JSON array of strings, each string formatted as a complete,
     self-contained cloze deletion using the exact format: {{c1::...}}.
+    
+    Additional formatting instructions:
+    
+    2. Formatting Cloze Deletions Properly
+       • Cloze deletions should be written in the format:
+         {{c1::hidden text}}
+       • Example:
+         Original sentence: "Canberra is the capital of Australia."
+         Cloze version: "{{c1::Canberra}} is the capital of {{c2::Australia}}."
+
+    3. Using Multiple Cloze Deletions in One Card
+       • If multiple deletions belong to the same testable concept, they should use the same number:
+         Example: "The three branches of the U.S. government are {{c1::executive}}, {{c1::legislative}}, and {{c1::judicial}}."
+       • If deletions belong to separate testable concepts, use different numbers:
+         Example: "The heart has {{c1::four}} chambers and pumps blood through the {{c2::circulatory}} system."
+
+    4. Ensuring One Clear Answer
+       • Avoid ambiguity—each blank should have only one reasonable answer.
+       • Bad Example: "{{c1::He}} went to the store."
+       • Good Example: "The mitochondria is known as the {{c1::powerhouse}} of the cell."
+
+    5. Choosing Between Fill-in-the-Blank vs. Q&A Style
+       • Fill-in-the-blank format works well for quick fact recall:
+           {{c1::Canberra}} is the capital of {{c2::Australia}}.
+       • Q&A-style cloze deletions work better for some questions:
+           What is the capital of Australia?<br><br>{{c1::Canberra}}
+       • Use line breaks (<br><br>) so the answer appears on a separate line.
+
+    6. Avoiding Overly General or Basic Facts
+       • Bad Example (too vague): "{{c1::A planet}} orbits a star."
+       • Better Example: "{{c1::Jupiter}} is the largest planet in the solar system."
+       • Focus on college-level or expert knowledge.
+
+    7. Using Cloze Deletion for Definitions
+       • Definitions should follow the “is defined as” structure for clarity.
+         Example: "A {{c1::pneumothorax}} is defined as {{c2::air in the pleural space}}."
+
+    8. Formatting Output in HTML for Readability
+       • Use line breaks (<br><br>) to properly space question and answer.
+         Example:
+         What is the capital of Australia?<br><br>{{c1::Canberra}}
+       • This keeps the cloze deletion on a separate line, improving readability.
+
+    9. Summary of Key Rules
+       • Keep answers concise (single words or short phrases).
+       • Use different C-numbers for unrelated deletions.
+       • Ensure only one correct answer per deletion.
+       • Focus on college-level or expert-level knowledge.
+       • Use HTML formatting for better display for question-based cloze deletions.
+
+    Remember: Output ONLY a valid JSON array of strings, with no extra commentary.
     """
     prompt = f"""
 You are an expert at creating study flashcards in Anki using cloze deletion.
 Given the transcript below, generate a list of flashcards.
-Each flashcard should be a complete, self-contained sentence (or sentence fragment) containing a cloze deletion formatted exactly as:
+Each flashcard should be a complete, self-contained sentence (or sentence fragment) containing one or more cloze deletions.
+Each cloze deletion must be formatted exactly as:
   {{c1::hidden text}}
-Ensure that:
-- You use double curly braces for the cloze deletion.
-- Do not include any extra numbering, labels, or commentary.
-- Output ONLY a valid JSON array of strings with no markdown formatting or additional text.
-
+Follow these formatting instructions exactly:
+2. Formatting Cloze Deletions Properly
+   • Cloze deletions should be written in the format:
+     {{c1::hidden text}}
+   • Example:
+     Original sentence: "Canberra is the capital of Australia."
+     Cloze version: "{{c1::Canberra}} is the capital of {{c2::Australia}}."
+3. Using Multiple Cloze Deletions in One Card
+   • If multiple deletions belong to the same testable concept, they should use the same number:
+     Example: "The three branches of the U.S. government are {{c1::executive}}, {{c1::legislative}}, and {{c1::judicial}}."
+   • If deletions belong to separate testable concepts, use different numbers:
+     Example: "The heart has {{c1::four}} chambers and pumps blood through the {{c2::circulatory}} system."
+4. Ensuring One Clear Answer
+   • Avoid ambiguity—each blank should have only one reasonable answer.
+   • Bad Example: "{{c1::He}} went to the store."
+   • Good Example: "The mitochondria is known as the {{c1::powerhouse}} of the cell."
+5. Choosing Between Fill-in-the-Blank vs. Q&A Style
+   • Fill-in-the-blank format works well for quick fact recall:
+         {{c1::Canberra}} is the capital of {{c2::Australia}}.
+   • Q&A-style cloze deletions work better for some questions:
+         What is the capital of Australia?<br><br>{{c1::Canberra}}
+   • Use line breaks (<br><br>) so the answer appears on a separate line.
+6. Avoiding Overly General or Basic Facts
+   • Bad Example (too vague): "{{c1::A planet}} orbits a star."
+   • Better Example: "{{c1::Jupiter}} is the largest planet in the solar system."
+   • Focus on college-level or expert-level knowledge.
+7. Using Cloze Deletion for Definitions
+   • Definitions should follow the “is defined as” structure for clarity.
+         Example: "A {{c1::pneumothorax}} is defined as {{c2::air in the pleural space}}."
+8. Formatting Output in HTML for Readability
+   • Use line breaks (<br><br>) to properly space question and answer.
+         Example:
+         What is the capital of Australia?<br><br>{{c1::Canberra}}
+9. Summary of Key Rules
+   • Keep answers concise (single words or short phrases).
+   • Use different C-numbers for unrelated deletions.
+   • Ensure only one correct answer per deletion.
+   • Focus on college-level or expert-level knowledge.
+   • Use HTML formatting for better display.
+Ensure you output ONLY a valid JSON array of strings, with no additional commentary or markdown.
+    
 Transcript:
 \"\"\"{transcript_chunk}\"\"\"
 """
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",  # Your chosen model.
+            model="gpt-4o-mini",  # Your chosen model.
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": prompt}
