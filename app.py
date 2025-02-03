@@ -201,11 +201,7 @@ INDEX_HTML = """
 </html>
 """
 
-# The review page has been restructured so that:
-# - Initially, only the card question is shown.
-# - Tapping the card reveals the answer and then shows the Discard/Save action controls.
-# - Bottom controls now appear as two stacked rows: the top row for Undo, and the row below for Edit.
-# - In edit mode, only the Edit Controls row appears, with Cancel Edit on the left and Save Edit on the right.
+# The review page now centers the card vertically and sets a minimum height.
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -214,81 +210,100 @@ ANKI_HTML = """
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Anki Cloze Review</title>
   <style>
-    /* Provided Styling */
-    html { overflow: scroll; overflow-x: hidden; }
-    #kard { padding: 0; max-width: 700px; margin: 20px auto; word-wrap: break-word; position: relative; }
-    .card { font-family: helvetica; font-size: 20px; text-align: center; color: #D7DEE9; line-height: 1.6em; background-color: #2F2F31; padding: 20px; border-radius: 5px; }
+    /* Base styling */
+    html, body { height: 100%; margin: 0; padding: 0; }
+    body { background-color: #1E1E20; font-family: helvetica, Arial, sans-serif; }
+    /* Container for centering content */
+    #reviewContainer {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 10px;
+    }
+    /* Card container with a minimum height of about half the screen */
+    #kard {
+      background-color: #2F2F31;
+      border-radius: 5px;
+      padding: 20px;
+      max-width: 700px;
+      width: 100%;
+      min-height: 50vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      word-wrap: break-word;
+      margin-bottom: 20px;
+    }
+    .card { font-size: 20px; color: #D7DEE9; line-height: 1.6em; }
     /* Edit mode styling for textarea */
     #editArea { width: 100%; height: 150px; font-size: 20px; padding: 10px; }
-    /* Cloze deletions styled in MediumSeaGreen. */
+    /* Cloze styling */
     .cloze, .cloze b, .cloze u, .cloze i { font-weight: bold; color: MediumSeaGreen !important; cursor: pointer; }
-    #extra, #extra i { font-size: 15px; color:#D7DEE9; font-style: italic; }
-    #list { color: #A6ABB9; font-size: 10px; width: 100%; text-align: center; }
-    .tags { color: #A6ABB9; opacity: 0; font-size: 10px; text-align: center; text-transform: uppercase; position: fixed; top: 0; right: 0; padding: 0; }
-    img { display: block; max-width: 100%; margin: 10px auto; }
-    img:active { width: 100%; }
-    tr { font-size: 12px; }
-    b { color: #C695C6 !important; }
-    u { text-decoration: none; color: #5EB3B3; }
-    i { color: IndianRed; }
-    a { color: LightBlue !important; text-decoration: none; font-size: 14px; }
-    ::-webkit-scrollbar { background: #fff; width: 0; }
-    ::-webkit-scrollbar-thumb { background: #bbb; }
-    body { background-color: #1E1E20; margin: 0; padding: 0; }
-    #progress { text-align: center; font-family: helvetica; color: #A6ABB9; margin-top: 10px; }
-    /* Action controls (Discard/Save) appear only after reveal */
-    #actionControls { display: none; justify-content: space-between; max-width: 700px; margin: 20px auto; padding: 0 10px; }
+    /* Control styling */
+    #actionControls { display: none; justify-content: space-between; width: 100%; max-width: 700px; margin: 10px auto; }
     .actionButton { padding: 10px 20px; font-size: 16px; border: none; color: #fff; border-radius: 5px; cursor: pointer; flex: 1; margin: 0 5px; }
     .discard { background-color: red; }
     .save { background-color: green; }
-    /* Bottom controls: Two rows (Undo then Edit) */
-    #bottomUndo { display: flex; justify-content: center; max-width: 700px; margin: 10px auto; padding: 0 10px; }
+    /* Bottom controls: two rows */
+    #bottomUndo, #bottomEdit {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+      max-width: 700px;
+      margin: 5px auto;
+      padding: 0 10px;
+    }
     .bottomButton { padding: 10px 20px; font-size: 16px; border: none; color: #fff; border-radius: 5px; cursor: pointer; flex: 1; margin: 0 5px; }
     .undo { background-color: #4A90E2; }
-    #bottomEdit { display: flex; justify-content: center; max-width: 700px; margin: 10px auto; padding: 0 10px; }
-    .edit { background-color: #FFA500; } /* Orange */
-    /* Edit controls (Cancel Edit and Save Edit) with Cancel on left */
-    #editControls { display: none; justify-content: space-between; max-width: 700px; margin: 20px auto; padding: 0 10px; }
+    .edit { background-color: #FFA500; }
+    /* Edit controls: Cancel Edit left, Save Edit right */
+    #editControls { display: none; justify-content: space-between; width: 100%; max-width: 700px; margin: 10px auto; }
     .editButton { padding: 10px 20px; font-size: 16px; border: none; color: #fff; border-radius: 5px; cursor: pointer; flex: 1; margin: 0 5px; }
     .cancelEdit { background-color: gray; }
     .saveEdit { background-color: green; }
-    /* Saved cards output styling */
-    #savedCardsContainer { max-width: 700px; margin: 20px auto; font-family: helvetica; color: #D7DEE9; display: none; }
-    #savedCardsText { width: 100%; height: 200px; padding: 10px; font-size: 16px; background-color: #2F2F31; color: #D7DEE9; border: none; border-radius: 5px; resize: none; }
+    /* Progress tracker */
+    #progress { text-align: center; color: #A6ABB9; margin-bottom: 10px; }
+    /* Saved cards styling */
+    #savedCardsContainer { width: 100%; max-width: 700px; margin: 20px auto; color: #D7DEE9; display: none; }
+    #savedCardsText { width: 100%; height: 200px; padding: 10px; font-size: 16px; background-color: #2F2F31; border: none; border-radius: 5px; resize: none; }
     #copyButton { margin-top: 10px; padding: 10px 20px; font-size: 16px; background-color: #4A90E2; color: #fff; border: none; border-radius: 5px; cursor: pointer; }
   </style>
 </head>
 <body class="mobile">
-  <!-- Progress Tracker -->
-  <div id="progress">Card <span id="current">0</span> of <span id="total">0</span></div>
-  <!-- Card Display -->
-  <div id="kard" class="card">
-    <div class="tags"></div>
-    <div id="cardContent"><!-- Processed card content will be injected here --></div>
-  </div>
-  <!-- Action Controls (Discard/Save) - Hidden until answer is revealed -->
-  <div id="actionControls">
-    <button id="discardButton" class="actionButton discard">Discard</button>
-    <button id="saveButton" class="actionButton save">Save</button>
-  </div>
-  <!-- Edit Controls (Cancel Edit on left, Save Edit on right) -->
-  <div id="editControls">
-    <button id="cancelEditButton" class="editButton cancelEdit">Cancel Edit</button>
-    <button id="saveEditButton" class="editButton saveEdit">Save Edit</button>
-  </div>
-  <!-- Bottom Controls -->
-  <div id="bottomUndo">
-    <button id="undoButton" class="bottomButton undo">Undo</button>
-  </div>
-  <div id="bottomEdit">
-    <button id="editButton" class="bottomButton edit">Edit</button>
-  </div>
-  <!-- Saved Cards Output -->
-  <div id="savedCardsContainer">
-    <h3 style="text-align:center;">Saved Cards</h3>
-    <textarea id="savedCardsText" readonly></textarea>
-    <div style="text-align:center;">
-      <button id="copyButton">Copy Saved Cards</button>
+  <div id="reviewContainer">
+    <!-- Progress Tracker -->
+    <div id="progress">Card <span id="current">0</span> of <span id="total">0</span></div>
+    <!-- Card Display -->
+    <div id="kard">
+      <div class="card" id="cardContent"><!-- Card content injected here --></div>
+    </div>
+    <!-- Action Controls (Discard/Save) - hidden until answer is revealed -->
+    <div id="actionControls">
+      <button id="discardButton" class="actionButton discard">Discard</button>
+      <button id="saveButton" class="actionButton save">Save</button>
+    </div>
+    <!-- Edit Controls (Cancel Edit on left, Save Edit on right) -->
+    <div id="editControls">
+      <button id="cancelEditButton" class="editButton cancelEdit">Cancel Edit</button>
+      <button id="saveEditButton" class="editButton saveEdit">Save Edit</button>
+    </div>
+    <!-- Bottom Controls: two rows -->
+    <div id="bottomUndo">
+      <button id="undoButton" class="bottomButton undo">Undo</button>
+    </div>
+    <div id="bottomEdit">
+      <button id="editButton" class="bottomButton edit">Edit</button>
+    </div>
+    <!-- Saved Cards Output -->
+    <div id="savedCardsContainer">
+      <h3 style="text-align:center;">Saved Cards</h3>
+      <textarea id="savedCardsText" readonly></textarea>
+      <div style="text-align:center;">
+        <button id="copyButton">Copy Saved Cards</button>
+      </div>
     </div>
   </div>
   <script>
@@ -296,7 +311,7 @@ ANKI_HTML = """
     const cards = {{ cards_json|safe }};
 {% raw %}
     /**********************
-     * Build Interactive Cards from Generated Notes *
+     * Build Interactive Cards *
      **********************/
     let interactiveCards = [];
     function generateInteractiveCards(cardText) {
