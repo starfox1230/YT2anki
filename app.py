@@ -202,10 +202,10 @@ INDEX_HTML = """
 """
 
 # The review page has been restructured so that:
-# - The card (question) is shown initially.
-# - Tapping the card (if not in edit mode) reveals the answer and shows the action controls (Discard/Save).
-# - A bottom controls row always shows Undo and Edit buttons.
-# - In edit mode, only Save Edit and Cancel Edit buttons appear.
+# - Initially, only the card question is shown.
+# - Tapping the card reveals the answer and then shows the Discard/Save action controls.
+# - Bottom controls now appear as two stacked rows: the top row for Undo, and the row below for Edit.
+# - In edit mode, only the Edit Controls row appears, with Cancel Edit on the left and Save Edit on the right.
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -241,16 +241,17 @@ ANKI_HTML = """
     .actionButton { padding: 10px 20px; font-size: 16px; border: none; color: #fff; border-radius: 5px; cursor: pointer; flex: 1; margin: 0 5px; }
     .discard { background-color: red; }
     .save { background-color: green; }
-    /* Bottom controls always visible (Undo and Edit) */
-    #bottomControls { display: flex; justify-content: space-between; max-width: 700px; margin: 20px auto; padding: 0 10px; }
+    /* Bottom controls: Two rows (Undo then Edit) */
+    #bottomUndo { display: flex; justify-content: center; max-width: 700px; margin: 10px auto; padding: 0 10px; }
     .bottomButton { padding: 10px 20px; font-size: 16px; border: none; color: #fff; border-radius: 5px; cursor: pointer; flex: 1; margin: 0 5px; }
     .undo { background-color: #4A90E2; }
+    #bottomEdit { display: flex; justify-content: center; max-width: 700px; margin: 10px auto; padding: 0 10px; }
     .edit { background-color: #FFA500; } /* Orange */
-    /* Edit controls (Save Edit and Cancel Edit) */
+    /* Edit controls (Cancel Edit and Save Edit) with Cancel on left */
     #editControls { display: none; justify-content: space-between; max-width: 700px; margin: 20px auto; padding: 0 10px; }
     .editButton { padding: 10px 20px; font-size: 16px; border: none; color: #fff; border-radius: 5px; cursor: pointer; flex: 1; margin: 0 5px; }
-    .saveEdit { background-color: green; }
     .cancelEdit { background-color: gray; }
+    .saveEdit { background-color: green; }
     /* Saved cards output styling */
     #savedCardsContainer { max-width: 700px; margin: 20px auto; font-family: helvetica; color: #D7DEE9; display: none; }
     #savedCardsText { width: 100%; height: 200px; padding: 10px; font-size: 16px; background-color: #2F2F31; color: #D7DEE9; border: none; border-radius: 5px; resize: none; }
@@ -270,14 +271,16 @@ ANKI_HTML = """
     <button id="discardButton" class="actionButton discard">Discard</button>
     <button id="saveButton" class="actionButton save">Save</button>
   </div>
-  <!-- Edit Controls (Save Edit/Cancel Edit) -->
+  <!-- Edit Controls (Cancel Edit on left, Save Edit on right) -->
   <div id="editControls">
-    <button id="saveEditButton" class="editButton saveEdit">Save Edit</button>
     <button id="cancelEditButton" class="editButton cancelEdit">Cancel Edit</button>
+    <button id="saveEditButton" class="editButton saveEdit">Save Edit</button>
   </div>
-  <!-- Bottom Controls (Undo and Edit) -->
-  <div id="bottomControls">
+  <!-- Bottom Controls -->
+  <div id="bottomUndo">
     <button id="undoButton" class="bottomButton undo">Undo</button>
+  </div>
+  <div id="bottomEdit">
     <button id="editButton" class="bottomButton edit">Edit</button>
   </div>
   <!-- Saved Cards Output -->
@@ -296,7 +299,6 @@ ANKI_HTML = """
      * Build Interactive Cards from Generated Notes *
      **********************/
     let interactiveCards = [];
-    // Each card object: { target, displayText, exportText }
     function generateInteractiveCards(cardText) {
       const regex = /{{c(\d+)::(.*?)}}/g;
       const numbers = new Set();
@@ -339,7 +341,8 @@ ANKI_HTML = """
     const totalEl = document.getElementById("total");
     const cardContentEl = document.getElementById("cardContent");
     const actionControls = document.getElementById("actionControls");
-    const bottomControls = document.getElementById("bottomControls");
+    const bottomUndo = document.getElementById("bottomUndo");
+    const bottomEdit = document.getElementById("bottomEdit");
     const undoButton = document.getElementById("undoButton");
     const editButton = document.getElementById("editButton");
     const discardButton = document.getElementById("discardButton");
@@ -360,14 +363,12 @@ ANKI_HTML = """
      * Global Reveal on Touch *
      ***************************/
     cardContentEl.addEventListener("click", function(e) {
-      if (inEditMode) return; // Do nothing in edit mode.
-      // Only reveal answer if actionControls are hidden.
+      if (inEditMode) return;
       if (actionControls.style.display === "none" || actionControls.style.display === "") {
         const clozes = document.querySelectorAll("#cardContent .cloze");
         clozes.forEach(span => {
           span.innerHTML = span.getAttribute("data-answer");
         });
-        // Show discard and save buttons.
         actionControls.style.display = "flex";
       }
     });
@@ -376,7 +377,6 @@ ANKI_HTML = """
      * Card Display Functions *
      ***************************/
     function showCard() {
-      // In non-edit mode, hide action controls initially.
       if (!inEditMode) {
         actionControls.style.display = "none";
       }
@@ -394,7 +394,8 @@ ANKI_HTML = """
     function finish() {
       document.getElementById("kard").style.display = "none";
       actionControls.style.display = "none";
-      bottomControls.style.display = "none";
+      bottomUndo.style.display = "none";
+      bottomEdit.style.display = "none";
       document.getElementById("progress").textContent = "Review complete!";
       savedCardsText.value = savedCards.join("\\n");
       savedCardsContainer.style.display = "block";
@@ -416,7 +417,6 @@ ANKI_HTML = """
       savedCards.push(interactiveCards[currentIndex].exportText);
       nextCard();
     });
-    // Edit button (in bottom controls)
     editButton.addEventListener("click", function(e) {
       e.stopPropagation();
       if (!inEditMode) enterEditMode();
@@ -424,19 +424,16 @@ ANKI_HTML = """
     function enterEditMode() {
       inEditMode = true;
       originalCardText = interactiveCards[currentIndex].exportText;
-      // Replace card content with a textarea prefilled with the export text.
       cardContentEl.innerHTML = '<textarea id="editArea">' + interactiveCards[currentIndex].exportText + '</textarea>';
-      // Hide action and bottom controls; show edit controls.
       actionControls.style.display = "none";
-      bottomControls.style.display = "none";
+      bottomUndo.style.display = "none";
+      bottomEdit.style.display = "none";
       editControls.style.display = "flex";
     }
     saveEditButton.addEventListener("click", function(e) {
       e.stopPropagation();
       const editedText = document.getElementById("editArea").value;
-      // Update the card's raw export text.
       interactiveCards[currentIndex].exportText = editedText;
-      // Recalculate the display text for the current cloze target.
       let target = interactiveCards[currentIndex].target;
       if (target) {
         interactiveCards[currentIndex].displayText = processCloze(editedText, target);
@@ -445,14 +442,16 @@ ANKI_HTML = """
       }
       inEditMode = false;
       editControls.style.display = "none";
-      bottomControls.style.display = "flex";
+      bottomUndo.style.display = "flex";
+      bottomEdit.style.display = "flex";
       showCard();
     });
     cancelEditButton.addEventListener("click", function(e) {
       e.stopPropagation();
       inEditMode = false;
       editControls.style.display = "none";
-      bottomControls.style.display = "flex";
+      bottomUndo.style.display = "flex";
+      bottomEdit.style.display = "flex";
       showCard();
     });
     undoButton.addEventListener("click", function(e) {
