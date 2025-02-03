@@ -86,19 +86,40 @@ Follow these formatting instructions exactly:
      Original sentence: "Canberra is the capital of Australia."
      Cloze version: "{{c1::Canberra}} is the capital of {{c2::Australia}}."
 3. Using Multiple Cloze Deletions in One Card
-   • If multiple deletions belong to the same testable concept, they should use the same number.
-   • If deletions belong to separate testable concepts, use different numbers.
+   • If multiple deletions belong to the same testable concept, they should use the same number:
+     Example: "The three branches of the U.S. government are {{c1::executive}}, {{c1::legislative}}, and {{c1::judicial}}."
+   • If deletions belong to separate testable concepts, use different numbers:
+     Example: "The heart has {{c1::four}} chambers and pumps blood through the {{c2::circulatory}} system."
 4. Ensuring One Clear Answer
    • Avoid ambiguity—each blank should have only one reasonable answer.
+   • Bad Example: "{{c1::He}} went to the store."
+   • Good Example: "The mitochondria is known as the {{c1::powerhouse}} of the cell."
 5. Choosing Between Fill-in-the-Blank vs. Q&A Style
+   • Fill-in-the-blank format works well for quick fact recall:
+         {{c1::Canberra}} is the capital of {{c2::Australia}}.
+   • Q&A-style cloze deletions work better for some questions:
+         What is the capital of Australia?<br><br>{{c1::Canberra}}
    • Use line breaks (<br><br>) so the answer appears on a separate line.
 6. Avoiding Overly General or Basic Facts
+   • Bad Example (too vague): "{{c1::A planet}} orbits a star."
+   • Better Example: "{{c1::Jupiter}} is the largest planet in the solar system."
+   • Focus on college-level or expert-level knowledge.
 7. Using Cloze Deletion for Definitions
+   • Definitions should follow the “is defined as” structure for clarity.
+         Example: "A {{c1::pneumothorax}} is defined as {{c2::air in the pleural space}}."
 8. Formatting Output in HTML for Readability
+   • Use line breaks (<br><br>) to properly space question and answer.
+         Example:
+         What is the capital of Australia?<br><br>{{c1::Canberra}}
 9. Summary of Key Rules
-   • Keep answers concise, use different C-numbers, and focus on expert-level knowledge.
+   • Keep answers concise (single words or short phrases).
+   • Use different C-numbers for unrelated deletions.
+   • Ensure only one correct answer per deletion.
+   • Focus on college-level or expert-level knowledge.
+   • Use HTML formatting for better display.
+In addition, you must make sure to follow the following instructions:
 {user_instr}
-Ensure you output ONLY a valid JSON array of strings, with no additional commentary.
+Ensure you output ONLY a valid JSON array of strings, with no additional commentary or markdown.
     
 Transcript:
 \"\"\"{transcript_chunk}\"\"\"
@@ -201,7 +222,7 @@ INDEX_HTML = """
 </html>
 """
 
-# The review page now centers the card vertically and sets a minimum height.
+# The review page now positions the progress tracker at the top of the screen and the card box just beneath it.
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -213,15 +234,15 @@ ANKI_HTML = """
     /* Base styling */
     html, body { height: 100%; margin: 0; padding: 0; }
     body { background-color: #1E1E20; font-family: helvetica, Arial, sans-serif; }
-    /* Container for centering content */
+    /* Container for review; now aligned at the top */
     #reviewContainer {
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      min-height: 100vh;
       padding: 10px;
     }
+    /* Progress Tracker positioned at the top */
+    #progress { width: 100%; max-width: 700px; text-align: center; color: #A6ABB9; margin-bottom: 10px; }
     /* Card container with a minimum height of about half the screen */
     #kard {
       background-color: #2F2F31;
@@ -242,12 +263,12 @@ ANKI_HTML = """
     #editArea { width: 100%; height: 150px; font-size: 20px; padding: 10px; }
     /* Cloze styling */
     .cloze, .cloze b, .cloze u, .cloze i { font-weight: bold; color: MediumSeaGreen !important; cursor: pointer; }
-    /* Control styling */
+    /* Action Controls (Discard/Save) - hidden until answer is revealed */
     #actionControls { display: none; justify-content: space-between; width: 100%; max-width: 700px; margin: 10px auto; }
     .actionButton { padding: 10px 20px; font-size: 16px; border: none; color: #fff; border-radius: 5px; cursor: pointer; flex: 1; margin: 0 5px; }
     .discard { background-color: red; }
     .save { background-color: green; }
-    /* Bottom controls: two rows */
+    /* Bottom Controls: two rows */
     #bottomUndo, #bottomEdit {
       display: flex;
       justify-content: center;
@@ -259,14 +280,12 @@ ANKI_HTML = """
     .bottomButton { padding: 10px 20px; font-size: 16px; border: none; color: #fff; border-radius: 5px; cursor: pointer; flex: 1; margin: 0 5px; }
     .undo { background-color: #4A90E2; }
     .edit { background-color: #FFA500; }
-    /* Edit controls: Cancel Edit left, Save Edit right */
+    /* Edit Controls: Cancel Edit on left, Save Edit on right */
     #editControls { display: none; justify-content: space-between; width: 100%; max-width: 700px; margin: 10px auto; }
     .editButton { padding: 10px 20px; font-size: 16px; border: none; color: #fff; border-radius: 5px; cursor: pointer; flex: 1; margin: 0 5px; }
     .cancelEdit { background-color: gray; }
     .saveEdit { background-color: green; }
-    /* Progress tracker */
-    #progress { text-align: center; color: #A6ABB9; margin-bottom: 10px; }
-    /* Saved cards styling */
+    /* Saved Cards styling */
     #savedCardsContainer { width: 100%; max-width: 700px; margin: 20px auto; color: #D7DEE9; display: none; }
     #savedCardsText { width: 100%; height: 200px; padding: 10px; font-size: 16px; background-color: #2F2F31; border: none; border-radius: 5px; resize: none; }
     #copyButton { margin-top: 10px; padding: 10px 20px; font-size: 16px; background-color: #4A90E2; color: #fff; border: none; border-radius: 5px; cursor: pointer; }
@@ -274,18 +293,18 @@ ANKI_HTML = """
 </head>
 <body class="mobile">
   <div id="reviewContainer">
-    <!-- Progress Tracker -->
+    <!-- Progress Tracker at the top -->
     <div id="progress">Card <span id="current">0</span> of <span id="total">0</span></div>
     <!-- Card Display -->
     <div id="kard">
       <div class="card" id="cardContent"><!-- Card content injected here --></div>
     </div>
-    <!-- Action Controls (Discard/Save) - hidden until answer is revealed -->
+    <!-- Action Controls (Discard/Save) -->
     <div id="actionControls">
       <button id="discardButton" class="actionButton discard">Discard</button>
       <button id="saveButton" class="actionButton save">Save</button>
     </div>
-    <!-- Edit Controls (Cancel Edit on left, Save Edit on right) -->
+    <!-- Edit Controls (Cancel Edit left, Save Edit right) -->
     <div id="editControls">
       <button id="cancelEditButton" class="editButton cancelEdit">Cancel Edit</button>
       <button id="saveEditButton" class="editButton saveEdit">Save Edit</button>
@@ -375,10 +394,12 @@ ANKI_HTML = """
     updateUndoButtonState();
     
     /***************************
-     * Global Reveal on Touch *
+     * Global Reveal on Card-Box Click *
      ***************************/
-    cardContentEl.addEventListener("click", function(e) {
+    // Attach click listener to the entire card container (#kard) so that clicking anywhere reveals the answer.
+    document.getElementById("kard").addEventListener("click", function(e) {
       if (inEditMode) return;
+      // Only reveal if actionControls are not already visible.
       if (actionControls.style.display === "none" || actionControls.style.display === "") {
         const clozes = document.querySelectorAll("#cardContent .cloze");
         clozes.forEach(span => {
