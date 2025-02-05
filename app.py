@@ -384,6 +384,8 @@ INDEX_HTML = """
 #   • Finish Screen Behavior: When finishing, the progress text displays “Review Complete” and if a user navigates back, the card counter is restored.
 #   • Buttons on the Finish Screen (Edit, Saved Cards, Return to Card) are hidden.
 #   • Saved Cards Screen Behavior: When accessed before finishing, the Return to Card button text shows the card number.
+# 
+# Added Loading Overlay with Lottie animation.
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -498,10 +500,28 @@ ANKI_HTML = """
     .cart.bottomButton:hover {
       background-color: #0288D1;
     }
+    /* Loading Overlay Styles */
+    #loadingOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #121212;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.7.6/lottie.min.js"></script>
 </head>
 <body>
-  <div id="reviewContainer">
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay">
+    <div id="lottieContainer" style="width: 300px; height: 300px;"></div>
+  </div>
+  <div id="reviewContainer" style="display: none;">
     <div id="progress">Card <span id="current">0</span> of <span id="total">0</span></div>
     <div id="kard">
       <div class="card" id="cardContent"></div>
@@ -534,6 +554,27 @@ ANKI_HTML = """
       </div>
     </div>
   </div>
+  <script>
+    // Initialize Lottie animation
+    var animation = lottie.loadAnimation({
+      container: document.getElementById('lottieContainer'),
+      renderer: 'svg',
+      loop: true,
+      autoplay: true,
+      path: 'URL_TO_YOUR_LOTTIE_ANIMATION.json'
+    });
+    // Once the page has fully loaded, hide the loading overlay and show the review container.
+    window.addEventListener('load', function() {
+      var overlay = document.getElementById('loadingOverlay');
+      var reviewContainer = document.getElementById('reviewContainer');
+      overlay.style.transition = 'opacity 0.5s ease';
+      overlay.style.opacity = '0';
+      setTimeout(function() {
+        overlay.style.display = 'none';
+        reviewContainer.style.display = 'flex';
+      }, 500);
+    });
+  </script>
   <script>
     const cards = {{ cards_json|safe }};
 {% raw %}
@@ -786,6 +827,8 @@ ANKI_HTML = """
 #   • New “Show Anki Cards” Button added to the final results screen.
 #   • The revealed content displays each question followed by two <br><br> then the answer in cloze formatting.
 #   • A “Copy Anki Cards” button is provided to copy the formatted text.
+# 
+# Added Loading Overlay with Lottie animation.
 INTERACTIVE_HTML = """
 <!DOCTYPE html>
 <html>
@@ -904,10 +947,28 @@ INTERACTIVE_HTML = """
         opacity: 0;
       }
     }
+    /* Loading Overlay Styles */
+    #loadingOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #121212;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.7.6/lottie.min.js"></script>
 </head>
 <body>
-  <div class="container">
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay">
+    <div id="lottieContainer" style="width: 300px; height: 300px;"></div>
+  </div>
+  <div class="container" id="gameContainer" style="display: none;">
     <div class="header">
       <div id="questionProgress">Question 1 of 0</div>
       <div id="rawScore">Score: 0</div>
@@ -918,6 +979,27 @@ INTERACTIVE_HTML = """
     <div id="feedback" class="hidden"></div>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+  <script>
+    // Initialize Lottie animation
+    var animation = lottie.loadAnimation({
+      container: document.getElementById('lottieContainer'),
+      renderer: 'svg',
+      loop: true,
+      autoplay: true,
+      path: 'URL_TO_YOUR_LOTTIE_ANIMATION.json'
+    });
+    // Once the page has fully loaded, hide the loading overlay and show the game container.
+    window.addEventListener('load', function() {
+      var overlay = document.getElementById('loadingOverlay');
+      var gameContainer = document.getElementById('gameContainer');
+      overlay.style.transition = 'opacity 0.5s ease';
+      overlay.style.opacity = '0';
+      setTimeout(function() {
+        overlay.style.display = 'none';
+        gameContainer.style.display = 'block';
+      }, 500);
+    });
+  </script>
   <script>
     const questions = {{ questions_json|safe }};
     let currentQuestionIndex = 0;
