@@ -735,7 +735,7 @@ ANKI_HTML = """
 """
 
 # Interactive Game template with new button styling (using the same resets, layout, and ripple effect as the provided sample,
-# while keeping our original button colors and glowing effects).
+# while keeping our original button colors and glowing effects and now changing the inner color as well).
 INTERACTIVE_HTML = """
 <!DOCTYPE html>
 <html>
@@ -768,19 +768,19 @@ INTERACTIVE_HTML = """
       margin: 0 auto;
     }
     h1 { color: #bb86fc; }
-    .question-box {
-      background-color: #1e1e1e;
-      padding: 20px;
-      border: 2px solid #bb86fc;
-      border-radius: 10px;
-      margin-bottom: 20px;
-    }
     .score {
       font-size: 20px;
       margin-bottom: 20px;
     }
     .timer {
       font-size: 24px;
+      margin-bottom: 20px;
+    }
+    .question-box {
+      background-color: #1e1e1e;
+      padding: 20px;
+      border: 2px solid #bb86fc;
+      border-radius: 10px;
       margin-bottom: 20px;
     }
     .options {
@@ -800,7 +800,7 @@ INTERACTIVE_HTML = """
       overflow: hidden;
       border: none;
       cursor: pointer;
-      /* Keep our original colors but use a gradient layout similar to the sample */
+      /* Use our original gradient colors for the default state */
       background: linear-gradient(135deg, #3700b3, #6200ee);
       color: #f0f0f0;
       font-size: 18px;
@@ -817,13 +817,16 @@ INTERACTIVE_HTML = """
     .option-button:active {
       transform: scale(0.95);
     }
+    /* When an answer is selected, override the gradient with a solid color for the entire button */
     .option-button.correct {
-      background-color: #03dac6;
+      background: #03dac6 !important;
       box-shadow: 0 0 10px #03dac6;
+      color: #000 !important;
     }
     .option-button.incorrect {
-      background-color: #cf6679;
+      background: #cf6679 !important;
       box-shadow: 0 0 10px #cf6679;
+      color: #000 !important;
     }
     .hidden {
       display: none;
