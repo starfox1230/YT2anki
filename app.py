@@ -262,8 +262,6 @@ def get_all_interactive_questions(transcript, user_preferences="", max_chunk_siz
 # ----------------------------
 
 # Updated index page with two buttons for mode selection.
-# Advanced options now default to model gpt-4o-mini and 1000 characters for chunk size.
-# The advanced toggle is styled in a more modern, understated way.
 INDEX_HTML = """
 <!DOCTYPE html>
 <html>
@@ -284,27 +282,10 @@ INDEX_HTML = """
       border-radius: 5px;
     }
     textarea { height: 200px; }
-    input[type="submit"] { 
-      padding: 10px 20px; 
-      font-size: 16px; 
-      margin-top: 10px; 
-      background-color: #6200ee; 
-      color: #fff; 
-      border: none; 
-      border-radius: 5px; 
-      cursor: pointer; 
-      transition: background-color 0.3s;
-    }
-    input[type="submit"]:hover { background-color: #3700b3; }
+    input[type="submit"] { padding: 10px 20px; font-size: 16px; margin-top: 10px; }
     .flash { color: red; }
     a { color: #6BB0F5; text-decoration: none; }
     a:hover { text-decoration: underline; }
-    #advancedToggle {
-      cursor: pointer;
-      color: #bb86fc;
-      font-weight: bold;
-      margin-bottom: 10px;
-    }
     #advancedOptions {
       width: 80%;
       margin: 0 auto 20px;
@@ -315,15 +296,22 @@ INDEX_HTML = """
       border-radius: 5px;
     }
     #advancedOptions label { display: block; margin-bottom: 5px; }
+    #advancedToggle {
+      cursor: pointer;
+      color: #6BB0F5;
+      text-decoration: underline;
+      margin-bottom: 10px;
+      display: inline-block;
+    }
+    /* Layout for two buttons side-by-side */
     .button-group {
       display: flex;
-      flex-direction: column;
+      justify-content: center;
       gap: 10px;
-      align-items: center;
     }
     .button-group input[type="submit"] {
-      width: 80%;
-      max-width: 300px;
+      flex: 1;
+      max-width: 200px;
     }
   </style>
 </head>
@@ -345,12 +333,12 @@ INDEX_HTML = """
     <div id="advancedOptions" style="display: none;">
       <label for="modelSelect">Model:</label>
       <select name="model" id="modelSelect">
-        <option value="gpt-4o-mini" selected>gpt-4o-mini</option>
-        <option value="gpt-4o">gpt-4o</option>
+        <option value="gpt-4o" selected>gpt-4o</option>
+        <option value="gpt-4o-mini">gpt-4o-mini</option>
       </select>
       <br>
       <label for="maxSize">Max Chunk Size (characters):</label>
-      <input type="text" name="max_size" id="maxSize" value="1000">
+      <input type="text" name="max_size" id="maxSize" value="4000">
     </div>
     <textarea name="transcript" placeholder="Paste your transcript here" required></textarea>
     <br>
@@ -358,7 +346,7 @@ INDEX_HTML = """
     <br>
     <div class="button-group">
       <input type="submit" name="mode" value="Generate Anki Cards">
-      <input type="submit" name="mode" value="Generate Game">
+      <input type="submit" name="mode" value="Generate Interactive Game">
     </div>
   </form>
   <script>
@@ -378,10 +366,7 @@ INDEX_HTML = """
 </html>
 """
 
-# Existing Anki review template with the following changes:
-# - "Undo" button now reads "Previous Card".
-# - A new "Cart" button is added below the other buttons.
-# - In the final view (the cart), a "Return to Card" button is added.
+# Existing Anki review template remains the same.
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -428,9 +413,8 @@ ANKI_HTML = """
       margin: 5px auto;
       padding: 0 10px;
     }
-    .bottomButton { padding: 10px 20px; font-size: 16px; border: none; color: #fff; border-radius: 5px; cursor: pointer; flex: 1; margin: 0 5px; background-color: #6200ee; transition: background-color 0.3s; }
-    .bottomButton:hover { background-color: #3700b3; }
-    .undo { }
+    .bottomButton { padding: 10px 20px; font-size: 16px; border: none; color: #fff; border-radius: 5px; cursor: pointer; flex: 1; margin: 0 5px; }
+    .undo { background-color: #4A90E2; }
     .edit { background-color: #FFA500; }
     #editControls { display: none; justify-content: space-between; width: 100%; max-width: 700px; margin: 10px auto; }
     .editButton { padding: 10px 20px; font-size: 16px; border: none; color: #fff; border-radius: 5px; cursor: pointer; flex: 1; margin: 0 5px; }
@@ -438,10 +422,7 @@ ANKI_HTML = """
     .saveEdit { background-color: green; }
     #savedCardsContainer { width: 100%; max-width: 700px; margin: 20px auto; color: #D7DEE9; display: none; }
     #savedCardsText { width: 100%; height: 200px; padding: 10px; font-size: 16px; background-color: #2F2F31; border: none; border-radius: 5px; resize: none; color: #D7DEE9; }
-    #copyButton, #returnButton { margin-top: 10px; padding: 10px 20px; font-size: 16px; background-color: #4A90E2; color: #fff; border: none; border-radius: 5px; cursor: pointer; }
-    #cartContainer { display: flex; justify-content: center; margin: 10px auto; }
-    #cartButton { padding: 10px 20px; font-size: 16px; background-color: #03A9F4; color: #fff; border: none; border-radius: 5px; cursor: pointer; transition: background-color 0.3s; }
-    #cartButton:hover { background-color: #0288D1; }
+    #copyButton { margin-top: 10px; padding: 10px 20px; font-size: 16px; background-color: #4A90E2; color: #fff; border: none; border-radius: 5px; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -459,22 +440,16 @@ ANKI_HTML = """
       <button id="saveEditButton" class="editButton saveEdit">Save Edit</button>
     </div>
     <div id="bottomUndo">
-      <button id="undoButton" class="bottomButton undo">Previous Card</button>
+      <button id="undoButton" class="bottomButton undo">Undo</button>
     </div>
     <div id="bottomEdit">
       <button id="editButton" class="bottomButton edit">Edit</button>
-    </div>
-    <div id="cartContainer">
-      <button id="cartButton" class="bottomButton cart">Cart</button>
     </div>
     <div id="savedCardsContainer">
       <h3 style="text-align:center;">Saved Cards</h3>
       <textarea id="savedCardsText" readonly></textarea>
       <div style="text-align:center;">
         <button id="copyButton">Copy Saved Cards</button>
-      </div>
-      <div style="text-align:center; margin-top:10px;">
-        <button id="returnButton" class="bottomButton return">Return to Card</button>
       </div>
     </div>
   </div>
@@ -516,7 +491,6 @@ ANKI_HTML = """
     let historyStack = [];
     let inEditMode = false;
     let originalCardText = "";
-    let savedCardIndex = null; // For cart functionality
     
     const currentEl = document.getElementById("current");
     const totalEl = document.getElementById("total");
@@ -534,8 +508,6 @@ ANKI_HTML = """
     const savedCardsContainer = document.getElementById("savedCardsContainer");
     const savedCardsText = document.getElementById("savedCardsText");
     const copyButton = document.getElementById("copyButton");
-    const cartButton = document.getElementById("cartButton");
-    const returnButton = document.getElementById("returnButton");
     totalEl.textContent = interactiveCards.length;
     function updateUndoButtonState() {
       undoButton.disabled = historyStack.length === 0;
@@ -569,10 +541,9 @@ ANKI_HTML = """
       }
     }
     function finish() {
-      // In final view (cart view), do not hide the Previous Card button.
       document.getElementById("kard").style.display = "none";
       actionControls.style.display = "none";
-      // bottomUndo remains visible for "Previous Card" functionality.
+      bottomUndo.style.display = "none";
       bottomEdit.style.display = "none";
       document.getElementById("progress").textContent = "Review complete!";
       savedCardsText.value = savedCards.join("\\n");
@@ -631,16 +602,6 @@ ANKI_HTML = """
     });
     undoButton.addEventListener("click", function(e) {
       e.stopPropagation();
-      // If in cart view, undo (Previous Card) returns to the last card.
-      if (savedCardsContainer.style.display !== "none") {
-        savedCardsContainer.style.display = "none";
-        currentIndex = interactiveCards.length - 1;
-        document.getElementById("kard").style.display = "flex";
-        bottomUndo.style.display = "flex";
-        bottomEdit.style.display = "flex";
-        showCard();
-        return;
-      }
       if (historyStack.length === 0) {
         alert("No actions to undo.");
         return;
@@ -663,33 +624,6 @@ ANKI_HTML = """
         copyButton.textContent = "Copy Saved Cards";
       }, 2000);
     });
-    // New Cart button event listener
-    cartButton.addEventListener("click", function(e) {
-      e.stopPropagation();
-      savedCardIndex = currentIndex;
-      // Hide card view elements
-      document.getElementById("kard").style.display = "none";
-      actionControls.style.display = "none";
-      bottomUndo.style.display = "none";
-      bottomEdit.style.display = "none";
-      // Show saved cards (cart) view
-      savedCardsText.value = savedCards.join("\\n");
-      savedCardsContainer.style.display = "block";
-    });
-    // Return button event listener (in cart view)
-    returnButton.addEventListener("click", function(e) {
-      e.stopPropagation();
-      if (savedCardIndex !== null) {
-        currentIndex = savedCardIndex;
-      }
-      savedCardsContainer.style.display = "none";
-      document.getElementById("kard").style.display = "flex";
-      actionControls.style.display = "none";
-      bottomUndo.style.display = "flex";
-      bottomEdit.style.display = "flex";
-      showCard();
-    });
-    
     showCard();
 {% endraw %}
   </script>
@@ -697,10 +631,7 @@ ANKI_HTML = """
 </html>
 """
 
-# Interactive Game Template with the following changes:
-# 1. The order of the options is randomized.
-# 2. Immediately after an answer is displayed (while the buttons remain highlighted green/red),
-#    the focus is removed (simulated by blurring the active element).
+# New Interactive Game Template
 INTERACTIVE_HTML = """
 <!DOCTYPE html>
 <html>
@@ -820,13 +751,7 @@ INTERACTIVE_HTML = """
     const currentQuestion = questions[currentQuestionIndex];
     questionBox.textContent = currentQuestion.question;
     optionsList.innerHTML = '';
-    // Randomize the options order
-    const optionsShuffled = currentQuestion.options.slice();
-    for (let i = optionsShuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [optionsShuffled[i], optionsShuffled[j]] = [optionsShuffled[j], optionsShuffled[i]];
-    }
-    optionsShuffled.forEach(option => {
+    currentQuestion.options.forEach(option => {
       const li = document.createElement('li');
       const button = document.createElement('button');
       button.textContent = option;
@@ -863,12 +788,6 @@ INTERACTIVE_HTML = """
       });
     }
     updateScore();
-    // Remove focus from any button immediately so no purple highlight remains.
-    setTimeout(() => {
-      if(document.activeElement) {
-        document.activeElement.blur();
-      }
-    }, 50);
     setTimeout(() => {
       currentQuestionIndex++;
       showQuestion();
@@ -893,25 +812,23 @@ INTERACTIVE_HTML = """
 # Flask Routes
 # ----------------------------
 
-@app.route("/", methods=["GET", "POST", "HEAD"])
+@app.route("/", methods=["GET", "POST"])
 def index():
-    if request.method == "HEAD":
-        return ""
     if request.method == "POST":
         transcript = request.form.get("transcript")
         if not transcript:
             flash("Please paste a transcript.")
             return redirect(url_for("index"))
         user_preferences = request.form.get("preferences", "")
-        model = request.form.get("model", "gpt-4o-mini")
-        max_size_str = request.form.get("max_size", "1000")
+        model = request.form.get("model", "gpt-4o")
+        max_size_str = request.form.get("max_size", "4000")
         try:
             max_size = int(max_size_str)
         except ValueError:
-            max_size = 1000
+            max_size = 4000
 
         mode = request.form.get("mode", "Generate Anki Cards")
-        if mode == "Generate Game":
+        if mode == "Generate Interactive Game":
             questions = get_all_interactive_questions(transcript, user_preferences, max_chunk_size=max_size, model=model)
             logger.debug("Final interactive questions list: %s", questions)
             if not questions:
