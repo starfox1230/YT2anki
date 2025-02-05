@@ -375,7 +375,7 @@ INDEX_HTML = """
 </html>
 """
 
-# Cart button label changed to "Saved Cards"
+# The Anki template (no changes except for the "Saved Cards" label).
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -499,7 +499,6 @@ ANKI_HTML = """
     <div id="bottomEdit">
       <button id="editButton" class="bottomButton edit">Edit</button>
     </div>
-    <!-- Cart button label changed to "Saved Cards" -->
     <div id="cartContainer">
       <button id="cartButton" class="bottomButton cart">Saved Cards</button>
     </div>
@@ -727,6 +726,9 @@ ANKI_HTML = """
 </html>
 """
 
+# Interactive Game Template now *removes the old buttons each round*
+# by fully re-creating the <ul> each time in showQuestion, removing any leftover elements.
+# No "phantom tap" zone or forced blur.
 INTERACTIVE_HTML = """
 <!DOCTYPE html>
 <html>
@@ -754,6 +756,7 @@ INTERACTIVE_HTML = """
       border-radius: 10px;
       margin-bottom: 20px;
     }
+    /* We'll dynamically create the <ul> for options each question. */
     .options {
       list-style: none;
       padding: 0;
@@ -785,12 +788,6 @@ INTERACTIVE_HTML = """
     .timer { font-size: 24px; margin-bottom: 20px; }
     .score { font-size: 20px; margin-bottom: 20px; }
     .hidden { display: none; }
-    /* Hidden div for simulated tap below the buttons */
-    #phantomTapZone {
-      width: 100%;
-      height: 1px;
-      margin-top: 50px; /* ensure it's below the buttons */
-    }
   </style>
 </head>
 <body>
@@ -798,15 +795,10 @@ INTERACTIVE_HTML = """
   <h1>Interactive Game</h1>
   <div class="score" id="score">Score: 0 / 0</div>
   <div class="timer" id="timer">Time: 15</div>
-  <div class="question-box" id="questionBox">
-    <!-- Question text will go here -->
-  </div>
-  <ul class="options" id="optionsList">
-    <!-- Options will be added here dynamically -->
-  </ul>
+  <div class="question-box" id="questionBox"></div>
+  <!-- We'll create & attach a new <ul> each time in JS -->
+  <div id="optionsWrapper"></div>
   <div id="feedback" class="hidden"></div>
-  <!-- 3) We'll use this hidden div to simulate a tap. -->
-  <div id="phantomTapZone"></div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
 <script>
@@ -818,9 +810,8 @@ INTERACTIVE_HTML = """
   const scoreEl = document.getElementById('score');
   const timerEl = document.getElementById('timer');
   const questionBox = document.getElementById('questionBox');
-  const optionsList = document.getElementById('optionsList');
+  const optionsWrapper = document.getElementById('optionsWrapper');
   const feedbackEl = document.getElementById('feedback');
-  const phantomTapZone = document.getElementById('phantomTapZone');
 
   function startGame() {
     score = 0;
@@ -854,13 +845,21 @@ INTERACTIVE_HTML = """
     }
     const currentQuestion = questions[currentQuestionIndex];
     questionBox.textContent = currentQuestion.question;
-    optionsList.innerHTML = '';
-    // Randomize the options order
+
+    // Remove old buttons entirely from the DOM
+    optionsWrapper.innerHTML = '';
+
+    // Create a new <ul> and new <button> elements for each option
+    const newList = document.createElement('ul');
+    newList.className = 'options';
+
+    // Randomize the options
     const optionsShuffled = currentQuestion.options.slice();
     for (let i = optionsShuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [optionsShuffled[i], optionsShuffled[j]] = [optionsShuffled[j], optionsShuffled[i]];
     }
+    // Build new li/button for each option
     optionsShuffled.forEach(option => {
       const li = document.createElement('li');
       const button = document.createElement('button');
@@ -868,10 +867,14 @@ INTERACTIVE_HTML = """
       button.className = 'option-button';
       button.onclick = () => selectAnswer(option);
       li.appendChild(button);
-      optionsList.appendChild(li);
+      newList.appendChild(li);
     });
+    // Attach the fresh <ul> to the DOM
+    optionsWrapper.appendChild(newList);
+
+    // Start the timer
     startTimer(15, () => {
-      // Time expired, mark as incorrect
+      // Time expired, treat as incorrect
       selectAnswer(null);
     });
   }
@@ -879,19 +882,18 @@ INTERACTIVE_HTML = """
   function selectAnswer(selectedOption) {
     clearInterval(timerInterval);
     const currentQuestion = questions[currentQuestionIndex];
-    const buttons = document.querySelectorAll('.option-button');
-    let isCorrect = (selectedOption === currentQuestion.correctAnswer);
-    buttons.forEach(button => {
-      if (button.textContent === currentQuestion.correctAnswer) {
-        button.classList.add('correct');
-      } else if (button.textContent === selectedOption) {
-        button.classList.add('incorrect');
-      }
-      button.disabled = true;
-    });
+    // Highlight the correct & selected answers
+    const allButtons = document.querySelectorAll('.option-button');
+    const isCorrect = (selectedOption === currentQuestion.correctAnswer);
 
-    // Immediately simulate a tap on phantomTapZone
-    phantomTapZone.click();
+    allButtons.forEach(btn => {
+      if (btn.textContent === currentQuestion.correctAnswer) {
+        btn.classList.add('correct');
+      } else if (btn.textContent === selectedOption) {
+        btn.classList.add('incorrect');
+      }
+      btn.disabled = true;
+    });
 
     if (isCorrect) {
       score++;
@@ -911,7 +913,7 @@ INTERACTIVE_HTML = """
 
   function endGame() {
     questionBox.textContent = "Game Over!";
-    optionsList.innerHTML = '';
+    optionsWrapper.innerHTML = '';
     timerEl.textContent = '';
     feedbackEl.classList.remove('hidden');
     feedbackEl.innerHTML = `<h2>Your final score is ${score} out of ${totalQuestions}</h2><button onclick="startGame()" class="option-button">Play Again</button>`;
