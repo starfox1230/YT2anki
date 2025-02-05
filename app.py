@@ -430,7 +430,7 @@ ANKI_HTML = """
     }
     .bottomButton { padding: 10px 20px; font-size: 16px; border: none; color: #fff; border-radius: 5px; cursor: pointer; flex: 1; margin: 0 5px; background-color: #6200ee; transition: background-color 0.3s; }
     .bottomButton:hover { background-color: #3700b3; }
-    .undo { /* Label will be updated to "Previous Card" */ }
+    .undo { }
     .edit { background-color: #FFA500; }
     #editControls { display: none; justify-content: space-between; width: 100%; max-width: 700px; margin: 10px auto; }
     .editButton { padding: 10px 20px; font-size: 16px; border: none; color: #fff; border-radius: 5px; cursor: pointer; flex: 1; margin: 0 5px; }
@@ -464,7 +464,6 @@ ANKI_HTML = """
     <div id="bottomEdit">
       <button id="editButton" class="bottomButton edit">Edit</button>
     </div>
-    <!-- New Cart button -->
     <div id="cartContainer">
       <button id="cartButton" class="bottomButton cart">Cart</button>
     </div>
@@ -474,7 +473,6 @@ ANKI_HTML = """
       <div style="text-align:center;">
         <button id="copyButton">Copy Saved Cards</button>
       </div>
-      <!-- Button to return to the card view -->
       <div style="text-align:center; margin-top:10px;">
         <button id="returnButton" class="bottomButton return">Return to Card</button>
       </div>
@@ -699,10 +697,10 @@ ANKI_HTML = """
 </html>
 """
 
-// New Interactive Game Template with the following changes:
-// 1. The order of the options is randomized.
-// 2. Immediately after an answer is displayed (while the buttons remain highlighted green/red),
-//    the focus is removed (simulated by blurring the active element).
+# Interactive Game Template with the following changes:
+# 1. The order of the options is randomized.
+# 2. Immediately after an answer is displayed (while the buttons remain highlighted green/red),
+#    the focus is removed (simulated by blurring the active element).
 INTERACTIVE_HTML = """
 <!DOCTYPE html>
 <html>
@@ -899,39 +897,4 @@ INTERACTIVE_HTML = """
 def index():
     if request.method == "POST":
         transcript = request.form.get("transcript")
-        if not transcript:
-            flash("Please paste a transcript.")
-            return redirect(url_for("index"))
-        user_preferences = request.form.get("preferences", "")
-        model = request.form.get("model", "gpt-4o-mini")
-        max_size_str = request.form.get("max_size", "1000")
-        try:
-            max_size = int(max_size_str)
-        except ValueError:
-            max_size = 1000
-
-        mode = request.form.get("mode", "Generate Anki Cards")
-        if mode == "Generate Game":
-            questions = get_all_interactive_questions(transcript, user_preferences, max_chunk_size=max_size, model=model)
-            logger.debug("Final interactive questions list: %s", questions)
-            if not questions:
-                flash("Failed to generate any interactive questions.")
-                return redirect(url_for("index"))
-            questions_json = json.dumps(questions)
-            return render_template_string(INTERACTIVE_HTML, questions_json=questions_json)
-        else:
-            cards = get_all_anki_cards(transcript, user_preferences, max_chunk_size=max_size, model=model)
-            logger.debug("Final flashcards list: %s", cards)
-            if not cards:
-                flash("Failed to generate any Anki cards.")
-                return redirect(url_for("index"))
-            cards_json = json.dumps(cards)
-            return render_template_string(ANKI_HTML, cards_json=cards_json)
-    return render_template_string(INDEX_HTML)
-
-# ----------------------------
-# Main
-# ----------------------------
-
-if __name__ == "__main__":
-    app.run(debug=True, port=10000)
+        
