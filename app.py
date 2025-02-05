@@ -380,11 +380,6 @@ INDEX_HTML = """
 """
 
 # Anki template – Auggie Card Simulator.
-# Changes:
-#   • Added a "finished" flag.
-#   • When the user makes a save/discard on the last card, the finish screen (showing saved cards) is displayed with a header.
-#   • If the user clicks "Previous Card" while finished, the finished state is cleared and the last card is displayed again with progress.
-#   • Ensured that the card content remains vertically centered.
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -540,7 +535,7 @@ ANKI_HTML = """
 {% raw %}
     let interactiveCards = [];
     function generateInteractiveCards(cardText) {
-      const regex = /{{c(\d+)::(.*?)}}/g;
+      const regex = /{{c(\\d+)::(.*?)}}/g;
       const numbers = new Set();
       let m;
       while ((m = regex.exec(cardText)) !== null) {
@@ -557,7 +552,7 @@ ANKI_HTML = """
       return cardsForNote;
     }
     function processCloze(text, target) {
-      return text.replace(/{{c(\d+)::(.*?)}}/g, function(match, clozeNum, answer) {
+      return text.replace(/{{c(\\d+)::(.*?)}}/g, function(match, clozeNum, answer) {
         if (clozeNum === target) {
           return '<span class="cloze" data-answer="' + answer.replace(/"/g, '&quot;') + '">[...]</span>';
         } else {
@@ -621,25 +616,25 @@ ANKI_HTML = """
         actionControls.style.display = "none";
       }
       cardContentEl.innerHTML = interactiveCards[currentIndex].displayText;
-      // Ensure the card content remains vertically centered.
       document.getElementById("kard").style.display = "flex";
       savedCardsContainer.style.display = "none";
+      // Restore buttons for normal review mode
+      editButton.style.display = "flex";
+      cartButton.style.display = "flex";
     }
     function nextCard() {
       if (currentIndex < interactiveCards.length - 1) {
           currentIndex++;
           showCard();
       } else {
-          // On the last card, when a choice is made, we will show the finished (saved cards) screen.
           finished = true;
+          showFinished();
       }
     }
-    // Modify the save and discard button event handlers:
     discardButton.addEventListener("click", function(e) {
       e.stopPropagation();
       historyStack.push({ currentIndex: currentIndex, savedCards: savedCards.slice(), finished: finished });
       updateUndoButtonState();
-      // If on last card, set finished flag and show finished screen.
       if (currentIndex === interactiveCards.length - 1) {
           finished = true;
           showFinished();
@@ -661,14 +656,17 @@ ANKI_HTML = """
     });
 
     function showFinished() {
-      // Hide card display and action controls, update header and show saved cards.
       document.getElementById("kard").style.display = "none";
       actionControls.style.display = "none";
-      finishedHeader.textContent = "Review complete!";
+      finishedHeader.textContent = "Review Complete!";
       savedCardsText.value = savedCards.join("\\n");
       savedCardsContainer.style.display = "flex";
-      // Also update the progress text to indicate finished.
-      document.getElementById("progress").textContent = "Finished! (Card " + interactiveCards.length + " of " + interactiveCards.length + ")";
+      // Set progress text to indicate finish state
+      document.getElementById("progress").textContent = "Review Complete";
+      // Hide buttons that should not appear on finish screen
+      editButton.style.display = "none";
+      cartButton.style.display = "none";
+      returnButton.style.display = "none";
     }
 
     editButton.addEventListener("click", function(e) {
@@ -677,7 +675,6 @@ ANKI_HTML = """
     });
     function enterEditMode() {
       inEditMode = true;
-      originalCardText = interactiveCards[currentIndex].exportText;
       cardContentEl.innerHTML = '<textarea id="editArea">' + interactiveCards[currentIndex].exportText + '</textarea>';
       actionControls.style.display = "none";
       bottomUndo.style.display = "none";
@@ -719,7 +716,6 @@ ANKI_HTML = """
       currentIndex = snapshot.currentIndex;
       savedCards = snapshot.savedCards.slice();
       finished = snapshot.finished;
-      // If we were finished and undo is pressed, revert to card display.
       if (finished) {
         finished = false;
         showCard();
@@ -730,17 +726,10 @@ ANKI_HTML = """
         cartContainer.style.display = "flex";
         cardContentEl.innerHTML = interactiveCards[currentIndex].displayText;
         currentEl.textContent = currentIndex + 1;
+        editButton.style.display = "flex";
+        cartButton.style.display = "flex";
       }
       updateUndoButtonState();
-    });
-
-    copyButton.addEventListener("click", function() {
-      savedCardsText.select();
-      document.execCommand("copy");
-      copyButton.textContent = "Copied!";
-      setTimeout(function() {
-        copyButton.textContent = "Copy Saved Cards";
-      }, 2000);
     });
 
     cartButton.addEventListener("click", function(e) {
@@ -753,6 +742,12 @@ ANKI_HTML = """
       cartContainer.style.display = "none";
       savedCardsText.value = savedCards.join("\\n");
       savedCardsContainer.style.display = "flex";
+      if (!finished) {
+          returnButton.style.display = "flex";
+          returnButton.textContent = "Return to Card " + (savedCardIndex+1);
+      } else {
+          returnButton.style.display = "none";
+      }
     });
     returnButton.addEventListener("click", function(e) {
       e.stopPropagation();
@@ -765,6 +760,8 @@ ANKI_HTML = """
       bottomUndo.style.display = "flex";
       bottomEdit.style.display = "flex";
       cartContainer.style.display = "flex";
+      editButton.style.display = "flex";
+      cartButton.style.display = "flex";
       showCard();
     });
 
@@ -775,11 +772,7 @@ ANKI_HTML = """
 </html>
 """
 
-# Interactive Game template – modifications:
-#   • The header now shows two pieces of information:
-#       - On the top left: "Question X of Y"
-#       - On the top right: "Score: Z"
-#   • The JavaScript updates these two values as the game progresses.
+# Interactive Game template – modifications.
 INTERACTIVE_HTML = """
 <!DOCTYPE html>
 <html>
@@ -811,7 +804,6 @@ INTERACTIVE_HTML = """
       max-width: 800px;
       margin: 0 auto;
     }
-    /* Header with question progress on left and raw score on right */
     .header {
       display: flex;
       justify-content: space-between;
@@ -854,7 +846,6 @@ INTERACTIVE_HTML = """
       overflow: hidden;
       border: none;
       cursor: pointer;
-      /* Use our original gradient colors for the default state */
       background: linear-gradient(135deg, #3700b3, #6200ee);
       color: #f0f0f0;
       font-size: 18px;
@@ -871,7 +862,6 @@ INTERACTIVE_HTML = """
     .option-button:active {
       transform: scale(0.95);
     }
-    /* When an answer is selected, override the gradient with a solid color for the entire button */
     .option-button.correct {
       background: #03dac6 !important;
       box-shadow: 0 0 10px #03dac6;
@@ -885,7 +875,6 @@ INTERACTIVE_HTML = """
     .hidden {
       display: none;
     }
-    /* Ripple effect */
     .ripple {
       position: absolute;
       border-radius: 50%;
@@ -1030,8 +1019,46 @@ INTERACTIVE_HTML = """
       questionBox.textContent = "Game Over!";
       optionsWrapper.innerHTML = "";
       timerEl.textContent = "";
+      let ankiCardsHtml = "";
+      questions.forEach(q => {
+          ankiCardsHtml += q.question + "<br><br>{{c1::" + q.correctAnswer + "}}<br><br>";
+      });
+      let ankiContainer = document.createElement('div');
+      ankiContainer.id = "ankiContainer";
+      ankiContainer.style.display = "none";
+      ankiContainer.innerHTML = ankiCardsHtml;
+      
       feedbackEl.classList.remove('hidden');
-      feedbackEl.innerHTML = "<h2>Your final score is " + score + " out of " + totalQuestions + "</h2><button onclick='startGame()' class='option-button' ontouchend='this.blur()'>Play Again</button>";
+      feedbackEl.innerHTML = "<h2>Your final score is " + score + " out of " + totalQuestions + "</h2>" +
+                               "<button onclick='startGame()' class='option-button' ontouchend='this.blur()'>Play Again</button>" +
+                               "<button id='toggleAnkiBtn' class='option-button' ontouchend='this.blur()'>Show Anki Cards</button>" +
+                               "<button id='copyAnkiBtn' class='option-button' ontouchend='this.blur()' style='display:none;'>Copy Anki Cards</button>";
+      feedbackEl.appendChild(ankiContainer);
+      
+      document.getElementById("toggleAnkiBtn").addEventListener("click", function() {
+           if(ankiContainer.style.display === "none") {
+               ankiContainer.style.display = "block";
+               this.textContent = "Hide Anki Cards";
+               document.getElementById("copyAnkiBtn").style.display = "block";
+           } else {
+               ankiContainer.style.display = "none";
+               this.textContent = "Show Anki Cards";
+               document.getElementById("copyAnkiBtn").style.display = "none";
+           }
+      });
+      
+      document.getElementById("copyAnkiBtn").addEventListener("click", function() {
+            let tempTextarea = document.createElement("textarea");
+            tempTextarea.value = ankiContainer.innerHTML.replace(/<br><br>/g, "\n\n").replace(/<br>/g, "\n");
+            document.body.appendChild(tempTextarea);
+            tempTextarea.select();
+            document.execCommand("copy");
+            document.body.removeChild(tempTextarea);
+            this.textContent = "Copied!";
+            setTimeout(() => {
+                this.textContent = "Copy Anki Cards";
+            }, 2000);
+      });
     }
 
     startGame();
