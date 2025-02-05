@@ -269,6 +269,8 @@ INDEX_HTML = """
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Transcript to Anki Cards or Interactive Game</title>
   <style>
+    /* Remove tap highlight on mobile */
+    button { -webkit-tap-highlight-color: transparent; }
     body { background-color: #1E1E20; color: #D7DEE9; font-family: Arial, sans-serif; text-align: center; padding-top: 50px; }
     textarea, input[type="text"], select {
       width: 80%;
@@ -375,7 +377,7 @@ INDEX_HTML = """
 </html>
 """
 
-# The Anki template (no changes except for the "Saved Cards" label).
+# The Anki review template with "Saved Cards" label for the cart button.
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -384,6 +386,8 @@ ANKI_HTML = """
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Anki Cloze Review</title>
   <style>
+    /* Remove tap highlight on mobile */
+    button { -webkit-tap-highlight-color: transparent; }
     html, body { height: 100%; margin: 0; padding: 0; }
     body { background-color: #1E1E20; font-family: helvetica, Arial, sans-serif; }
     #reviewContainer {
@@ -471,6 +475,7 @@ ANKI_HTML = """
       max-width: 700px;
       padding: 0 10px;
     }
+    /* Cart button now labeled "Saved Cards" and same size/shape as bottom buttons */
     .cart.bottomButton {
       background-color: #03A9F4;
     }
@@ -726,9 +731,7 @@ ANKI_HTML = """
 </html>
 """
 
-# Interactive Game Template now *removes the old buttons each round*
-# by fully re-creating the <ul> each time in showQuestion, removing any leftover elements.
-# No "phantom tap" zone or forced blur.
+# The Interactive Game template now creates a new set of buttons for each round.
 INTERACTIVE_HTML = """
 <!DOCTYPE html>
 <html>
@@ -737,6 +740,8 @@ INTERACTIVE_HTML = """
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Interactive Game</title>
   <style>
+    /* Remove tap highlight on mobile */
+    button { -webkit-tap-highlight-color: transparent; }
     body {
       background-color: #121212;
       color: #f0f0f0;
@@ -756,7 +761,7 @@ INTERACTIVE_HTML = """
       border-radius: 10px;
       margin-bottom: 20px;
     }
-    /* We'll dynamically create the <ul> for options each question. */
+    /* We will dynamically generate the <ul> for options each round. */
     .options {
       list-style: none;
       padding: 0;
@@ -796,7 +801,7 @@ INTERACTIVE_HTML = """
   <div class="score" id="score">Score: 0 / 0</div>
   <div class="timer" id="timer">Time: 15</div>
   <div class="question-box" id="questionBox"></div>
-  <!-- We'll create & attach a new <ul> each time in JS -->
+  <!-- Options will be generated fresh each round -->
   <div id="optionsWrapper"></div>
   <div id="feedback" class="hidden"></div>
 </div>
@@ -846,20 +851,17 @@ INTERACTIVE_HTML = """
     const currentQuestion = questions[currentQuestionIndex];
     questionBox.textContent = currentQuestion.question;
 
-    // Remove old buttons entirely from the DOM
-    optionsWrapper.innerHTML = '';
+    // Remove any existing options and create new ones each round.
+    optionsWrapper.innerHTML = "";
+    const ul = document.createElement('ul');
+    ul.className = 'options';
 
-    // Create a new <ul> and new <button> elements for each option
-    const newList = document.createElement('ul');
-    newList.className = 'options';
-
-    // Randomize the options
+    // Randomize options order.
     const optionsShuffled = currentQuestion.options.slice();
     for (let i = optionsShuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [optionsShuffled[i], optionsShuffled[j]] = [optionsShuffled[j], optionsShuffled[i]];
     }
-    // Build new li/button for each option
     optionsShuffled.forEach(option => {
       const li = document.createElement('li');
       const button = document.createElement('button');
@@ -867,14 +869,10 @@ INTERACTIVE_HTML = """
       button.className = 'option-button';
       button.onclick = () => selectAnswer(option);
       li.appendChild(button);
-      newList.appendChild(li);
+      ul.appendChild(li);
     });
-    // Attach the fresh <ul> to the DOM
-    optionsWrapper.appendChild(newList);
-
-    // Start the timer
+    optionsWrapper.appendChild(ul);
     startTimer(15, () => {
-      // Time expired, treat as incorrect
       selectAnswer(null);
     });
   }
@@ -882,19 +880,16 @@ INTERACTIVE_HTML = """
   function selectAnswer(selectedOption) {
     clearInterval(timerInterval);
     const currentQuestion = questions[currentQuestionIndex];
-    // Highlight the correct & selected answers
-    const allButtons = document.querySelectorAll('.option-button');
+    const buttons = document.querySelectorAll('.option-button');
     const isCorrect = (selectedOption === currentQuestion.correctAnswer);
-
-    allButtons.forEach(btn => {
-      if (btn.textContent === currentQuestion.correctAnswer) {
-        btn.classList.add('correct');
-      } else if (btn.textContent === selectedOption) {
-        btn.classList.add('incorrect');
+    buttons.forEach(button => {
+      if (button.textContent === currentQuestion.correctAnswer) {
+        button.classList.add('correct');
+      } else if (button.textContent === selectedOption) {
+        button.classList.add('incorrect');
       }
-      btn.disabled = true;
+      button.disabled = true;
     });
-
     if (isCorrect) {
       score++;
       confetti({
@@ -904,7 +899,6 @@ INTERACTIVE_HTML = """
       });
     }
     updateScore();
-
     setTimeout(() => {
       currentQuestionIndex++;
       showQuestion();
@@ -913,8 +907,8 @@ INTERACTIVE_HTML = """
 
   function endGame() {
     questionBox.textContent = "Game Over!";
-    optionsWrapper.innerHTML = '';
-    timerEl.textContent = '';
+    optionsWrapper.innerHTML = "";
+    timerEl.textContent = "";
     feedbackEl.classList.remove('hidden');
     feedbackEl.innerHTML = `<h2>Your final score is ${score} out of ${totalQuestions}</h2><button onclick="startGame()" class="option-button">Play Again</button>`;
   }
