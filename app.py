@@ -121,7 +121,7 @@ In addition, you must make sure to follow the following instructions:
 Ensure you output ONLY a valid JSON array of strings, with no additional commentary or markdown.
     
 Transcript:
-\"\"\"{transcript_chunk}\"\"\" 
+\"\"\"{transcript_chunk}\"\"\"
 """
     try:
         response = client.chat.completions.create(
@@ -401,7 +401,7 @@ ANKI_HTML = """
     html, body { height: 100%; margin: 0; padding: 0; }
     body { background-color: #1E1E20; font-family: helvetica, Arial, sans-serif; }
     #reviewContainer {
-      display: flex;
+      display: none;
       flex-direction: column;
       align-items: center;
       padding: 10px;
@@ -521,7 +521,7 @@ ANKI_HTML = """
   <div id="loadingOverlay">
     <div id="lottieContainer" style="width: 300px; height: 300px;"></div>
   </div>
-  <div id="reviewContainer" style="display: none;">
+  <div id="reviewContainer">
     <div id="progress">Card <span id="current">0</span> of <span id="total">0</span></div>
     <div id="kard">
       <div class="card" id="cardContent"></div>
@@ -563,8 +563,9 @@ ANKI_HTML = """
       autoplay: true,
       path: 'https://lottie.host/embed/4500dbaf-9ac9-4b2b-b664-692cd9a3ccab/BGvTKQT8Tx.json'
     });
-    // Once the page has fully loaded, hide the loading overlay and show the review container.
-    window.addEventListener('load', function() {
+    
+    // Helper function to fade out the loading overlay after processing is complete.
+    function fadeOutOverlay() {
       var overlay = document.getElementById('loadingOverlay');
       var reviewContainer = document.getElementById('reviewContainer');
       overlay.style.transition = 'opacity 0.5s ease';
@@ -573,251 +574,255 @@ ANKI_HTML = """
         overlay.style.display = 'none';
         reviewContainer.style.display = 'flex';
       }, 500);
-    });
-  </script>
-  <script>
-    const cards = {{ cards_json|safe }};
-{% raw %}
-    let interactiveCards = [];
-    function generateInteractiveCards(cardText) {
-      const regex = /{{c(\d+)::(.*?)}}/g;
-      const numbers = new Set();
-      let m;
-      while ((m = regex.exec(cardText)) !== null) {
-        numbers.add(m[1]);
-      }
-      if (numbers.size === 0) {
-        return [{ target: null, displayText: cardText, exportText: cardText }];
-      }
-      const cardsForNote = [];
-      Array.from(numbers).sort().forEach(num => {
-        const display = processCloze(cardText, num);
-        cardsForNote.push({ target: num, displayText: display, exportText: cardText });
-      });
-      return cardsForNote;
     }
-    function processCloze(text, target) {
-      return text.replace(/{{c(\d+)::(.*?)}}/g, function(match, clozeNum, answer) {
-        if (clozeNum === target) {
-          return '<span class="cloze" data-answer="' + answer.replace(/"/g, '&quot;') + '">[...]</span>';
-        } else {
-          return answer;
+    
+    // IIFE wrapper to ensure processing is complete before hiding the overlay.
+    (function() {
+      const cards = {{ cards_json|safe }};
+    {% raw %}
+      let interactiveCards = [];
+      function generateInteractiveCards(cardText) {
+        const regex = /{{c(\d+)::(.*?)}}/g;
+        const numbers = new Set();
+        let m;
+        while ((m = regex.exec(cardText)) !== null) {
+          numbers.add(m[1]);
+        }
+        if (numbers.size === 0) {
+          return [{ target: null, displayText: cardText, exportText: cardText }];
+        }
+        const cardsForNote = [];
+        Array.from(numbers).sort().forEach(num => {
+          const display = processCloze(cardText, num);
+          cardsForNote.push({ target: num, displayText: display, exportText: cardText });
+        });
+        return cardsForNote;
+      }
+      function processCloze(text, target) {
+        return text.replace(/{{c(\d+)::(.*?)}}/g, function(match, clozeNum, answer) {
+          if (clozeNum === target) {
+            return '<span class="cloze" data-answer="' + answer.replace(/"/g, '&quot;') + '">[...]</span>';
+          } else {
+            return answer;
+          }
+        });
+      }
+      cards.forEach(cardText => {
+        interactiveCards = interactiveCards.concat(generateInteractiveCards(cardText));
+      });
+      let currentIndex = 0;
+      let savedCards = [];
+      let historyStack = [];
+      let inEditMode = false;
+      let finished = false;
+      let savedCardIndex = null; // For cart functionality
+
+      const currentEl = document.getElementById("current");
+      const totalEl = document.getElementById("total");
+      const cardContentEl = document.getElementById("cardContent");
+      const actionControls = document.getElementById("actionControls");
+      const bottomUndo = document.getElementById("bottomUndo");
+      const bottomEdit = document.getElementById("bottomEdit");
+      const undoButton = document.getElementById("undoButton");
+      const editButton = document.getElementById("editButton");
+      const discardButton = document.getElementById("discardButton");
+      const saveButton = document.getElementById("saveButton");
+      const editControls = document.getElementById("editControls");
+      const saveEditButton = document.getElementById("saveEditButton");
+      const cancelEditButton = document.getElementById("cancelEditButton");
+      const savedCardsContainer = document.getElementById("savedCardsContainer");
+      const finishedHeader = document.getElementById("finishedHeader");
+      const savedCardsText = document.getElementById("savedCardsText");
+      const copyButton = document.getElementById("copyButton");
+      const cartButton = document.getElementById("cartButton");
+      const returnButton = document.getElementById("returnButton");
+      const cartContainer = document.getElementById("cartContainer");
+
+      totalEl.textContent = interactiveCards.length;
+
+      function updateUndoButtonState() {
+        undoButton.disabled = historyStack.length === 0;
+      }
+      updateUndoButtonState();
+      
+      document.getElementById("kard").addEventListener("click", function(e) {
+        if (inEditMode) return;
+        if (actionControls.style.display === "none" || actionControls.style.display === "") {
+          const clozes = document.querySelectorAll("#cardContent .cloze");
+          clozes.forEach(span => {
+            span.innerHTML = span.getAttribute("data-answer");
+          });
+          actionControls.style.display = "flex";
         }
       });
-    }
-    cards.forEach(cardText => {
-      interactiveCards = interactiveCards.concat(generateInteractiveCards(cardText));
-    });
-    let currentIndex = 0;
-    let savedCards = [];
-    let historyStack = [];
-    let inEditMode = false;
-    let finished = false;
-    let savedCardIndex = null; // For cart functionality
-
-    const currentEl = document.getElementById("current");
-    const totalEl = document.getElementById("total");
-    const cardContentEl = document.getElementById("cardContent");
-    const actionControls = document.getElementById("actionControls");
-    const bottomUndo = document.getElementById("bottomUndo");
-    const bottomEdit = document.getElementById("bottomEdit");
-    const undoButton = document.getElementById("undoButton");
-    const editButton = document.getElementById("editButton");
-    const discardButton = document.getElementById("discardButton");
-    const saveButton = document.getElementById("saveButton");
-    const editControls = document.getElementById("editControls");
-    const saveEditButton = document.getElementById("saveEditButton");
-    const cancelEditButton = document.getElementById("cancelEditButton");
-    const savedCardsContainer = document.getElementById("savedCardsContainer");
-    const finishedHeader = document.getElementById("finishedHeader");
-    const savedCardsText = document.getElementById("savedCardsText");
-    const copyButton = document.getElementById("copyButton");
-    const cartButton = document.getElementById("cartButton");
-    const returnButton = document.getElementById("returnButton");
-    const cartContainer = document.getElementById("cartContainer");
-
-    totalEl.textContent = interactiveCards.length;
-
-    function updateUndoButtonState() {
-      undoButton.disabled = historyStack.length === 0;
-    }
-    updateUndoButtonState();
-    
-    document.getElementById("kard").addEventListener("click", function(e) {
-      if (inEditMode) return;
-      if (actionControls.style.display === "none" || actionControls.style.display === "") {
-        const clozes = document.querySelectorAll("#cardContent .cloze");
-        clozes.forEach(span => {
-          span.innerHTML = span.getAttribute("data-answer");
-        });
-        actionControls.style.display = "flex";
-      }
-    });
-    
-    function showCard() {
-      finished = false;
-      document.getElementById("progress").textContent = "Card " + (currentIndex+1) + " of " + interactiveCards.length;
-      if (!inEditMode) {
-        actionControls.style.display = "none";
-      }
-      cardContentEl.innerHTML = interactiveCards[currentIndex].displayText;
-      // Ensure the card content remains vertically centered.
-      document.getElementById("kard").style.display = "flex";
-      savedCardsContainer.style.display = "none";
-      // Restore buttons if coming back from finished state.
-      document.getElementById("bottomEdit").style.display = "flex";
-      document.getElementById("cartContainer").style.display = "flex";
-      document.getElementById("returnButton").style.display = "none";
-    }
-    function nextCard() {
-      if (currentIndex < interactiveCards.length - 1) {
-          currentIndex++;
-          showCard();
-      } else {
-          finished = true;
-      }
-    }
-    // Modify the save and discard button event handlers:
-    discardButton.addEventListener("click", function(e) {
-      e.stopPropagation();
-      historyStack.push({ currentIndex: currentIndex, savedCards: savedCards.slice(), finished: finished });
-      updateUndoButtonState();
-      if (currentIndex === interactiveCards.length - 1) {
-          finished = true;
-          showFinished();
-      } else {
-          nextCard();
-      }
-    });
-    saveButton.addEventListener("click", function(e) {
-      e.stopPropagation();
-      historyStack.push({ currentIndex: currentIndex, savedCards: savedCards.slice(), finished: finished });
-      updateUndoButtonState();
-      savedCards.push(interactiveCards[currentIndex].exportText);
-      if (currentIndex === interactiveCards.length - 1) {
-          finished = true;
-          showFinished();
-      } else {
-          nextCard();
-      }
-    });
-
-    function showFinished() {
-      // Hide card display and action controls, update header and show finish screen.
-      document.getElementById("kard").style.display = "none";
-      actionControls.style.display = "none";
-      finishedHeader.textContent = "Review complete!";
-      savedCardsText.value = savedCards.join("\\n");
-      savedCardsContainer.style.display = "flex";
-      // Update progress to show "Review Complete"
-      document.getElementById("progress").textContent = "Review Complete";
-      // Hide buttons that should not appear on the finish screen.
-      document.getElementById("bottomEdit").style.display = "none";
-      document.getElementById("cartContainer").style.display = "none";
-      document.getElementById("returnButton").style.display = "none";
-    }
-
-    editButton.addEventListener("click", function(e) {
-      e.stopPropagation();
-      if (!inEditMode) enterEditMode();
-    });
-    function enterEditMode() {
-      inEditMode = true;
-      originalCardText = interactiveCards[currentIndex].exportText;
-      cardContentEl.innerHTML = '<textarea id="editArea">' + interactiveCards[currentIndex].exportText + '</textarea>';
-      actionControls.style.display = "none";
-      bottomUndo.style.display = "none";
-      bottomEdit.style.display = "none";
-      editControls.style.display = "flex";
-    }
-    saveEditButton.addEventListener("click", function(e) {
-      e.stopPropagation();
-      const editedText = document.getElementById("editArea").value;
-      interactiveCards[currentIndex].exportText = editedText;
-      let target = interactiveCards[currentIndex].target;
-      if (target) {
-        interactiveCards[currentIndex].displayText = processCloze(editedText, target);
-      } else {
-        interactiveCards[currentIndex].displayText = editedText;
-      }
-      inEditMode = false;
-      editControls.style.display = "none";
-      bottomUndo.style.display = "flex";
-      bottomEdit.style.display = "flex";
-      showCard();
-    });
-    cancelEditButton.addEventListener("click", function(e) {
-      e.stopPropagation();
-      inEditMode = false;
-      editControls.style.display = "none";
-      bottomUndo.style.display = "flex";
-      bottomEdit.style.display = "flex";
-      showCard();
-    });
-
-    undoButton.addEventListener("click", function(e) {
-      e.stopPropagation();
-      if (historyStack.length === 0) {
-        alert("No actions to undo.");
-        return;
-      }
-      let snapshot = historyStack.pop();
-      currentIndex = snapshot.currentIndex;
-      savedCards = snapshot.savedCards.slice();
-      finished = snapshot.finished;
-      if (finished) {
+      
+      function showCard() {
         finished = false;
+        document.getElementById("progress").textContent = "Card " + (currentIndex+1) + " of " + interactiveCards.length;
+        if (!inEditMode) {
+          actionControls.style.display = "none";
+        }
+        cardContentEl.innerHTML = interactiveCards[currentIndex].displayText;
+        // Ensure the card content remains vertically centered.
+        document.getElementById("kard").style.display = "flex";
+        savedCardsContainer.style.display = "none";
+        // Restore buttons if coming back from finished state.
+        document.getElementById("bottomEdit").style.display = "flex";
+        document.getElementById("cartContainer").style.display = "flex";
+        document.getElementById("returnButton").style.display = "none";
+      }
+      function nextCard() {
+        if (currentIndex < interactiveCards.length - 1) {
+            currentIndex++;
+            showCard();
+        } else {
+            finished = true;
+        }
+      }
+      // Modify the save and discard button event handlers:
+      discardButton.addEventListener("click", function(e) {
+        e.stopPropagation();
+        historyStack.push({ currentIndex: currentIndex, savedCards: savedCards.slice(), finished: finished });
+        updateUndoButtonState();
+        if (currentIndex === interactiveCards.length - 1) {
+            finished = true;
+            showFinished();
+        } else {
+            nextCard();
+        }
+      });
+      saveButton.addEventListener("click", function(e) {
+        e.stopPropagation();
+        historyStack.push({ currentIndex: currentIndex, savedCards: savedCards.slice(), finished: finished });
+        updateUndoButtonState();
+        savedCards.push(interactiveCards[currentIndex].exportText);
+        if (currentIndex === interactiveCards.length - 1) {
+            finished = true;
+            showFinished();
+        } else {
+            nextCard();
+        }
+      });
+
+      function showFinished() {
+        // Hide card display and action controls, update header and show finish screen.
+        document.getElementById("kard").style.display = "none";
+        actionControls.style.display = "none";
+        finishedHeader.textContent = "Review complete!";
+        savedCardsText.value = savedCards.join("\\n");
+        savedCardsContainer.style.display = "flex";
+        // Update progress to show "Review Complete"
+        document.getElementById("progress").textContent = "Review Complete";
+        // Hide buttons that should not appear on the finish screen.
+        document.getElementById("bottomEdit").style.display = "none";
+        document.getElementById("cartContainer").style.display = "none";
+        document.getElementById("returnButton").style.display = "none";
+      }
+
+      editButton.addEventListener("click", function(e) {
+        e.stopPropagation();
+        if (!inEditMode) enterEditMode();
+      });
+      function enterEditMode() {
+        inEditMode = true;
+        originalCardText = interactiveCards[currentIndex].exportText;
+        cardContentEl.innerHTML = '<textarea id="editArea">' + interactiveCards[currentIndex].exportText + '</textarea>';
+        actionControls.style.display = "none";
+        bottomUndo.style.display = "none";
+        bottomEdit.style.display = "none";
+        editControls.style.display = "flex";
+      }
+      saveEditButton.addEventListener("click", function(e) {
+        e.stopPropagation();
+        const editedText = document.getElementById("editArea").value;
+        interactiveCards[currentIndex].exportText = editedText;
+        let target = interactiveCards[currentIndex].target;
+        if (target) {
+          interactiveCards[currentIndex].displayText = processCloze(editedText, target);
+        } else {
+          interactiveCards[currentIndex].displayText = editedText;
+        }
+        inEditMode = false;
+        editControls.style.display = "none";
+        bottomUndo.style.display = "flex";
+        bottomEdit.style.display = "flex";
         showCard();
-      } else {
+      });
+      cancelEditButton.addEventListener("click", function(e) {
+        e.stopPropagation();
+        inEditMode = false;
+        editControls.style.display = "none";
+        bottomUndo.style.display = "flex";
+        bottomEdit.style.display = "flex";
+        showCard();
+      });
+
+      undoButton.addEventListener("click", function(e) {
+        e.stopPropagation();
+        if (historyStack.length === 0) {
+          alert("No actions to undo.");
+          return;
+        }
+        let snapshot = historyStack.pop();
+        currentIndex = snapshot.currentIndex;
+        savedCards = snapshot.savedCards.slice();
+        finished = snapshot.finished;
+        if (finished) {
+          finished = false;
+          showCard();
+        } else {
+          document.getElementById("kard").style.display = "flex";
+          actionControls.style.display = "none";
+          savedCardsContainer.style.display = "none";
+          cartContainer.style.display = "flex";
+          cardContentEl.innerHTML = interactiveCards[currentIndex].displayText;
+          currentEl.textContent = currentIndex + 1;
+        }
+        updateUndoButtonState();
+      });
+
+      copyButton.addEventListener("click", function() {
+        savedCardsText.select();
+        document.execCommand("copy");
+        copyButton.textContent = "Copied!";
+        setTimeout(function() {
+          copyButton.textContent = "Copy Saved Cards";
+        }, 2000);
+      });
+
+      cartButton.addEventListener("click", function(e) {
+        e.stopPropagation();
+        savedCardIndex = currentIndex;
+        document.getElementById("kard").style.display = "none";
+        actionControls.style.display = "none";
+        bottomUndo.style.display = "none";
+        bottomEdit.style.display = "none";
+        cartContainer.style.display = "none";
+        savedCardsText.value = savedCards.join("\\n");
+        savedCardsContainer.style.display = "flex";
+        // Show and update the Return to Card button for non-finished saved cards view.
+        document.getElementById("returnButton").style.display = "block";
+        document.getElementById("returnButton").textContent = "Return to Card " + (savedCardIndex+1);
+      });
+      returnButton.addEventListener("click", function(e) {
+        e.stopPropagation();
+        if (savedCardIndex !== null) {
+          currentIndex = savedCardIndex;
+        }
+        savedCardsContainer.style.display = "none";
         document.getElementById("kard").style.display = "flex";
         actionControls.style.display = "none";
-        savedCardsContainer.style.display = "none";
+        bottomUndo.style.display = "flex";
+        bottomEdit.style.display = "flex";
         cartContainer.style.display = "flex";
-        cardContentEl.innerHTML = interactiveCards[currentIndex].displayText;
-        currentEl.textContent = currentIndex + 1;
-      }
-      updateUndoButtonState();
-    });
+        showCard();
+      });
 
-    copyButton.addEventListener("click", function() {
-      savedCardsText.select();
-      document.execCommand("copy");
-      copyButton.textContent = "Copied!";
-      setTimeout(function() {
-        copyButton.textContent = "Copy Saved Cards";
-      }, 2000);
-    });
-
-    cartButton.addEventListener("click", function(e) {
-      e.stopPropagation();
-      savedCardIndex = currentIndex;
-      document.getElementById("kard").style.display = "none";
-      actionControls.style.display = "none";
-      bottomUndo.style.display = "none";
-      bottomEdit.style.display = "none";
-      cartContainer.style.display = "none";
-      savedCardsText.value = savedCards.join("\\n");
-      savedCardsContainer.style.display = "flex";
-      // Show and update the Return to Card button for non-finished saved cards view.
-      document.getElementById("returnButton").style.display = "block";
-      document.getElementById("returnButton").textContent = "Return to Card " + (savedCardIndex+1);
-    });
-    returnButton.addEventListener("click", function(e) {
-      e.stopPropagation();
-      if (savedCardIndex !== null) {
-        currentIndex = savedCardIndex;
-      }
-      savedCardsContainer.style.display = "none";
-      document.getElementById("kard").style.display = "flex";
-      actionControls.style.display = "none";
-      bottomUndo.style.display = "flex";
-      bottomEdit.style.display = "flex";
-      cartContainer.style.display = "flex";
       showCard();
-    });
-
-    showCard();
-{% endraw %}
+    {% endraw %}
+      // Once all processing is complete, fade out the overlay.
+      fadeOutOverlay();
+    })();
   </script>
 </body>
 </html>
@@ -988,176 +993,181 @@ INTERACTIVE_HTML = """
       autoplay: true,
       path: 'https://lottie.host/embed/4500dbaf-9ac9-4b2b-b664-692cd9a3ccab/BGvTKQT8Tx.json'
     });
-    // Once the page has fully loaded, hide the loading overlay and show the game container.
-    window.addEventListener('load', function() {
-      var overlay = document.getElementById('loadingOverlay');
-      var gameContainer = document.getElementById('gameContainer');
+    
+    // Helper function to fade out the loading overlay after setup.
+    function fadeOutOverlay() {
+      const overlay = document.getElementById('loadingOverlay');
+      const gameContainer = document.getElementById('gameContainer');
       overlay.style.transition = 'opacity 0.5s ease';
       overlay.style.opacity = '0';
-      setTimeout(function() {
-        overlay.style.display = 'none';
-        gameContainer.style.display = 'block';
-      }, 500);
-    });
-  </script>
-  <script>
-    const questions = {{ questions_json|safe }};
-    let currentQuestionIndex = 0;
-    let score = 0;
-    let timerInterval;
-    const totalQuestions = questions.length;
-    const questionProgressEl = document.getElementById('questionProgress');
-    const rawScoreEl = document.getElementById('rawScore');
-    const timerEl = document.getElementById('timer');
-    const questionBox = document.getElementById('questionBox');
-    const optionsWrapper = document.getElementById('optionsWrapper');
-    const feedbackEl = document.getElementById('feedback');
-
-    function startGame() {
-      score = 0;
-      currentQuestionIndex = 0;
-      updateHeader();
-      showQuestion();
-    }
-
-    function updateHeader() {
-      questionProgressEl.textContent = "Question " + (currentQuestionIndex+1) + " of " + totalQuestions;
-      rawScoreEl.textContent = "Score: " + score;
-    }
-
-    function startTimer(duration, callback) {
-      let timeRemaining = duration;
-      timerEl.textContent = "Time: " + timeRemaining;
-      timerInterval = setInterval(() => {
-        timeRemaining--;
-        timerEl.textContent = "Time: " + timeRemaining;
-        if (timeRemaining <= 0) {
-          clearInterval(timerInterval);
-          callback();
-        }
-      }, 1000);
-    }
-
-    function showQuestion() {
-      feedbackEl.classList.add('hidden');
-      if (currentQuestionIndex >= totalQuestions) {
-        endGame();
-        return;
-      }
-      const currentQuestion = questions[currentQuestionIndex];
-      questionBox.textContent = currentQuestion.question;
-      optionsWrapper.innerHTML = "";
-      const ul = document.createElement('ul');
-      ul.className = 'options';
-
-      const optionsShuffled = currentQuestion.options.slice();
-      for (let i = optionsShuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [optionsShuffled[i], optionsShuffled[j]] = [optionsShuffled[j], optionsShuffled[i]];
-      }
-      optionsShuffled.forEach(option => {
-        const li = document.createElement('li');
-        const button = document.createElement('button');
-        button.textContent = option;
-        button.className = 'option-button';
-        button.onmousedown = function(e) { e.preventDefault(); };
-        button.setAttribute("ontouchend", "this.blur()");
-        button.onclick = () => selectAnswer(option);
-        button.addEventListener('click', function(e) {
-          const rect = button.getBoundingClientRect();
-          const ripple = document.createElement('span');
-          ripple.className = 'ripple';
-          ripple.style.left = (e.clientX - rect.left) + 'px';
-          ripple.style.top = (e.clientY - rect.top) + 'px';
-          button.appendChild(ripple);
-          setTimeout(() => {
-            ripple.remove();
-          }, 600);
-        });
-        li.appendChild(button);
-        ul.appendChild(li);
-      });
-      optionsWrapper.appendChild(ul);
-      startTimer(15, () => {
-        selectAnswer(null);
-      });
-      updateHeader();
-    }
-
-    function selectAnswer(selectedOption) {
-      clearInterval(timerInterval);
-      const currentQuestion = questions[currentQuestionIndex];
-      const buttons = document.querySelectorAll('.option-button');
-      const isCorrect = (selectedOption === currentQuestion.correctAnswer);
-      buttons.forEach(button => {
-        if (button.textContent === currentQuestion.correctAnswer) {
-          button.classList.add('correct');
-        } else if (button.textContent === selectedOption) {
-          button.classList.add('incorrect');
-        }
-        button.disabled = true;
-      });
-      if (isCorrect) {
-        score++;
-        confetti({
-          particleCount: 100,
-          spread: 70,
-          colors: ['#bb86fc', '#ffd700']
-        });
-      }
-      updateHeader();
       setTimeout(() => {
-        currentQuestionIndex++;
+         overlay.style.display = 'none';
+         gameContainer.style.display = 'block';
+      }, 500);
+    }
+    
+    // IIFE wrapper to ensure processing is complete before hiding the overlay.
+    (function() {
+      const questions = {{ questions_json|safe }};
+      let currentQuestionIndex = 0;
+      let score = 0;
+      let timerInterval;
+      const totalQuestions = questions.length;
+      const questionProgressEl = document.getElementById('questionProgress');
+      const rawScoreEl = document.getElementById('rawScore');
+      const timerEl = document.getElementById('timer');
+      const questionBox = document.getElementById('questionBox');
+      const optionsWrapper = document.getElementById('optionsWrapper');
+      const feedbackEl = document.getElementById('feedback');
+
+      function startGame() {
+        score = 0;
+        currentQuestionIndex = 0;
+        updateHeader();
         showQuestion();
-      }, 2000);
-    }
+      }
 
-    function endGame() {
-      questionBox.textContent = "Game Over!";
-      optionsWrapper.innerHTML = "";
-      timerEl.textContent = "";
-      feedbackEl.classList.remove('hidden');
-      // Set up final results with Play Again, Show Anki Cards toggle, and Copy Anki Cards button.
-      feedbackEl.innerHTML = "<h2>Your final score is " + score + " out of " + totalQuestions + "</h2>" +
-        "<button onclick='startGame()' class='option-button' ontouchend='this.blur()'>Play Again</button>" +
-        "<button id='toggleAnkiBtn' class='option-button' ontouchend='this.blur()' style='margin-top:10px;'>Show Anki Cards</button>" +
-        "<div id='ankiCardsContainer' style='display:none; margin-top:10px; text-align:left; background-color:#1e1e1e; padding:10px; border:1px solid #bb86fc; border-radius:10px;'></div>" +
-        "<button id='copyAnkiBtn' class='option-button' ontouchend='this.blur()' style='display:none; margin-top:10px;'>Copy Anki Cards</button>";
-      // Add event listeners for the new buttons.
-      document.getElementById('toggleAnkiBtn').addEventListener('click', function(){
-        let container = document.getElementById('ankiCardsContainer');
-        let copyBtn = document.getElementById('copyAnkiBtn');
-        if (container.style.display === 'none') {
-           let content = "";
-           questions.forEach(q => {
-               content += q.question + "&lt;br&gt;&lt;br&gt;" + "{" + "{" + "c1::" + q.correctAnswer + "}" + "}" + "<br>";
-           });
-           container.innerHTML = content;
-           container.style.display = 'block';
-           copyBtn.style.display = 'block';
-           this.textContent = "Hide Anki Cards";
-        } else {
-           container.style.display = 'none';
-           copyBtn.style.display = 'none';
-           this.textContent = "Show Anki Cards";
+      function updateHeader() {
+        questionProgressEl.textContent = "Question " + (currentQuestionIndex+1) + " of " + totalQuestions;
+        rawScoreEl.textContent = "Score: " + score;
+      }
+
+      function startTimer(duration, callback) {
+        let timeRemaining = duration;
+        timerEl.textContent = "Time: " + timeRemaining;
+        timerInterval = setInterval(() => {
+          timeRemaining--;
+          timerEl.textContent = "Time: " + timeRemaining;
+          if (timeRemaining <= 0) {
+            clearInterval(timerInterval);
+            callback();
+          }
+        }, 1000);
+      }
+
+      function showQuestion() {
+        feedbackEl.classList.add('hidden');
+        if (currentQuestionIndex >= totalQuestions) {
+          endGame();
+          return;
         }
-      });
-      document.getElementById('copyAnkiBtn').addEventListener('click', function(){
-         let container = document.getElementById('ankiCardsContainer');
-         let tempInput = document.createElement('textarea');
-         tempInput.value = container.innerText;
-         document.body.appendChild(tempInput);
-         tempInput.select();
-         document.execCommand('copy');
-         document.body.removeChild(tempInput);
-         this.textContent = "Copied!";
-         setTimeout(() => {
-             this.textContent = "Copy Anki Cards";
-         }, 2000);
-      });
-    }
+        const currentQuestion = questions[currentQuestionIndex];
+        questionBox.textContent = currentQuestion.question;
+        optionsWrapper.innerHTML = "";
+        const ul = document.createElement('ul');
+        ul.className = 'options';
 
-    startGame();
+        const optionsShuffled = currentQuestion.options.slice();
+        for (let i = optionsShuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [optionsShuffled[i], optionsShuffled[j]] = [optionsShuffled[j], optionsShuffled[i]];
+        }
+        optionsShuffled.forEach(option => {
+          const li = document.createElement('li');
+          const button = document.createElement('button');
+          button.textContent = option;
+          button.className = 'option-button';
+          button.onmousedown = function(e) { e.preventDefault(); };
+          button.setAttribute("ontouchend", "this.blur()");
+          button.onclick = () => selectAnswer(option);
+          button.addEventListener('click', function(e) {
+            const rect = button.getBoundingClientRect();
+            const ripple = document.createElement('span');
+            ripple.className = 'ripple';
+            ripple.style.left = (e.clientX - rect.left) + 'px';
+            ripple.style.top = (e.clientY - rect.top) + 'px';
+            button.appendChild(ripple);
+            setTimeout(() => {
+              ripple.remove();
+            }, 600);
+          });
+          li.appendChild(button);
+          ul.appendChild(li);
+        });
+        optionsWrapper.appendChild(ul);
+        startTimer(15, () => {
+          selectAnswer(null);
+        });
+        updateHeader();
+      }
+
+      function selectAnswer(selectedOption) {
+        clearInterval(timerInterval);
+        const currentQuestion = questions[currentQuestionIndex];
+        const buttons = document.querySelectorAll('.option-button');
+        const isCorrect = (selectedOption === currentQuestion.correctAnswer);
+        buttons.forEach(button => {
+          if (button.textContent === currentQuestion.correctAnswer) {
+            button.classList.add('correct');
+          } else if (button.textContent === selectedOption) {
+            button.classList.add('incorrect');
+          }
+          button.disabled = true;
+        });
+        if (isCorrect) {
+          score++;
+          confetti({
+            particleCount: 100,
+            spread: 70,
+            colors: ['#bb86fc', '#ffd700']
+          });
+        }
+        updateHeader();
+        setTimeout(() => {
+          currentQuestionIndex++;
+          showQuestion();
+        }, 2000);
+      }
+
+      function endGame() {
+        questionBox.textContent = "Game Over!";
+        optionsWrapper.innerHTML = "";
+        timerEl.textContent = "";
+        feedbackEl.classList.remove('hidden');
+        // Set up final results with Play Again, Show Anki Cards toggle, and Copy Anki Cards button.
+        feedbackEl.innerHTML = "<h2>Your final score is " + score + " out of " + totalQuestions + "</h2>" +
+          "<button onclick='startGame()' class='option-button' ontouchend='this.blur()'>Play Again</button>" +
+          "<button id='toggleAnkiBtn' class='option-button' ontouchend='this.blur()' style='margin-top:10px;'>Show Anki Cards</button>" +
+          "<div id='ankiCardsContainer' style='display:none; margin-top:10px; text-align:left; background-color:#1e1e1e; padding:10px; border:1px solid #bb86fc; border-radius:10px;'></div>" +
+          "<button id='copyAnkiBtn' class='option-button' ontouchend='this.blur()' style='display:none; margin-top:10px;'>Copy Anki Cards</button>";
+        // Add event listeners for the new buttons.
+        document.getElementById('toggleAnkiBtn').addEventListener('click', function(){
+          let container = document.getElementById('ankiCardsContainer');
+          let copyBtn = document.getElementById('copyAnkiBtn');
+          if (container.style.display === 'none') {
+             let content = "";
+             questions.forEach(q => {
+                 content += q.question + "&lt;br&gt;&lt;br&gt;" + "{" + "{" + "c1::" + q.correctAnswer + "}" + "}" + "<br>";
+             });
+             container.innerHTML = content;
+             container.style.display = 'block';
+             copyBtn.style.display = 'block';
+             this.textContent = "Hide Anki Cards";
+          } else {
+             container.style.display = 'none';
+             copyBtn.style.display = 'none';
+             this.textContent = "Show Anki Cards";
+          }
+        });
+        document.getElementById('copyAnkiBtn').addEventListener('click', function(){
+           let container = document.getElementById('ankiCardsContainer');
+           let tempInput = document.createElement('textarea');
+           tempInput.value = container.innerText;
+           document.body.appendChild(tempInput);
+           tempInput.select();
+           document.execCommand('copy');
+           document.body.removeChild(tempInput);
+           this.textContent = "Copied!";
+           setTimeout(() => {
+               this.textContent = "Copy Anki Cards";
+           }, 2000);
+        });
+      }
+
+      startGame();
+    })();
+    // Once setup is complete, fade out the overlay.
+    fadeOutOverlay();
   </script>
 </body>
 </html>
