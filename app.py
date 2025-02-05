@@ -1048,7 +1048,7 @@ INTERACTIVE_HTML = """
         if (container.style.display === 'none') {
            let content = "";
            questions.forEach(q => {
-               content += q.question + "&lt;br&gt;&lt;br&gt;" + "{" + "{" + "c1::" + q.correctAnswer + "}" + "}" + "&lt;br&gt;&lt;br&gt;";
+               content += q.question + "&lt;br&gt;&lt;br&gt;" + "{" + "{" + "c1::" + q.correctAnswer + "}" + "}" + "<br>";
            });
            container.innerHTML = content;
            container.style.display = 'block';
