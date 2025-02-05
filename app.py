@@ -380,6 +380,10 @@ INDEX_HTML = """
 """
 
 # Anki template – Auggie Card Simulator.
+# Changes:
+#   • Finish Screen Behavior: When finishing, the progress text displays “Review Complete” and if a user navigates back, the card counter is restored.
+#   • Buttons on the Finish Screen (Edit, Saved Cards, Return to Card) are hidden.
+#   • Saved Cards Screen Behavior: When accessed before finishing, the Return to Card button text shows the card number.
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -535,7 +539,7 @@ ANKI_HTML = """
 {% raw %}
     let interactiveCards = [];
     function generateInteractiveCards(cardText) {
-      const regex = /{{c(\\d+)::(.*?)}}/g;
+      const regex = /{{c(\d+)::(.*?)}}/g;
       const numbers = new Set();
       let m;
       while ((m = regex.exec(cardText)) !== null) {
@@ -552,7 +556,7 @@ ANKI_HTML = """
       return cardsForNote;
     }
     function processCloze(text, target) {
-      return text.replace(/{{c(\\d+)::(.*?)}}/g, function(match, clozeNum, answer) {
+      return text.replace(/{{c(\d+)::(.*?)}}/g, function(match, clozeNum, answer) {
         if (clozeNum === target) {
           return '<span class="cloze" data-answer="' + answer.replace(/"/g, '&quot;') + '">[...]</span>';
         } else {
@@ -616,11 +620,13 @@ ANKI_HTML = """
         actionControls.style.display = "none";
       }
       cardContentEl.innerHTML = interactiveCards[currentIndex].displayText;
+      // Ensure the card content remains vertically centered.
       document.getElementById("kard").style.display = "flex";
       savedCardsContainer.style.display = "none";
-      // Restore buttons for normal review mode
-      editButton.style.display = "flex";
-      cartButton.style.display = "flex";
+      // Restore buttons if coming back from finished state.
+      document.getElementById("bottomEdit").style.display = "flex";
+      document.getElementById("cartContainer").style.display = "flex";
+      document.getElementById("returnButton").style.display = "none";
     }
     function nextCard() {
       if (currentIndex < interactiveCards.length - 1) {
@@ -628,9 +634,9 @@ ANKI_HTML = """
           showCard();
       } else {
           finished = true;
-          showFinished();
       }
     }
+    // Modify the save and discard button event handlers:
     discardButton.addEventListener("click", function(e) {
       e.stopPropagation();
       historyStack.push({ currentIndex: currentIndex, savedCards: savedCards.slice(), finished: finished });
@@ -656,17 +662,18 @@ ANKI_HTML = """
     });
 
     function showFinished() {
+      // Hide card display and action controls, update header and show finish screen.
       document.getElementById("kard").style.display = "none";
       actionControls.style.display = "none";
-      finishedHeader.textContent = "Review Complete!";
+      finishedHeader.textContent = "Review complete!";
       savedCardsText.value = savedCards.join("\\n");
       savedCardsContainer.style.display = "flex";
-      // Set progress text to indicate finish state
+      // Update progress to show "Review Complete"
       document.getElementById("progress").textContent = "Review Complete";
-      // Hide buttons that should not appear on finish screen
-      editButton.style.display = "none";
-      cartButton.style.display = "none";
-      returnButton.style.display = "none";
+      // Hide buttons that should not appear on the finish screen.
+      document.getElementById("bottomEdit").style.display = "none";
+      document.getElementById("cartContainer").style.display = "none";
+      document.getElementById("returnButton").style.display = "none";
     }
 
     editButton.addEventListener("click", function(e) {
@@ -675,6 +682,7 @@ ANKI_HTML = """
     });
     function enterEditMode() {
       inEditMode = true;
+      originalCardText = interactiveCards[currentIndex].exportText;
       cardContentEl.innerHTML = '<textarea id="editArea">' + interactiveCards[currentIndex].exportText + '</textarea>';
       actionControls.style.display = "none";
       bottomUndo.style.display = "none";
@@ -726,8 +734,6 @@ ANKI_HTML = """
         cartContainer.style.display = "flex";
         cardContentEl.innerHTML = interactiveCards[currentIndex].displayText;
         currentEl.textContent = currentIndex + 1;
-        editButton.style.display = "flex";
-        cartButton.style.display = "flex";
       }
       updateUndoButtonState();
     });
@@ -742,12 +748,9 @@ ANKI_HTML = """
       cartContainer.style.display = "none";
       savedCardsText.value = savedCards.join("\\n");
       savedCardsContainer.style.display = "flex";
-      if (!finished) {
-          returnButton.style.display = "flex";
-          returnButton.textContent = "Return to Card " + (savedCardIndex+1);
-      } else {
-          returnButton.style.display = "none";
-      }
+      // Show and update the Return to Card button for non-finished saved cards view.
+      document.getElementById("returnButton").style.display = "block";
+      document.getElementById("returnButton").textContent = "Return to Card " + (savedCardIndex+1);
     });
     returnButton.addEventListener("click", function(e) {
       e.stopPropagation();
@@ -760,8 +763,6 @@ ANKI_HTML = """
       bottomUndo.style.display = "flex";
       bottomEdit.style.display = "flex";
       cartContainer.style.display = "flex";
-      editButton.style.display = "flex";
-      cartButton.style.display = "flex";
       showCard();
     });
 
@@ -772,7 +773,10 @@ ANKI_HTML = """
 </html>
 """
 
-# Interactive Game template – modifications.
+# Interactive Game template – modifications:
+#   • New “Show Anki Cards” Button added to the final results screen.
+#   • The revealed content displays each question followed by two <br><br> then the answer in cloze formatting.
+#   • A “Copy Anki Cards” button is provided to copy the formatted text.
 INTERACTIVE_HTML = """
 <!DOCTYPE html>
 <html>
@@ -804,6 +808,7 @@ INTERACTIVE_HTML = """
       max-width: 800px;
       margin: 0 auto;
     }
+    /* Header with question progress on left and raw score on right */
     .header {
       display: flex;
       justify-content: space-between;
@@ -875,6 +880,7 @@ INTERACTIVE_HTML = """
     .hidden {
       display: none;
     }
+    /* Ripple effect */
     .ripple {
       position: absolute;
       border-radius: 50%;
@@ -1019,45 +1025,44 @@ INTERACTIVE_HTML = """
       questionBox.textContent = "Game Over!";
       optionsWrapper.innerHTML = "";
       timerEl.textContent = "";
-      let ankiCardsHtml = "";
-      questions.forEach(q => {
-          ankiCardsHtml += q.question + "<br><br>{{c1::" + q.correctAnswer + "}}<br><br>";
-      });
-      let ankiContainer = document.createElement('div');
-      ankiContainer.id = "ankiContainer";
-      ankiContainer.style.display = "none";
-      ankiContainer.innerHTML = ankiCardsHtml;
-      
       feedbackEl.classList.remove('hidden');
+      // Set up final results with Play Again, Show Anki Cards toggle, and Copy Anki Cards button.
       feedbackEl.innerHTML = "<h2>Your final score is " + score + " out of " + totalQuestions + "</h2>" +
-                               "<button onclick='startGame()' class='option-button' ontouchend='this.blur()'>Play Again</button>" +
-                               "<button id='toggleAnkiBtn' class='option-button' ontouchend='this.blur()'>Show Anki Cards</button>" +
-                               "<button id='copyAnkiBtn' class='option-button' ontouchend='this.blur()' style='display:none;'>Copy Anki Cards</button>";
-      feedbackEl.appendChild(ankiContainer);
-      
-      document.getElementById("toggleAnkiBtn").addEventListener("click", function() {
-           if(ankiContainer.style.display === "none") {
-               ankiContainer.style.display = "block";
-               this.textContent = "Hide Anki Cards";
-               document.getElementById("copyAnkiBtn").style.display = "block";
-           } else {
-               ankiContainer.style.display = "none";
-               this.textContent = "Show Anki Cards";
-               document.getElementById("copyAnkiBtn").style.display = "none";
-           }
+        "<button onclick='startGame()' class='option-button' ontouchend='this.blur()'>Play Again</button>" +
+        "<button id='toggleAnkiBtn' class='option-button' ontouchend='this.blur()' style='margin-top:10px;'>Show Anki Cards</button>" +
+        "<div id='ankiCardsContainer' style='display:none; margin-top:10px; text-align:left; background-color:#1e1e1e; padding:10px; border:1px solid #bb86fc; border-radius:10px;'></div>" +
+        "<button id='copyAnkiBtn' class='option-button' ontouchend='this.blur()' style='display:none; margin-top:10px;'>Copy Anki Cards</button>";
+      // Add event listeners for the new buttons.
+      document.getElementById('toggleAnkiBtn').addEventListener('click', function(){
+        let container = document.getElementById('ankiCardsContainer');
+        let copyBtn = document.getElementById('copyAnkiBtn');
+        if (container.style.display === 'none') {
+           let content = "";
+           questions.forEach(q => {
+               content += q.question + "<br><br>{{c1::" + q.correctAnswer + "}}<br><br>";
+           });
+           container.innerHTML = content;
+           container.style.display = 'block';
+           copyBtn.style.display = 'block';
+           this.textContent = "Hide Anki Cards";
+        } else {
+           container.style.display = 'none';
+           copyBtn.style.display = 'none';
+           this.textContent = "Show Anki Cards";
+        }
       });
-      
-      document.getElementById("copyAnkiBtn").addEventListener("click", function() {
-            let tempTextarea = document.createElement("textarea");
-            tempTextarea.value = ankiContainer.innerHTML.replace(/<br><br>/g, "\n\n").replace(/<br>/g, "\n");
-            document.body.appendChild(tempTextarea);
-            tempTextarea.select();
-            document.execCommand("copy");
-            document.body.removeChild(tempTextarea);
-            this.textContent = "Copied!";
-            setTimeout(() => {
-                this.textContent = "Copy Anki Cards";
-            }, 2000);
+      document.getElementById('copyAnkiBtn').addEventListener('click', function(){
+         let container = document.getElementById('ankiCardsContainer');
+         let tempInput = document.createElement('textarea');
+         tempInput.value = container.innerText;
+         document.body.appendChild(tempInput);
+         tempInput.select();
+         document.execCommand('copy');
+         document.body.removeChild(tempInput);
+         this.textContent = "Copied!";
+         setTimeout(() => {
+             this.textContent = "Copy Anki Cards";
+         }, 2000);
       });
     }
 
