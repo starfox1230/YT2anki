@@ -561,7 +561,7 @@ ANKI_HTML = """
       renderer: 'svg',
       loop: true,
       autoplay: true,
-      path: 'URL_TO_YOUR_LOTTIE_ANIMATION.json'
+      path: 'https://lottie.host/embed/4500dbaf-9ac9-4b2b-b664-692cd9a3ccab/BGvTKQT8Tx.json'
     });
     // Once the page has fully loaded, hide the loading overlay and show the review container.
     window.addEventListener('load', function() {
@@ -986,7 +986,7 @@ INTERACTIVE_HTML = """
       renderer: 'svg',
       loop: true,
       autoplay: true,
-      path: 'URL_TO_YOUR_LOTTIE_ANIMATION.json'
+      path: 'https://lottie.host/embed/4500dbaf-9ac9-4b2b-b664-692cd9a3ccab/BGvTKQT8Tx.json'
     });
     // Once the page has fully loaded, hide the loading overlay and show the game container.
     window.addEventListener('load', function() {
