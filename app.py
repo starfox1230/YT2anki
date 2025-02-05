@@ -261,7 +261,9 @@ def get_all_interactive_questions(transcript, user_preferences="", max_chunk_siz
 # Embedded HTML Templates
 # ----------------------------
 
-# Updated index page with two buttons for mode selection.
+# 2) Default chunk size changed to 10,000 in both code and template
+# (value="10000" and request.form.get("max_size", "10000"))
+
 INDEX_HTML = """
 <!DOCTYPE html>
 <html>
@@ -282,10 +284,27 @@ INDEX_HTML = """
       border-radius: 5px;
     }
     textarea { height: 200px; }
-    input[type="submit"] { padding: 10px 20px; font-size: 16px; margin-top: 10px; }
+    input[type="submit"] { 
+      padding: 10px 20px; 
+      font-size: 16px; 
+      margin-top: 10px; 
+      background-color: #6200ee; 
+      color: #fff; 
+      border: none; 
+      border-radius: 5px; 
+      cursor: pointer; 
+      transition: background-color 0.3s;
+    }
+    input[type="submit"]:hover { background-color: #3700b3; }
     .flash { color: red; }
     a { color: #6BB0F5; text-decoration: none; }
     a:hover { text-decoration: underline; }
+    #advancedToggle {
+      cursor: pointer;
+      color: #bb86fc;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
     #advancedOptions {
       width: 80%;
       margin: 0 auto 20px;
@@ -296,22 +315,15 @@ INDEX_HTML = """
       border-radius: 5px;
     }
     #advancedOptions label { display: block; margin-bottom: 5px; }
-    #advancedToggle {
-      cursor: pointer;
-      color: #6BB0F5;
-      text-decoration: underline;
-      margin-bottom: 10px;
-      display: inline-block;
-    }
-    /* Layout for two buttons side-by-side */
     .button-group {
       display: flex;
-      justify-content: center;
+      flex-direction: column;
       gap: 10px;
+      align-items: center;
     }
     .button-group input[type="submit"] {
-      flex: 1;
-      max-width: 200px;
+      width: 80%;
+      max-width: 300px;
     }
   </style>
 </head>
@@ -333,12 +345,12 @@ INDEX_HTML = """
     <div id="advancedOptions" style="display: none;">
       <label for="modelSelect">Model:</label>
       <select name="model" id="modelSelect">
-        <option value="gpt-4o" selected>gpt-4o</option>
-        <option value="gpt-4o-mini">gpt-4o-mini</option>
+        <option value="gpt-4o-mini" selected>gpt-4o-mini</option>
+        <option value="gpt-4o">gpt-4o</option>
       </select>
       <br>
       <label for="maxSize">Max Chunk Size (characters):</label>
-      <input type="text" name="max_size" id="maxSize" value="4000">
+      <input type="text" name="max_size" id="maxSize" value="10000">
     </div>
     <textarea name="transcript" placeholder="Paste your transcript here" required></textarea>
     <br>
@@ -346,7 +358,7 @@ INDEX_HTML = """
     <br>
     <div class="button-group">
       <input type="submit" name="mode" value="Generate Anki Cards">
-      <input type="submit" name="mode" value="Generate Interactive Game">
+      <input type="submit" name="mode" value="Generate Game">
     </div>
   </form>
   <script>
@@ -366,7 +378,9 @@ INDEX_HTML = """
 </html>
 """
 
-# Existing Anki review template remains the same.
+# 4) Make the Cart button identical in size/shape to the bottom buttons, but a different color.
+#    We'll remove the custom #cartButton styling and let it share .bottomButton. Then we add a .cart override.
+
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -413,16 +427,62 @@ ANKI_HTML = """
       margin: 5px auto;
       padding: 0 10px;
     }
-    .bottomButton { padding: 10px 20px; font-size: 16px; border: none; color: #fff; border-radius: 5px; cursor: pointer; flex: 1; margin: 0 5px; }
-    .undo { background-color: #4A90E2; }
+    .bottomButton {
+      padding: 10px 20px;
+      font-size: 16px;
+      border: none;
+      color: #fff;
+      border-radius: 5px;
+      cursor: pointer;
+      flex: 1;
+      margin: 0 5px;
+      background-color: #6200ee;
+      transition: background-color 0.3s;
+    }
+    .bottomButton:hover { background-color: #3700b3; }
+    .undo { }
     .edit { background-color: #FFA500; }
     #editControls { display: none; justify-content: space-between; width: 100%; max-width: 700px; margin: 10px auto; }
     .editButton { padding: 10px 20px; font-size: 16px; border: none; color: #fff; border-radius: 5px; cursor: pointer; flex: 1; margin: 0 5px; }
     .cancelEdit { background-color: gray; }
     .saveEdit { background-color: green; }
     #savedCardsContainer { width: 100%; max-width: 700px; margin: 20px auto; color: #D7DEE9; display: none; }
-    #savedCardsText { width: 100%; height: 200px; padding: 10px; font-size: 16px; background-color: #2F2F31; border: none; border-radius: 5px; resize: none; color: #D7DEE9; }
-    #copyButton { margin-top: 10px; padding: 10px 20px; font-size: 16px; background-color: #4A90E2; color: #fff; border: none; border-radius: 5px; cursor: pointer; }
+    #savedCardsText {
+      width: 100%;
+      height: 200px;
+      padding: 10px;
+      font-size: 16px;
+      background-color: #2F2F31;
+      border: none;
+      border-radius: 5px;
+      resize: none;
+      color: #D7DEE9;
+    }
+    #copyButton, #returnButton {
+      margin-top: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #4A90E2;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #cartContainer {
+      display: flex;
+      justify-content: center;
+      margin: 5px auto;
+      width: 100%;
+      max-width: 700px;
+      padding: 0 10px;
+    }
+    /* 4) Cart button same shape/size as .bottomButton, but a different color. */
+    .cart.bottomButton {
+      background-color: #03A9F4;
+    }
+    .cart.bottomButton:hover {
+      background-color: #0288D1;
+    }
   </style>
 </head>
 <body>
@@ -440,16 +500,23 @@ ANKI_HTML = """
       <button id="saveEditButton" class="editButton saveEdit">Save Edit</button>
     </div>
     <div id="bottomUndo">
-      <button id="undoButton" class="bottomButton undo">Undo</button>
+      <button id="undoButton" class="bottomButton undo">Previous Card</button>
     </div>
     <div id="bottomEdit">
       <button id="editButton" class="bottomButton edit">Edit</button>
+    </div>
+    <!-- 5) We do not place a cart button in the cart view. It's only in main view. -->
+    <div id="cartContainer">
+      <button id="cartButton" class="bottomButton cart">Cart</button>
     </div>
     <div id="savedCardsContainer">
       <h3 style="text-align:center;">Saved Cards</h3>
       <textarea id="savedCardsText" readonly></textarea>
       <div style="text-align:center;">
         <button id="copyButton">Copy Saved Cards</button>
+      </div>
+      <div style="text-align:center; margin-top:10px;">
+        <button id="returnButton" class="bottomButton return">Return to Card</button>
       </div>
     </div>
   </div>
@@ -491,7 +558,8 @@ ANKI_HTML = """
     let historyStack = [];
     let inEditMode = false;
     let originalCardText = "";
-    
+    let savedCardIndex = null; // For cart functionality
+
     const currentEl = document.getElementById("current");
     const totalEl = document.getElementById("total");
     const cardContentEl = document.getElementById("cardContent");
@@ -508,7 +576,12 @@ ANKI_HTML = """
     const savedCardsContainer = document.getElementById("savedCardsContainer");
     const savedCardsText = document.getElementById("savedCardsText");
     const copyButton = document.getElementById("copyButton");
+    const cartButton = document.getElementById("cartButton");
+    const returnButton = document.getElementById("returnButton");
+    const cartContainer = document.getElementById("cartContainer");
+
     totalEl.textContent = interactiveCards.length;
+
     function updateUndoButtonState() {
       undoButton.disabled = historyStack.length === 0;
     }
@@ -543,7 +616,6 @@ ANKI_HTML = """
     function finish() {
       document.getElementById("kard").style.display = "none";
       actionControls.style.display = "none";
-      bottomUndo.style.display = "none";
       bottomEdit.style.display = "none";
       document.getElementById("progress").textContent = "Review complete!";
       savedCardsText.value = savedCards.join("\\n");
@@ -563,6 +635,7 @@ ANKI_HTML = """
       savedCards.push(interactiveCards[currentIndex].exportText);
       nextCard();
     });
+
     editButton.addEventListener("click", function(e) {
       e.stopPropagation();
       if (!inEditMode) enterEditMode();
@@ -600,6 +673,9 @@ ANKI_HTML = """
       bottomEdit.style.display = "flex";
       showCard();
     });
+
+    // 1) Remove the special block that forced "Previous Card" to go to last card when in cart
+    //    so we can properly return to the correct sequence after returning from cart.
     undoButton.addEventListener("click", function(e) {
       e.stopPropagation();
       if (historyStack.length === 0) {
@@ -612,10 +688,12 @@ ANKI_HTML = """
       document.getElementById("kard").style.display = "block";
       actionControls.style.display = "none";
       savedCardsContainer.style.display = "none";
+      cartContainer.style.display = "flex";
       cardContentEl.innerHTML = interactiveCards[currentIndex].displayText;
       currentEl.textContent = currentIndex + 1;
       updateUndoButtonState();
     });
+
     copyButton.addEventListener("click", function() {
       savedCardsText.select();
       document.execCommand("copy");
@@ -624,6 +702,33 @@ ANKI_HTML = """
         copyButton.textContent = "Copy Saved Cards";
       }, 2000);
     });
+
+    // 5) Hide cart button while in cart view, show it when returning to card
+    cartButton.addEventListener("click", function(e) {
+      e.stopPropagation();
+      savedCardIndex = currentIndex;
+      document.getElementById("kard").style.display = "none";
+      actionControls.style.display = "none";
+      bottomUndo.style.display = "none";
+      bottomEdit.style.display = "none";
+      cartContainer.style.display = "none";
+      savedCardsText.value = savedCards.join("\\n");
+      savedCardsContainer.style.display = "block";
+    });
+    returnButton.addEventListener("click", function(e) {
+      e.stopPropagation();
+      if (savedCardIndex !== null) {
+        currentIndex = savedCardIndex;
+      }
+      savedCardsContainer.style.display = "none";
+      document.getElementById("kard").style.display = "flex";
+      actionControls.style.display = "none";
+      bottomUndo.style.display = "flex";
+      bottomEdit.style.display = "flex";
+      cartContainer.style.display = "flex";
+      showCard();
+    });
+
     showCard();
 {% endraw %}
   </script>
@@ -631,7 +736,9 @@ ANKI_HTML = """
 </html>
 """
 
-# New Interactive Game Template
+# 3) Add an immediate blur after highlighting correct/incorrect in the game
+#    so the phone highlight is removed right away, not waiting for user to tap.
+
 INTERACTIVE_HTML = """
 <!DOCTYPE html>
 <html>
@@ -751,7 +858,13 @@ INTERACTIVE_HTML = """
     const currentQuestion = questions[currentQuestionIndex];
     questionBox.textContent = currentQuestion.question;
     optionsList.innerHTML = '';
-    currentQuestion.options.forEach(option => {
+    // Randomize the options order
+    const optionsShuffled = currentQuestion.options.slice();
+    for (let i = optionsShuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [optionsShuffled[i], optionsShuffled[j]] = [optionsShuffled[j], optionsShuffled[i]];
+    }
+    optionsShuffled.forEach(option => {
       const li = document.createElement('li');
       const button = document.createElement('button');
       button.textContent = option;
@@ -779,6 +892,11 @@ INTERACTIVE_HTML = """
       }
       button.disabled = true;
     });
+    // 3) Immediately blur after highlighting to remove phone focus
+    if (document.activeElement) {
+      document.activeElement.blur();
+    }
+
     if (isCorrect) {
       score++;
       confetti({
@@ -788,6 +906,13 @@ INTERACTIVE_HTML = """
       });
     }
     updateScore();
+    // Additional small delay to re-blur if needed
+    setTimeout(() => {
+      if (document.activeElement) {
+        document.activeElement.blur();
+      }
+    }, 50);
+
     setTimeout(() => {
       currentQuestionIndex++;
       showQuestion();
@@ -812,23 +937,26 @@ INTERACTIVE_HTML = """
 # Flask Routes
 # ----------------------------
 
-@app.route("/", methods=["GET", "POST"])
+@app.route("/", methods=["GET", "POST", "HEAD"])
 def index():
+    if request.method == "HEAD":
+        return ""
     if request.method == "POST":
         transcript = request.form.get("transcript")
         if not transcript:
             flash("Please paste a transcript.")
             return redirect(url_for("index"))
         user_preferences = request.form.get("preferences", "")
-        model = request.form.get("model", "gpt-4o")
-        max_size_str = request.form.get("max_size", "4000")
+        # 2) Default chunk size is now "10000"
+        model = request.form.get("model", "gpt-4o-mini")
+        max_size_str = request.form.get("max_size", "10000")
         try:
             max_size = int(max_size_str)
         except ValueError:
-            max_size = 4000
+            max_size = 10000
 
         mode = request.form.get("mode", "Generate Anki Cards")
-        if mode == "Generate Interactive Game":
+        if mode == "Generate Game":
             questions = get_all_interactive_questions(transcript, user_preferences, max_chunk_size=max_size, model=model)
             logger.debug("Final interactive questions list: %s", questions)
             if not questions:
@@ -845,10 +973,6 @@ def index():
             cards_json = json.dumps(cards)
             return render_template_string(ANKI_HTML, cards_json=cards_json)
     return render_template_string(INDEX_HTML)
-
-# ----------------------------
-# Main
-# ----------------------------
 
 if __name__ == "__main__":
     app.run(debug=True, port=10000)
