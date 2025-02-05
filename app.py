@@ -607,21 +607,16 @@ ANKI_HTML = """
       cardContentEl.innerHTML = interactiveCards[currentIndex].displayText;
     }
     function nextCard() {
-      currentIndex++;
-      if (currentIndex >= interactiveCards.length) {
-        finish();
+      // Instead of calling finish(), if already at the last card simply update the progress text.
+      if (currentIndex < interactiveCards.length - 1) {
+          currentIndex++;
+          showCard();
       } else {
-        showCard();
+          document.getElementById("progress").textContent = "Review complete! Card " + (currentIndex+1) + " of " + interactiveCards.length;
+          // Remain on the last card so that the Previous Card button can be used.
       }
     }
-    function finish() {
-      document.getElementById("kard").style.display = "none";
-      actionControls.style.display = "none";
-      bottomEdit.style.display = "none";
-      document.getElementById("progress").textContent = "Review complete!";
-      savedCardsText.value = savedCards.join("\\n");
-      savedCardsContainer.style.display = "block";
-    }
+    // The finish() function is no longer used in Anki mode.
     
     discardButton.addEventListener("click", function(e) {
       e.stopPropagation();
@@ -821,12 +816,12 @@ INTERACTIVE_HTML = """
     .option-button.correct {
       background: #03dac6 !important;
       box-shadow: 0 0 10px #03dac6;
-      color: #000 !important;
+      color: #fff !important;
     }
     .option-button.incorrect {
       background: #cf6679 !important;
       box-shadow: 0 0 10px #cf6679;
-      color: #000 !important;
+      color: #fff !important;
     }
     .hidden {
       display: none;
