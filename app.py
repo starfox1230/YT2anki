@@ -734,19 +734,28 @@ ANKI_HTML = """
 </html>
 """
 
-# Interactive Game template now generates new buttons each round.
+# Interactive Game template with new button styling (using the same resets, layout, and ripple effect as the provided sample,
+# while keeping our original button colors and glowing effects).
 INTERACTIVE_HTML = """
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
   <title>Interactive Game</title>
   <style>
-    /* Remove tap highlight on mobile */
-    button { -webkit-tap-highlight-color: transparent; }
-    /* Remove focus outline */
-    button:focus { outline: none; }
+    /* Global resets and mobile-friendly properties */
+    * {
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    html {
+      touch-action: manipulation;
+    }
+    button {
+      -webkit-appearance: none;
+      outline: none;
+    }
     body {
       background-color: #121212;
       color: #f0f0f0;
@@ -766,29 +775,48 @@ INTERACTIVE_HTML = """
       border-radius: 10px;
       margin-bottom: 20px;
     }
-    /* We will dynamically generate the <ul> for options each round. */
+    .score {
+      font-size: 20px;
+      margin-bottom: 20px;
+    }
+    .timer {
+      font-size: 24px;
+      margin-bottom: 20px;
+    }
     .options {
       list-style: none;
       padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
     }
-    .options li { margin: 10px 0; }
-    .option-button {
-      background-color: #3700b3;
-      color: #f0f0f0;
-      border: none;
-      padding: 10px 20px;
-      font-size: 18px;
-      border-radius: 5px;
-      cursor: pointer;
+    .options li {
       width: 100%;
       max-width: 300px;
-      margin: 0 auto;
-      display: block;
-      transition: background-color 0.3s, box-shadow 0.3s;
+    }
+    .option-button {
       position: relative;
       overflow: hidden;
+      border: none;
+      cursor: pointer;
+      /* Keep our original colors but use a gradient layout similar to the sample */
+      background: linear-gradient(135deg, #3700b3, #6200ee);
+      color: #f0f0f0;
+      font-size: 18px;
+      width: 100%;
+      padding: 10px 20px;
+      border-radius: 10px;
+      transition: transform 0.3s ease, background 0.3s ease, box-shadow 0.3s ease;
     }
-    .option-button:hover { background-color: #6200ee; }
+    @media (hover: hover) {
+      .option-button:hover {
+        transform: scale(1.05);
+      }
+    }
+    .option-button:active {
+      transform: scale(0.95);
+    }
     .option-button.correct {
       background-color: #03dac6;
       box-shadow: 0 0 10px #03dac6;
@@ -797,18 +825,19 @@ INTERACTIVE_HTML = """
       background-color: #cf6679;
       box-shadow: 0 0 10px #cf6679;
     }
-    .timer { font-size: 24px; margin-bottom: 20px; }
-    .score { font-size: 20px; margin-bottom: 20px; }
-    .hidden { display: none; }
-    /* Ripple effect styles */
+    .hidden {
+      display: none;
+    }
+    /* Ripple effect */
     .ripple {
       position: absolute;
       border-radius: 50%;
+      background: rgba(255, 255, 255, 0.4);
       transform: scale(0);
-      animation: ripple 600ms linear;
-      background: rgba(255, 255, 255, 0.7);
+      animation: ripple-animation 0.6s linear;
+      pointer-events: none;
     }
-    @keyframes ripple {
+    @keyframes ripple-animation {
       to {
         transform: scale(4);
         opacity: 0;
@@ -817,141 +846,134 @@ INTERACTIVE_HTML = """
   </style>
 </head>
 <body>
-<div class="container">
-  <h1>Interactive Game</h1>
-  <div class="score" id="score">Score: 0 / 0</div>
-  <div class="timer" id="timer">Time: 15</div>
-  <div class="question-box" id="questionBox"></div>
-  <!-- Options will be generated fresh each round -->
-  <div id="optionsWrapper"></div>
-  <div id="feedback" class="hidden"></div>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
-<script>
-  const questions = {{ questions_json|safe }};
-  let currentQuestionIndex = 0;
-  let score = 0;
-  let timerInterval;
-  const totalQuestions = questions.length;
-  const scoreEl = document.getElementById('score');
-  const timerEl = document.getElementById('timer');
-  const questionBox = document.getElementById('questionBox');
-  const optionsWrapper = document.getElementById('optionsWrapper');
-  const feedbackEl = document.getElementById('feedback');
+  <div class="container">
+    <h1>Interactive Game</h1>
+    <div class="score" id="score">Score: 0 / 0</div>
+    <div class="timer" id="timer">Time: 15</div>
+    <div class="question-box" id="questionBox"></div>
+    <div id="optionsWrapper"></div>
+    <div id="feedback" class="hidden"></div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+  <script>
+    const questions = {{ questions_json|safe }};
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let timerInterval;
+    const totalQuestions = questions.length;
+    const scoreEl = document.getElementById('score');
+    const timerEl = document.getElementById('timer');
+    const questionBox = document.getElementById('questionBox');
+    const optionsWrapper = document.getElementById('optionsWrapper');
+    const feedbackEl = document.getElementById('feedback');
 
-  function startGame() {
-    score = 0;
-    currentQuestionIndex = 0;
-    updateScore();
-    showQuestion();
-  }
-
-  function updateScore() {
-    scoreEl.textContent = `Score: ${score} / ${totalQuestions}`;
-  }
-
-  function startTimer(duration, callback) {
-    let timeRemaining = duration;
-    timerEl.textContent = `Time: ${timeRemaining}`;
-    timerInterval = setInterval(() => {
-      timeRemaining--;
-      timerEl.textContent = `Time: ${timeRemaining}`;
-      if (timeRemaining <= 0) {
-        clearInterval(timerInterval);
-        callback();
-      }
-    }, 1000);
-  }
-
-  function showQuestion() {
-    feedbackEl.classList.add('hidden');
-    if (currentQuestionIndex >= totalQuestions) {
-      endGame();
-      return;
-    }
-    const currentQuestion = questions[currentQuestionIndex];
-    questionBox.textContent = currentQuestion.question;
-
-    // Remove any existing options and create new ones
-    optionsWrapper.innerHTML = "";
-    const ul = document.createElement('ul');
-    ul.className = 'options';
-
-    // Randomize options order.
-    const optionsShuffled = currentQuestion.options.slice();
-    for (let i = optionsShuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [optionsShuffled[i], optionsShuffled[j]] = [optionsShuffled[j], optionsShuffled[i]];
-    }
-    optionsShuffled.forEach(option => {
-      const li = document.createElement('li');
-      const button = document.createElement('button');
-      button.textContent = option;
-      button.className = 'option-button';
-      // Add onmousedown to prevent residual focus on mobile
-      button.onmousedown = function(e) { e.preventDefault(); };
-      // Add ontouchend to remove focus on iOS
-      button.setAttribute("ontouchend", "this.blur()");
-      button.onclick = () => selectAnswer(option);
-      // Add ripple effect on click
-      button.addEventListener('click', function(e) {
-        const rect = button.getBoundingClientRect();
-        const ripple = document.createElement('span');
-        ripple.className = 'ripple';
-        ripple.style.left = (e.clientX - rect.left) + 'px';
-        ripple.style.top = (e.clientY - rect.top) + 'px';
-        button.appendChild(ripple);
-        setTimeout(() => {
-          ripple.remove();
-        }, 600);
-      });
-      li.appendChild(button);
-      ul.appendChild(li);
-    });
-    optionsWrapper.appendChild(ul);
-    startTimer(15, () => {
-      selectAnswer(null);
-    });
-  }
-
-  function selectAnswer(selectedOption) {
-    clearInterval(timerInterval);
-    const currentQuestion = questions[currentQuestionIndex];
-    const buttons = document.querySelectorAll('.option-button');
-    const isCorrect = (selectedOption === currentQuestion.correctAnswer);
-    buttons.forEach(button => {
-      if (button.textContent === currentQuestion.correctAnswer) {
-        button.classList.add('correct');
-      } else if (button.textContent === selectedOption) {
-        button.classList.add('incorrect');
-      }
-      button.disabled = true;
-    });
-    if (isCorrect) {
-      score++;
-      confetti({
-        particleCount: 100,
-        spread: 70,
-        colors: ['#bb86fc', '#ffd700']
-      });
-    }
-    updateScore();
-    setTimeout(() => {
-      currentQuestionIndex++;
+    function startGame() {
+      score = 0;
+      currentQuestionIndex = 0;
+      updateScore();
       showQuestion();
-    }, 2000);
-  }
+    }
 
-  function endGame() {
-    questionBox.textContent = "Game Over!";
-    optionsWrapper.innerHTML = "";
-    timerEl.textContent = "";
-    feedbackEl.classList.remove('hidden');
-    feedbackEl.innerHTML = `<h2>Your final score is ${score} out of ${totalQuestions}</h2><button onclick="startGame()" class="option-button" ontouchend="this.blur()">Play Again</button>`;
-  }
+    function updateScore() {
+      scoreEl.textContent = `Score: ${score} / ${totalQuestions}`;
+    }
 
-  startGame();
-</script>
+    function startTimer(duration, callback) {
+      let timeRemaining = duration;
+      timerEl.textContent = `Time: ${timeRemaining}`;
+      timerInterval = setInterval(() => {
+        timeRemaining--;
+        timerEl.textContent = `Time: ${timeRemaining}`;
+        if (timeRemaining <= 0) {
+          clearInterval(timerInterval);
+          callback();
+        }
+      }, 1000);
+    }
+
+    function showQuestion() {
+      feedbackEl.classList.add('hidden');
+      if (currentQuestionIndex >= totalQuestions) {
+        endGame();
+        return;
+      }
+      const currentQuestion = questions[currentQuestionIndex];
+      questionBox.textContent = currentQuestion.question;
+      optionsWrapper.innerHTML = "";
+      const ul = document.createElement('ul');
+      ul.className = 'options';
+
+      const optionsShuffled = currentQuestion.options.slice();
+      for (let i = optionsShuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [optionsShuffled[i], optionsShuffled[j]] = [optionsShuffled[j], optionsShuffled[i]];
+      }
+      optionsShuffled.forEach(option => {
+        const li = document.createElement('li');
+        const button = document.createElement('button');
+        button.textContent = option;
+        button.className = 'option-button';
+        button.onmousedown = function(e) { e.preventDefault(); };
+        button.setAttribute("ontouchend", "this.blur()");
+        button.onclick = () => selectAnswer(option);
+        button.addEventListener('click', function(e) {
+          const rect = button.getBoundingClientRect();
+          const ripple = document.createElement('span');
+          ripple.className = 'ripple';
+          ripple.style.left = (e.clientX - rect.left) + 'px';
+          ripple.style.top = (e.clientY - rect.top) + 'px';
+          button.appendChild(ripple);
+          setTimeout(() => {
+            ripple.remove();
+          }, 600);
+        });
+        li.appendChild(button);
+        ul.appendChild(li);
+      });
+      optionsWrapper.appendChild(ul);
+      startTimer(15, () => {
+        selectAnswer(null);
+      });
+    }
+
+    function selectAnswer(selectedOption) {
+      clearInterval(timerInterval);
+      const currentQuestion = questions[currentQuestionIndex];
+      const buttons = document.querySelectorAll('.option-button');
+      const isCorrect = (selectedOption === currentQuestion.correctAnswer);
+      buttons.forEach(button => {
+        if (button.textContent === currentQuestion.correctAnswer) {
+          button.classList.add('correct');
+        } else if (button.textContent === selectedOption) {
+          button.classList.add('incorrect');
+        }
+        button.disabled = true;
+      });
+      if (isCorrect) {
+        score++;
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          colors: ['#bb86fc', '#ffd700']
+        });
+      }
+      updateScore();
+      setTimeout(() => {
+        currentQuestionIndex++;
+        showQuestion();
+      }, 2000);
+    }
+
+    function endGame() {
+      questionBox.textContent = "Game Over!";
+      optionsWrapper.innerHTML = "";
+      timerEl.textContent = "";
+      feedbackEl.classList.remove('hidden');
+      feedbackEl.innerHTML = `<h2>Your final score is ${score} out of ${totalQuestions}</h2><button onclick="startGame()" class="option-button" ontouchend="this.blur()">Play Again</button>`;
+    }
+
+    startGame();
+  </script>
 </body>
 </html>
 """
