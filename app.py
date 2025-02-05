@@ -261,9 +261,9 @@ def get_all_interactive_questions(transcript, user_preferences="", max_chunk_siz
 # Embedded HTML Templates
 # ----------------------------
 
-# INDEX_HTML template uses dotlottie-player for the loading animation.
-# The loading overlay now has a transparent background.
-# The form submit event now delays submission briefly so the animation can animate.
+# INDEX_HTML template now loads the dotlottie-player from the very start,
+# placing it behind every element (via opacity 0, z-index -1, and pointer-events: none).
+# When a button is pressed, a script brings that element to the front.
 INDEX_HTML = """
 <!DOCTYPE html>
 <html>
@@ -276,7 +276,7 @@ INDEX_HTML = """
     button { -webkit-tap-highlight-color: transparent; }
     /* Remove focus outline */
     button:focus, input:focus { outline: none; }
-    body { background-color: #1E1E20; color: #D7DEE9; font-family: Arial, sans-serif; text-align: center; padding-top: 50px; }
+    body { background-color: #1E1E20; color: #D7DEE9; font-family: Arial, sans-serif; text-align: center; padding-top: 50px; position: relative; z-index: 1; }
     textarea, input[type="text"], select {
       width: 80%;
       padding: 10px;
@@ -329,13 +329,28 @@ INDEX_HTML = """
       width: 80%;
       max-width: 300px;
     }
+    /* The loading overlay is always in the DOM and playing but hidden behind everything */
+    #loadingOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      opacity: 0;
+      pointer-events: none;
+      z-index: -1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
   </style>
   <!-- Use dotlottie-player for the loading animation -->
   <script src="https://unpkg.com/@dotlottie/player-component@2.7.12/dist/dotlottie-player.mjs" type="module"></script>
 </head>
 <body>
-  <!-- Loading Overlay using dotlottie-player with a transparent background -->
-  <div id="loadingOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: transparent; display: none; justify-content: center; align-items: center; z-index: 9999;">
+  <!-- The dotlottie-player is loaded immediately and plays in the background -->
+  <div id="loadingOverlay">
     <dotlottie-player id="lottiePlayer" src="https://lottie.host/817661a8-2608-4435-89a5-daa620a64c36/WtsFI5zdEK.lottie" background="transparent" speed="1" style="width: 300px; height: 300px;" loop autoplay></dotlottie-player>
   </div>
   <h1>Transcript to Anki Cards or Interactive Game</h1>
@@ -383,15 +398,14 @@ INDEX_HTML = """
           toggle.innerHTML = "Advanced Options &#9660;";
       }
     }
-    // Intercept form submission to show the loading overlay and force the lottie animation to play
-    document.querySelector("form").addEventListener("submit", function(e) {
-      e.preventDefault();  // Prevent immediate submission
-      document.getElementById("loadingOverlay").style.display = "flex";
-      document.getElementById("lottiePlayer").play();
-      var form = this;
-      setTimeout(function(){
-         form.submit();
-      }, 100);
+    // When a form button is pressed, bring the already playing animation to the front.
+    document.querySelector("form").addEventListener("submit", function() {
+      var overlay = document.getElementById("loadingOverlay");
+      // Make the overlay visible and interactive by raising its z-index and opacity.
+      overlay.style.opacity = "1";
+      overlay.style.zIndex = "9999";
+      overlay.style.pointerEvents = "auto";
+      // Let the form submit normally.
     });
   </script>
 </body>
