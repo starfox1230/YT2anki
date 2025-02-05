@@ -738,6 +738,15 @@ ANKI_HTML = """
       updateUndoButtonState();
     });
 
+    copyButton.addEventListener("click", function() {
+      savedCardsText.select();
+      document.execCommand("copy");
+      copyButton.textContent = "Copied!";
+      setTimeout(function() {
+        copyButton.textContent = "Copy Saved Cards";
+      }, 2000);
+    });
+
     cartButton.addEventListener("click", function(e) {
       e.stopPropagation();
       savedCardIndex = currentIndex;
@@ -1039,7 +1048,7 @@ INTERACTIVE_HTML = """
         if (container.style.display === 'none') {
            let content = "";
            questions.forEach(q => {
-               content += q.question + "<br><br>{{c1::" + q.correctAnswer + "}}<br><br>";
+               content += q.question + "<br><br>" + "{" + "{" + "c1::" + q.correctAnswer + "}" + "}" + "<br><br>";
            });
            container.innerHTML = content;
            container.style.display = 'block';
