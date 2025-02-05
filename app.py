@@ -261,7 +261,9 @@ def get_all_interactive_questions(transcript, user_preferences="", max_chunk_siz
 # Embedded HTML Templates
 # ----------------------------
 
-# INDEX_HTML template uses dotlottie-player instead of lottie.loadAnimation to avoid CORS issues.
+# INDEX_HTML template uses dotlottie-player for the loading animation.
+# The loading overlay now has a transparent background.
+# The form submit event now delays submission briefly so the animation can animate.
 INDEX_HTML = """
 <!DOCTYPE html>
 <html>
@@ -332,8 +334,8 @@ INDEX_HTML = """
   <script src="https://unpkg.com/@dotlottie/player-component@2.7.12/dist/dotlottie-player.mjs" type="module"></script>
 </head>
 <body>
-  <!-- Loading Overlay using dotlottie-player -->
-  <div id="loadingOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #121212; display: none; justify-content: center; align-items: center; z-index: 9999;">
+  <!-- Loading Overlay using dotlottie-player with a transparent background -->
+  <div id="loadingOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: transparent; display: none; justify-content: center; align-items: center; z-index: 9999;">
     <dotlottie-player id="lottiePlayer" src="https://lottie.host/817661a8-2608-4435-89a5-daa620a64c36/WtsFI5zdEK.lottie" background="transparent" speed="1" style="width: 300px; height: 300px;" loop autoplay></dotlottie-player>
   </div>
   <h1>Transcript to Anki Cards or Interactive Game</h1>
@@ -381,16 +383,22 @@ INDEX_HTML = """
           toggle.innerHTML = "Advanced Options &#9660;";
       }
     }
-    // Show loading overlay on form submission
-    document.querySelector("form").addEventListener("submit", function() {
+    // Intercept form submission to show the loading overlay and force the lottie animation to play
+    document.querySelector("form").addEventListener("submit", function(e) {
+      e.preventDefault();  // Prevent immediate submission
       document.getElementById("loadingOverlay").style.display = "flex";
+      document.getElementById("lottiePlayer").play();
+      var form = this;
+      setTimeout(function(){
+         form.submit();
+      }, 100);
     });
   </script>
 </body>
 </html>
 """
 
-# ANKI_HTML template updated to use dotlottie-player
+# ANKI_HTML template updated to use dotlottie-player and a transparent loading overlay.
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -505,14 +513,14 @@ ANKI_HTML = """
     .cart.bottomButton:hover {
       background-color: #0288D1;
     }
-    /* Loading Overlay Styles */
+    /* Loading Overlay Styles with transparent background */
     #loadingOverlay {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background: #121212;
+      background: transparent;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -822,7 +830,7 @@ ANKI_HTML = """
 </html>
 """
 
-# INTERACTIVE_HTML template updated to use dotlottie-player
+# INTERACTIVE_HTML template updated to use dotlottie-player and a transparent loading overlay.
 INTERACTIVE_HTML = """
 <!DOCTYPE html>
 <html>
@@ -941,14 +949,14 @@ INTERACTIVE_HTML = """
         opacity: 0;
       }
     }
-    /* Loading Overlay Styles */
+    /* Loading Overlay Styles with transparent background */
     #loadingOverlay {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background: #121212;
+      background: transparent;
       display: flex;
       justify-content: center;
       align-items: center;
