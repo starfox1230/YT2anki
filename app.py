@@ -66,7 +66,6 @@ def fix_cloze_formatting(card):
 def get_anki_cards_for_chunk(transcript_chunk, user_preferences="", model="gpt-4o"):
     """
     Calls the OpenAI API with a transcript chunk and returns a list of Anki cloze deletion flashcards.
-    (See prompt below for formatting instructions.)
     """
     user_instr = ""
     if user_preferences.strip():
@@ -180,19 +179,98 @@ def get_all_anki_cards(transcript, user_preferences="", max_chunk_size=4000, mod
     return all_cards
 
 # ----------------------------
+# New Functions for Interactive Mode
+# ----------------------------
+
+def get_interactive_questions_for_chunk(transcript_chunk, user_preferences="", model="gpt-4o"):
+    """
+    Calls the OpenAI API with a transcript chunk and returns a list of interactive multiple-choice questions.
+    Each question is a JSON object with keys: "question", "options", "correctAnswer" (and optionally "explanation").
+    """
+    user_instr = ""
+    if user_preferences.strip():
+        user_instr = f'\nUser Request: {user_preferences.strip()}\nIf no content relevant to the user request is found in this chunk, output a dummy question in the required JSON format.'
+    
+    prompt = f"""
+You are an expert at creating interactive multiple-choice questions for educational purposes.
+Given the transcript below, generate a list of interactive multiple-choice questions.
+Each question must be a JSON object with the following keys:
+  "question": a string containing the question text.
+  "options": an array of strings representing the possible answers.
+  "correctAnswer": a string that is exactly one of the options, representing the correct answer.
+Optionally, you may include an "explanation" key with a brief explanation.
+Ensure that the output is ONLY a valid JSON array of such objects, with no additional commentary or markdown.
+{user_instr}
+Transcript:
+\"\"\"{transcript_chunk}\"\"\"
+"""
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=2000,
+            timeout=60
+        )
+        result_text = response.choices[0].message.content.strip()
+        logger.debug("Raw API response for interactive questions: %s", result_text)
+        try:
+            questions = json.loads(result_text)
+            if isinstance(questions, list):
+                return questions
+        except Exception as parse_err:
+            logger.error("JSON parsing error for interactive questions: %s", parse_err)
+            start_idx = result_text.find('[')
+            end_idx = result_text.rfind(']')
+            if start_idx != -1 and end_idx != -1:
+                json_str = result_text[start_idx:end_idx+1]
+                try:
+                    questions = json.loads(json_str)
+                    if isinstance(questions, list):
+                        return questions
+                except Exception as e:
+                    logger.error("Fallback JSON parsing failed for interactive questions: %s", e)
+        flash("Failed to generate interactive questions for a chunk. API response: " + result_text)
+        return []
+    except Exception as e:
+        logger.error("OpenAI API error for interactive questions: %s", e)
+        flash("OpenAI API error for a chunk: " + str(e))
+        return []
+
+def get_all_interactive_questions(transcript, user_preferences="", max_chunk_size=4000, model="gpt-4o"):
+    """
+    Preprocesses the transcript, splits it into chunks, and processes each chunk to generate interactive questions.
+    Returns a combined list of all questions.
+    """
+    cleaned_transcript = preprocess_transcript(transcript)
+    logger.debug("Cleaned transcript (first 200 chars): %s", cleaned_transcript[:200])
+    chunks = chunk_text(cleaned_transcript, max_chunk_size)
+    all_questions = []
+    for i, chunk in enumerate(chunks):
+        logger.debug("Processing chunk %d/%d for interactive questions", i+1, len(chunks))
+        questions = get_interactive_questions_for_chunk(chunk, user_preferences, model=model)
+        logger.debug("Chunk %d produced %d interactive questions.", i+1, len(questions))
+        all_questions.extend(questions)
+    logger.debug("Total interactive questions generated: %d", len(all_questions))
+    return all_questions
+
+# ----------------------------
 # Embedded HTML Templates
 # ----------------------------
 
+# Updated index page with two buttons for mode selection.
 INDEX_HTML = """
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Transcript to Anki Cards</title>
+  <title>Transcript to Anki Cards or Interactive Game</title>
   <style>
     body { background-color: #1E1E20; color: #D7DEE9; font-family: Arial, sans-serif; text-align: center; padding-top: 50px; }
-    /* Ensure inputs are large enough on mobile (16px prevents zooming on focus in many browsers) */
     textarea, input[type="text"], select {
       width: 80%;
       padding: 10px;
@@ -208,7 +286,6 @@ INDEX_HTML = """
     .flash { color: red; }
     a { color: #6BB0F5; text-decoration: none; }
     a:hover { text-decoration: underline; }
-    /* Styling for the advanced options toggle */
     #advancedOptions {
       width: 80%;
       margin: 0 auto 20px;
@@ -218,10 +295,7 @@ INDEX_HTML = """
       border: 1px solid #444;
       border-radius: 5px;
     }
-    #advancedOptions label {
-      display: block;
-      margin-bottom: 5px;
-    }
+    #advancedOptions label { display: block; margin-bottom: 5px; }
     #advancedToggle {
       cursor: pointer;
       color: #6BB0F5;
@@ -229,10 +303,20 @@ INDEX_HTML = """
       margin-bottom: 10px;
       display: inline-block;
     }
+    /* Layout for two buttons side-by-side */
+    .button-group {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+    }
+    .button-group input[type="submit"] {
+      flex: 1;
+      max-width: 200px;
+    }
   </style>
 </head>
 <body>
-  <h1>Transcript to Anki Cards</h1>
+  <h1>Transcript to Anki Cards or Interactive Game</h1>
   <p>
     Don't have a transcript? Use the <a href="https://tactiq.io/tools/youtube-transcript" target="_blank">Tactiq.io transcript tool</a> to generate one.
   </p>
@@ -260,7 +344,10 @@ INDEX_HTML = """
     <br>
     <input type="text" name="preferences" placeholder="Enter your card preferences (optional)">
     <br>
-    <input type="submit" value="Generate Anki Cards">
+    <div class="button-group">
+      <input type="submit" name="mode" value="Generate Anki Cards">
+      <input type="submit" name="mode" value="Generate Interactive Game">
+    </div>
   </form>
   <script>
     function toggleAdvanced(){
@@ -279,6 +366,7 @@ INDEX_HTML = """
 </html>
 """
 
+# Existing Anki review template remains the same.
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -287,19 +375,15 @@ ANKI_HTML = """
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Anki Cloze Review</title>
   <style>
-    /* Base styling */
     html, body { height: 100%; margin: 0; padding: 0; }
     body { background-color: #1E1E20; font-family: helvetica, Arial, sans-serif; }
-    /* Container for review; now aligned at the top */
     #reviewContainer {
       display: flex;
       flex-direction: column;
       align-items: center;
       padding: 10px;
     }
-    /* Progress Tracker positioned at the top */
     #progress { width: 100%; max-width: 700px; text-align: center; color: #A6ABB9; margin-bottom: 10px; }
-    /* Card container with a minimum height of about half the screen */
     #kard {
       background-color: #2F2F31;
       border-radius: 5px;
@@ -315,16 +399,12 @@ ANKI_HTML = """
       margin-bottom: 20px;
     }
     .card { font-size: 20px; color: #D7DEE9; line-height: 1.6em; }
-    /* Edit mode styling for textarea */
     #editArea { width: 100%; height: 150px; font-size: 20px; padding: 10px; }
-    /* Cloze styling */
     .cloze, .cloze b, .cloze u, .cloze i { font-weight: bold; color: MediumSeaGreen !important; cursor: pointer; }
-    /* Action Controls (Discard/Save) - hidden until answer is revealed */
     #actionControls { display: none; justify-content: space-between; width: 100%; max-width: 700px; margin: 10px auto; }
     .actionButton { padding: 10px 20px; font-size: 16px; border: none; color: #fff; border-radius: 5px; cursor: pointer; flex: 1; margin: 0 5px; }
     .discard { background-color: red; }
     .save { background-color: green; }
-    /* Bottom Controls: two rows */
     #bottomUndo, #bottomEdit {
       display: flex;
       justify-content: center;
@@ -336,43 +416,35 @@ ANKI_HTML = """
     .bottomButton { padding: 10px 20px; font-size: 16px; border: none; color: #fff; border-radius: 5px; cursor: pointer; flex: 1; margin: 0 5px; }
     .undo { background-color: #4A90E2; }
     .edit { background-color: #FFA500; }
-    /* Edit Controls: Cancel Edit on left, Save Edit on right */
     #editControls { display: none; justify-content: space-between; width: 100%; max-width: 700px; margin: 10px auto; }
     .editButton { padding: 10px 20px; font-size: 16px; border: none; color: #fff; border-radius: 5px; cursor: pointer; flex: 1; margin: 0 5px; }
     .cancelEdit { background-color: gray; }
     .saveEdit { background-color: green; }
-    /* Saved Cards styling */
     #savedCardsContainer { width: 100%; max-width: 700px; margin: 20px auto; color: #D7DEE9; display: none; }
     #savedCardsText { width: 100%; height: 200px; padding: 10px; font-size: 16px; background-color: #2F2F31; border: none; border-radius: 5px; resize: none; color: #D7DEE9; }
     #copyButton { margin-top: 10px; padding: 10px 20px; font-size: 16px; background-color: #4A90E2; color: #fff; border: none; border-radius: 5px; cursor: pointer; }
   </style>
 </head>
-<body class="mobile">
+<body>
   <div id="reviewContainer">
-    <!-- Progress Tracker at the top -->
     <div id="progress">Card <span id="current">0</span> of <span id="total">0</span></div>
-    <!-- Card Display -->
     <div id="kard">
-      <div class="card" id="cardContent"><!-- Card content injected here --></div>
+      <div class="card" id="cardContent"></div>
     </div>
-    <!-- Action Controls (Discard/Save) -->
     <div id="actionControls">
       <button id="discardButton" class="actionButton discard">Discard</button>
       <button id="saveButton" class="actionButton save">Save</button>
     </div>
-    <!-- Edit Controls (Cancel Edit left, Save Edit right) -->
     <div id="editControls">
       <button id="cancelEditButton" class="editButton cancelEdit">Cancel Edit</button>
       <button id="saveEditButton" class="editButton saveEdit">Save Edit</button>
     </div>
-    <!-- Bottom Controls: two rows -->
     <div id="bottomUndo">
       <button id="undoButton" class="bottomButton undo">Undo</button>
     </div>
     <div id="bottomEdit">
       <button id="editButton" class="bottomButton edit">Edit</button>
     </div>
-    <!-- Saved Cards Output -->
     <div id="savedCardsContainer">
       <h3 style="text-align:center;">Saved Cards</h3>
       <textarea id="savedCardsText" readonly></textarea>
@@ -382,12 +454,8 @@ ANKI_HTML = """
     </div>
   </div>
   <script>
-    // Inject the generated cards from the backend.
     const cards = {{ cards_json|safe }};
 {% raw %}
-    /**********************
-     * Build Interactive Cards *
-     **********************/
     let interactiveCards = [];
     function generateInteractiveCards(cardText) {
       const regex = /{{c(\d+)::(.*?)}}/g;
@@ -424,9 +492,6 @@ ANKI_HTML = """
     let inEditMode = false;
     let originalCardText = "";
     
-    /*********************
-     * Element Selectors *
-     *********************/
     const currentEl = document.getElementById("current");
     const totalEl = document.getElementById("total");
     const cardContentEl = document.getElementById("cardContent");
@@ -449,13 +514,8 @@ ANKI_HTML = """
     }
     updateUndoButtonState();
     
-    /***************************
-     * Global Reveal on Card-Box Click *
-     ***************************/
-    // Attach click listener to the entire card container (#kard) so that clicking anywhere reveals the answer.
     document.getElementById("kard").addEventListener("click", function(e) {
       if (inEditMode) return;
-      // Only reveal if actionControls are not already visible.
       if (actionControls.style.display === "none" || actionControls.style.display === "") {
         const clozes = document.querySelectorAll("#cardContent .cloze");
         clozes.forEach(span => {
@@ -465,9 +525,6 @@ ANKI_HTML = """
       }
     });
     
-    /***************************
-     * Card Display Functions *
-     ***************************/
     function showCard() {
       if (!inEditMode) {
         actionControls.style.display = "none";
@@ -493,9 +550,6 @@ ANKI_HTML = """
       savedCardsContainer.style.display = "block";
     }
     
-    /***********************
-     * Button Event Listeners *
-     ***********************/
     discardButton.addEventListener("click", function(e) {
       e.stopPropagation();
       historyStack.push({ currentIndex: currentIndex, savedCards: savedCards.slice() });
@@ -570,13 +624,186 @@ ANKI_HTML = """
         copyButton.textContent = "Copy Saved Cards";
       }, 2000);
     });
-    
-    /***********************
-     * Start the Review *
-     ***********************/
     showCard();
 {% endraw %}
   </script>
+</body>
+</html>
+"""
+
+# New Interactive Game Template
+INTERACTIVE_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interactive Game</title>
+  <style>
+    body {
+      background-color: #121212;
+      color: #f0f0f0;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    h1 { color: #bb86fc; }
+    .question-box {
+      background-color: #1e1e1e;
+      padding: 20px;
+      border: 2px solid #bb86fc;
+      border-radius: 10px;
+      margin-bottom: 20px;
+    }
+    .options {
+      list-style: none;
+      padding: 0;
+    }
+    .options li { margin: 10px 0; }
+    .option-button {
+      background-color: #3700b3;
+      color: #f0f0f0;
+      border: none;
+      padding: 10px 20px;
+      font-size: 18px;
+      border-radius: 5px;
+      cursor: pointer;
+      width: 100%;
+      max-width: 300px;
+      margin: 0 auto;
+      display: block;
+      transition: background-color 0.3s, box-shadow 0.3s;
+    }
+    .option-button:hover { background-color: #6200ee; }
+    .option-button.correct {
+      background-color: #03dac6;
+      box-shadow: 0 0 10px #03dac6;
+    }
+    .option-button.incorrect {
+      background-color: #cf6679;
+      box-shadow: 0 0 10px #cf6679;
+    }
+    .timer { font-size: 24px; margin-bottom: 20px; }
+    .score { font-size: 20px; margin-bottom: 20px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>Interactive Game</h1>
+  <div class="score" id="score">Score: 0 / 0</div>
+  <div class="timer" id="timer">Time: 15</div>
+  <div class="question-box" id="questionBox">
+    <!-- Question text will go here -->
+  </div>
+  <ul class="options" id="optionsList">
+    <!-- Options will be added here dynamically -->
+  </ul>
+  <div id="feedback" class="hidden"></div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+<script>
+  const questions = {{ questions_json|safe }};
+  let currentQuestionIndex = 0;
+  let score = 0;
+  let timerInterval;
+  const totalQuestions = questions.length;
+  const scoreEl = document.getElementById('score');
+  const timerEl = document.getElementById('timer');
+  const questionBox = document.getElementById('questionBox');
+  const optionsList = document.getElementById('optionsList');
+  const feedbackEl = document.getElementById('feedback');
+
+  function startGame() {
+    score = 0;
+    currentQuestionIndex = 0;
+    updateScore();
+    showQuestion();
+  }
+
+  function updateScore() {
+    scoreEl.textContent = `Score: ${score} / ${totalQuestions}`;
+  }
+
+  function startTimer(duration, callback) {
+    let timeRemaining = duration;
+    timerEl.textContent = `Time: ${timeRemaining}`;
+    timerInterval = setInterval(() => {
+      timeRemaining--;
+      timerEl.textContent = `Time: ${timeRemaining}`;
+      if (timeRemaining <= 0) {
+        clearInterval(timerInterval);
+        callback();
+      }
+    }, 1000);
+  }
+
+  function showQuestion() {
+    feedbackEl.classList.add('hidden');
+    if (currentQuestionIndex >= totalQuestions) {
+      endGame();
+      return;
+    }
+    const currentQuestion = questions[currentQuestionIndex];
+    questionBox.textContent = currentQuestion.question;
+    optionsList.innerHTML = '';
+    currentQuestion.options.forEach(option => {
+      const li = document.createElement('li');
+      const button = document.createElement('button');
+      button.textContent = option;
+      button.className = 'option-button';
+      button.onclick = () => selectAnswer(option);
+      li.appendChild(button);
+      optionsList.appendChild(li);
+    });
+    startTimer(15, () => {
+      // Time expired, mark as incorrect
+      selectAnswer(null);
+    });
+  }
+
+  function selectAnswer(selectedOption) {
+    clearInterval(timerInterval);
+    const currentQuestion = questions[currentQuestionIndex];
+    const buttons = document.querySelectorAll('.option-button');
+    let isCorrect = (selectedOption === currentQuestion.correctAnswer);
+    buttons.forEach(button => {
+      if (button.textContent === currentQuestion.correctAnswer) {
+        button.classList.add('correct');
+      } else if (button.textContent === selectedOption) {
+        button.classList.add('incorrect');
+      }
+      button.disabled = true;
+    });
+    if (isCorrect) {
+      score++;
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        colors: ['#bb86fc', '#ffd700']
+      });
+    }
+    updateScore();
+    setTimeout(() => {
+      currentQuestionIndex++;
+      showQuestion();
+    }, 2000);
+  }
+
+  function endGame() {
+    questionBox.textContent = "Game Over!";
+    optionsList.innerHTML = '';
+    timerEl.textContent = '';
+    feedbackEl.classList.remove('hidden');
+    feedbackEl.innerHTML = `<h2>Your final score is ${score} out of ${totalQuestions}</h2><button onclick="startGame()" class="option-button">Play Again</button>`;
+  }
+
+  startGame();
+</script>
 </body>
 </html>
 """
@@ -599,13 +826,24 @@ def index():
             max_size = int(max_size_str)
         except ValueError:
             max_size = 4000
-        cards = get_all_anki_cards(transcript, user_preferences, max_chunk_size=max_size, model=model)
-        logger.debug("Final flashcards list: %s", cards)
-        if not cards:
-            flash("Failed to generate any Anki cards.")
-            return redirect(url_for("index"))
-        cards_json = json.dumps(cards)
-        return render_template_string(ANKI_HTML, cards_json=cards_json)
+
+        mode = request.form.get("mode", "Generate Anki Cards")
+        if mode == "Generate Interactive Game":
+            questions = get_all_interactive_questions(transcript, user_preferences, max_chunk_size=max_size, model=model)
+            logger.debug("Final interactive questions list: %s", questions)
+            if not questions:
+                flash("Failed to generate any interactive questions.")
+                return redirect(url_for("index"))
+            questions_json = json.dumps(questions)
+            return render_template_string(INTERACTIVE_HTML, questions_json=questions_json)
+        else:
+            cards = get_all_anki_cards(transcript, user_preferences, max_chunk_size=max_size, model=model)
+            logger.debug("Final flashcards list: %s", cards)
+            if not cards:
+                flash("Failed to generate any Anki cards.")
+                return redirect(url_for("index"))
+            cards_json = json.dumps(cards)
+            return render_template_string(ANKI_HTML, cards_json=cards_json)
     return render_template_string(INDEX_HTML)
 
 # ----------------------------
