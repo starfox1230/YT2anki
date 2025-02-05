@@ -377,7 +377,7 @@ INDEX_HTML = """
 </html>
 """
 
-# The Anki review template with "Saved Cards" label for the cart button.
+# Anki template with inline onmousedown attributes added to all <button> elements.
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -475,7 +475,6 @@ ANKI_HTML = """
       max-width: 700px;
       padding: 0 10px;
     }
-    /* Cart button now labeled "Saved Cards" and same size/shape as bottom buttons */
     .cart.bottomButton {
       background-color: #03A9F4;
     }
@@ -491,30 +490,30 @@ ANKI_HTML = """
       <div class="card" id="cardContent"></div>
     </div>
     <div id="actionControls">
-      <button id="discardButton" class="actionButton discard">Discard</button>
-      <button id="saveButton" class="actionButton save">Save</button>
+      <button id="discardButton" class="actionButton discard" onmousedown="event.preventDefault()">Discard</button>
+      <button id="saveButton" class="actionButton save" onmousedown="event.preventDefault()">Save</button>
     </div>
     <div id="editControls">
-      <button id="cancelEditButton" class="editButton cancelEdit">Cancel Edit</button>
-      <button id="saveEditButton" class="editButton saveEdit">Save Edit</button>
+      <button id="cancelEditButton" class="editButton cancelEdit" onmousedown="event.preventDefault()">Cancel Edit</button>
+      <button id="saveEditButton" class="editButton saveEdit" onmousedown="event.preventDefault()">Save Edit</button>
     </div>
     <div id="bottomUndo">
-      <button id="undoButton" class="bottomButton undo">Previous Card</button>
+      <button id="undoButton" class="bottomButton undo" onmousedown="event.preventDefault()">Previous Card</button>
     </div>
     <div id="bottomEdit">
-      <button id="editButton" class="bottomButton edit">Edit</button>
+      <button id="editButton" class="bottomButton edit" onmousedown="event.preventDefault()">Edit</button>
     </div>
     <div id="cartContainer">
-      <button id="cartButton" class="bottomButton cart">Saved Cards</button>
+      <button id="cartButton" class="bottomButton cart" onmousedown="event.preventDefault()">Saved Cards</button>
     </div>
     <div id="savedCardsContainer">
       <h3 style="text-align:center;">Saved Cards</h3>
       <textarea id="savedCardsText" readonly></textarea>
       <div style="text-align:center;">
-        <button id="copyButton">Copy Saved Cards</button>
+        <button id="copyButton" onmousedown="event.preventDefault()">Copy Saved Cards</button>
       </div>
       <div style="text-align:center; margin-top:10px;">
-        <button id="returnButton" class="bottomButton return">Return to Card</button>
+        <button id="returnButton" class="bottomButton return" onmousedown="event.preventDefault()">Return to Card</button>
       </div>
     </div>
   </div>
@@ -731,7 +730,7 @@ ANKI_HTML = """
 </html>
 """
 
-# The Interactive Game template now creates a new set of buttons for each round.
+# Interactive Game template now generates new buttons each round.
 INTERACTIVE_HTML = """
 <!DOCTYPE html>
 <html>
@@ -851,7 +850,7 @@ INTERACTIVE_HTML = """
     const currentQuestion = questions[currentQuestionIndex];
     questionBox.textContent = currentQuestion.question;
 
-    // Remove any existing options and create new ones each round.
+    // Remove any existing options and create new ones
     optionsWrapper.innerHTML = "";
     const ul = document.createElement('ul');
     ul.className = 'options';
@@ -867,6 +866,8 @@ INTERACTIVE_HTML = """
       const button = document.createElement('button');
       button.textContent = option;
       button.className = 'option-button';
+      // Add onmousedown to prevent residual focus on mobile
+      button.onmousedown = function(e) { e.preventDefault(); };
       button.onclick = () => selectAnswer(option);
       li.appendChild(button);
       ul.appendChild(li);
