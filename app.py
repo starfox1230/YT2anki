@@ -893,8 +893,45 @@ INTERACTIVE_HTML = """
 # Flask Routes
 # ----------------------------
 
-@app.route("/", methods=["GET", "POST"])
+@app.route("/", methods=["GET", "POST", "HEAD"])
 def index():
+    if request.method == "HEAD":
+        return ""
     if request.method == "POST":
         transcript = request.form.get("transcript")
-        
+        if not transcript:
+            flash("Please paste a transcript.")
+            return redirect(url_for("index"))
+        user_preferences = request.form.get("preferences", "")
+        model = request.form.get("model", "gpt-4o-mini")
+        max_size_str = request.form.get("max_size", "1000")
+        try:
+            max_size = int(max_size_str)
+        except ValueError:
+            max_size = 1000
+
+        mode = request.form.get("mode", "Generate Anki Cards")
+        if mode == "Generate Game":
+            questions = get_all_interactive_questions(transcript, user_preferences, max_chunk_size=max_size, model=model)
+            logger.debug("Final interactive questions list: %s", questions)
+            if not questions:
+                flash("Failed to generate any interactive questions.")
+                return redirect(url_for("index"))
+            questions_json = json.dumps(questions)
+            return render_template_string(INTERACTIVE_HTML, questions_json=questions_json)
+        else:
+            cards = get_all_anki_cards(transcript, user_preferences, max_chunk_size=max_size, model=model)
+            logger.debug("Final flashcards list: %s", cards)
+            if not cards:
+                flash("Failed to generate any Anki cards.")
+                return redirect(url_for("index"))
+            cards_json = json.dumps(cards)
+            return render_template_string(ANKI_HTML, cards_json=cards_json)
+    return render_template_string(INDEX_HTML)
+
+# ----------------------------
+# Main
+# ----------------------------
+
+if __name__ == "__main__":
+    app.run(debug=True, port=10000)
