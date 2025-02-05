@@ -271,6 +271,8 @@ INDEX_HTML = """
   <style>
     /* Remove tap highlight on mobile */
     button { -webkit-tap-highlight-color: transparent; }
+    /* Remove focus outline */
+    button:focus, input:focus { outline: none; }
     body { background-color: #1E1E20; color: #D7DEE9; font-family: Arial, sans-serif; text-align: center; padding-top: 50px; }
     textarea, input[type="text"], select {
       width: 80%;
@@ -377,7 +379,7 @@ INDEX_HTML = """
 </html>
 """
 
-# Anki template with inline onmousedown attributes added to all <button> elements.
+# Anki template with inline onmousedown and ontouchend attributes added to all <button> elements.
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -388,6 +390,8 @@ ANKI_HTML = """
   <style>
     /* Remove tap highlight on mobile */
     button { -webkit-tap-highlight-color: transparent; }
+    /* Remove focus outline */
+    button:focus { outline: none; }
     html, body { height: 100%; margin: 0; padding: 0; }
     body { background-color: #1E1E20; font-family: helvetica, Arial, sans-serif; }
     #reviewContainer {
@@ -490,30 +494,30 @@ ANKI_HTML = """
       <div class="card" id="cardContent"></div>
     </div>
     <div id="actionControls">
-      <button id="discardButton" class="actionButton discard" onmousedown="event.preventDefault()">Discard</button>
-      <button id="saveButton" class="actionButton save" onmousedown="event.preventDefault()">Save</button>
+      <button id="discardButton" class="actionButton discard" onmousedown="event.preventDefault()" ontouchend="this.blur()">Discard</button>
+      <button id="saveButton" class="actionButton save" onmousedown="event.preventDefault()" ontouchend="this.blur()">Save</button>
     </div>
     <div id="editControls">
-      <button id="cancelEditButton" class="editButton cancelEdit" onmousedown="event.preventDefault()">Cancel Edit</button>
-      <button id="saveEditButton" class="editButton saveEdit" onmousedown="event.preventDefault()">Save Edit</button>
+      <button id="cancelEditButton" class="editButton cancelEdit" onmousedown="event.preventDefault()" ontouchend="this.blur()">Cancel Edit</button>
+      <button id="saveEditButton" class="editButton saveEdit" onmousedown="event.preventDefault()" ontouchend="this.blur()">Save Edit</button>
     </div>
     <div id="bottomUndo">
-      <button id="undoButton" class="bottomButton undo" onmousedown="event.preventDefault()">Previous Card</button>
+      <button id="undoButton" class="bottomButton undo" onmousedown="event.preventDefault()" ontouchend="this.blur()">Previous Card</button>
     </div>
     <div id="bottomEdit">
-      <button id="editButton" class="bottomButton edit" onmousedown="event.preventDefault()">Edit</button>
+      <button id="editButton" class="bottomButton edit" onmousedown="event.preventDefault()" ontouchend="this.blur()">Edit</button>
     </div>
     <div id="cartContainer">
-      <button id="cartButton" class="bottomButton cart" onmousedown="event.preventDefault()">Saved Cards</button>
+      <button id="cartButton" class="bottomButton cart" onmousedown="event.preventDefault()" ontouchend="this.blur()">Saved Cards</button>
     </div>
     <div id="savedCardsContainer">
       <h3 style="text-align:center;">Saved Cards</h3>
       <textarea id="savedCardsText" readonly></textarea>
       <div style="text-align:center;">
-        <button id="copyButton" onmousedown="event.preventDefault()">Copy Saved Cards</button>
+        <button id="copyButton" onmousedown="event.preventDefault()" ontouchend="this.blur()">Copy Saved Cards</button>
       </div>
       <div style="text-align:center; margin-top:10px;">
-        <button id="returnButton" class="bottomButton return" onmousedown="event.preventDefault()">Return to Card</button>
+        <button id="returnButton" class="bottomButton return" onmousedown="event.preventDefault()" ontouchend="this.blur()">Return to Card</button>
       </div>
     </div>
   </div>
@@ -741,6 +745,8 @@ INTERACTIVE_HTML = """
   <style>
     /* Remove tap highlight on mobile */
     button { -webkit-tap-highlight-color: transparent; }
+    /* Remove focus outline */
+    button:focus { outline: none; }
     body {
       background-color: #121212;
       color: #f0f0f0;
@@ -779,6 +785,8 @@ INTERACTIVE_HTML = """
       margin: 0 auto;
       display: block;
       transition: background-color 0.3s, box-shadow 0.3s;
+      position: relative;
+      overflow: hidden;
     }
     .option-button:hover { background-color: #6200ee; }
     .option-button.correct {
@@ -792,6 +800,20 @@ INTERACTIVE_HTML = """
     .timer { font-size: 24px; margin-bottom: 20px; }
     .score { font-size: 20px; margin-bottom: 20px; }
     .hidden { display: none; }
+    /* Ripple effect styles */
+    .ripple {
+      position: absolute;
+      border-radius: 50%;
+      transform: scale(0);
+      animation: ripple 600ms linear;
+      background: rgba(255, 255, 255, 0.7);
+    }
+    @keyframes ripple {
+      to {
+        transform: scale(4);
+        opacity: 0;
+      }
+    }
   </style>
 </head>
 <body>
@@ -868,7 +890,21 @@ INTERACTIVE_HTML = """
       button.className = 'option-button';
       // Add onmousedown to prevent residual focus on mobile
       button.onmousedown = function(e) { e.preventDefault(); };
+      // Add ontouchend to remove focus on iOS
+      button.setAttribute("ontouchend", "this.blur()");
       button.onclick = () => selectAnswer(option);
+      // Add ripple effect on click
+      button.addEventListener('click', function(e) {
+        const rect = button.getBoundingClientRect();
+        const ripple = document.createElement('span');
+        ripple.className = 'ripple';
+        ripple.style.left = (e.clientX - rect.left) + 'px';
+        ripple.style.top = (e.clientY - rect.top) + 'px';
+        button.appendChild(ripple);
+        setTimeout(() => {
+          ripple.remove();
+        }, 600);
+      });
       li.appendChild(button);
       ul.appendChild(li);
     });
@@ -911,7 +947,7 @@ INTERACTIVE_HTML = """
     optionsWrapper.innerHTML = "";
     timerEl.textContent = "";
     feedbackEl.classList.remove('hidden');
-    feedbackEl.innerHTML = `<h2>Your final score is ${score} out of ${totalQuestions}</h2><button onclick="startGame()" class="option-button">Play Again</button>`;
+    feedbackEl.innerHTML = `<h2>Your final score is ${score} out of ${totalQuestions}</h2><button onclick="startGame()" class="option-button" ontouchend="this.blur()">Play Again</button>`;
   }
 
   startGame();
