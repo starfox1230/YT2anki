@@ -63,7 +63,7 @@ def fix_cloze_formatting(card):
     card = re.sub(r'(?<!})}(?!})', '}}', card)
     return card
 
-def get_anki_cards_for_chunk(transcript_chunk, user_preferences=""):
+def get_anki_cards_for_chunk(transcript_chunk, user_preferences="", model="gpt-4o"):
     """
     Calls the OpenAI API with a transcript chunk and returns a list of Anki cloze deletion flashcards.
     (See prompt below for formatting instructions.)
@@ -122,11 +122,11 @@ In addition, you must make sure to follow the following instructions:
 Ensure you output ONLY a valid JSON array of strings, with no additional commentary or markdown.
     
 Transcript:
-\"\"\"{transcript_chunk}\"\"\"
+\"\"\"{transcript_chunk}\"\"\" 
 """
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=model,
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": prompt}
@@ -162,7 +162,7 @@ Transcript:
         flash("OpenAI API error for a chunk: " + str(e))
         return []
 
-def get_all_anki_cards(transcript, user_preferences="", max_chunk_size=4000):
+def get_all_anki_cards(transcript, user_preferences="", max_chunk_size=4000, model="gpt-4o"):
     """
     Preprocesses the transcript, splits it into chunks, and processes each chunk.
     Returns a combined list of all flashcards.
@@ -173,7 +173,7 @@ def get_all_anki_cards(transcript, user_preferences="", max_chunk_size=4000):
     all_cards = []
     for i, chunk in enumerate(chunks):
         logger.debug("Processing chunk %d/%d", i+1, len(chunks))
-        cards = get_anki_cards_for_chunk(chunk, user_preferences)
+        cards = get_anki_cards_for_chunk(chunk, user_preferences, model=model)
         logger.debug("Chunk %d produced %d cards.", i+1, len(cards))
         all_cards.extend(cards)
     logger.debug("Total flashcards generated: %d", len(all_cards))
@@ -193,7 +193,7 @@ INDEX_HTML = """
   <style>
     body { background-color: #1E1E20; color: #D7DEE9; font-family: Arial, sans-serif; text-align: center; padding-top: 50px; }
     /* Ensure inputs are large enough on mobile (16px prevents zooming on focus in many browsers) */
-    textarea, input[type="text"] {
+    textarea, input[type="text"], select {
       width: 80%;
       padding: 10px;
       font-size: 16px;
@@ -208,6 +208,27 @@ INDEX_HTML = """
     .flash { color: red; }
     a { color: #6BB0F5; text-decoration: none; }
     a:hover { text-decoration: underline; }
+    /* Styling for the advanced options toggle */
+    #advancedOptions {
+      width: 80%;
+      margin: 0 auto 20px;
+      text-align: left;
+      background-color: #2F2F31;
+      padding: 10px;
+      border: 1px solid #444;
+      border-radius: 5px;
+    }
+    #advancedOptions label {
+      display: block;
+      margin-bottom: 5px;
+    }
+    #advancedToggle {
+      cursor: pointer;
+      color: #6BB0F5;
+      text-decoration: underline;
+      margin-bottom: 10px;
+      display: inline-block;
+    }
   </style>
 </head>
 <body>
@@ -223,12 +244,37 @@ INDEX_HTML = """
     {% endif %}
   {% endwith %}
   <form method="post">
+    <!-- Advanced Options Toggle -->
+    <div id="advancedToggle" onclick="toggleAdvanced()">Advanced Options &#9660;</div>
+    <div id="advancedOptions" style="display: none;">
+      <label for="modelSelect">Model:</label>
+      <select name="model" id="modelSelect">
+        <option value="gpt-4o" selected>gpt-4o</option>
+        <option value="gpt-4o-mini">gpt-4o-mini</option>
+      </select>
+      <br>
+      <label for="maxSize">Max Chunk Size (characters):</label>
+      <input type="text" name="max_size" id="maxSize" value="4000">
+    </div>
     <textarea name="transcript" placeholder="Paste your transcript here" required></textarea>
     <br>
     <input type="text" name="preferences" placeholder="Enter your card preferences (optional)">
     <br>
     <input type="submit" value="Generate Anki Cards">
   </form>
+  <script>
+    function toggleAdvanced(){
+      var adv = document.getElementById("advancedOptions");
+      var toggle = document.getElementById("advancedToggle");
+      if(adv.style.display === "none" || adv.style.display === ""){
+          adv.style.display = "block";
+          toggle.innerHTML = "Advanced Options &#9650;";
+      } else {
+          adv.style.display = "none";
+          toggle.innerHTML = "Advanced Options &#9660;";
+      }
+    }
+  </script>
 </body>
 </html>
 """
@@ -547,7 +593,13 @@ def index():
             flash("Please paste a transcript.")
             return redirect(url_for("index"))
         user_preferences = request.form.get("preferences", "")
-        cards = get_all_anki_cards(transcript, user_preferences)
+        model = request.form.get("model", "gpt-4o")
+        max_size_str = request.form.get("max_size", "4000")
+        try:
+            max_size = int(max_size_str)
+        except ValueError:
+            max_size = 4000
+        cards = get_all_anki_cards(transcript, user_preferences, max_chunk_size=max_size, model=model)
         logger.debug("Final flashcards list: %s", cards)
         if not cards:
             flash("Failed to generate any Anki cards.")
