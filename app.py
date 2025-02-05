@@ -188,10 +188,21 @@ INDEX_HTML = """
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Transcript to Anki Cards</title>
   <style>
     body { background-color: #1E1E20; color: #D7DEE9; font-family: Arial, sans-serif; text-align: center; padding-top: 50px; }
-    textarea, input[type="text"] { width: 80%; padding: 10px; font-size: 16px; margin-bottom: 10px; }
+    /* Ensure inputs are large enough on mobile (16px prevents zooming on focus in many browsers) */
+    textarea, input[type="text"] {
+      width: 80%;
+      padding: 10px;
+      font-size: 16px;
+      margin-bottom: 10px;
+      background-color: #2F2F31;
+      color: #D7DEE9;
+      border: 1px solid #444;
+      border-radius: 5px;
+    }
     textarea { height: 200px; }
     input[type="submit"] { padding: 10px 20px; font-size: 16px; margin-top: 10px; }
     .flash { color: red; }
@@ -222,7 +233,6 @@ INDEX_HTML = """
 </html>
 """
 
-# The review page now positions the progress tracker at the top of the screen and the card box just beneath it.
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -287,7 +297,7 @@ ANKI_HTML = """
     .saveEdit { background-color: green; }
     /* Saved Cards styling */
     #savedCardsContainer { width: 100%; max-width: 700px; margin: 20px auto; color: #D7DEE9; display: none; }
-    #savedCardsText { width: 100%; height: 200px; padding: 10px; font-size: 16px; background-color: #2F2F31; border: none; border-radius: 5px; resize: none; }
+    #savedCardsText { width: 100%; height: 200px; padding: 10px; font-size: 16px; background-color: #2F2F31; border: none; border-radius: 5px; resize: none; color: #D7DEE9; }
     #copyButton { margin-top: 10px; padding: 10px 20px; font-size: 16px; background-color: #4A90E2; color: #fff; border: none; border-radius: 5px; cursor: pointer; }
   </style>
 </head>
