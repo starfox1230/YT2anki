@@ -261,9 +261,6 @@ def get_all_interactive_questions(transcript, user_preferences="", max_chunk_siz
 # Embedded HTML Templates
 # ----------------------------
 
-# 2) Default chunk size changed to 10,000 in both code and template
-# (value="10000" and request.form.get("max_size", "10000"))
-
 INDEX_HTML = """
 <!DOCTYPE html>
 <html>
@@ -378,9 +375,7 @@ INDEX_HTML = """
 </html>
 """
 
-# 4) Make the Cart button identical in size/shape to the bottom buttons, but a different color.
-#    We'll remove the custom #cartButton styling and let it share .bottomButton. Then we add a .cart override.
-
+# Cart button label changed to "Saved Cards"
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -476,7 +471,6 @@ ANKI_HTML = """
       max-width: 700px;
       padding: 0 10px;
     }
-    /* 4) Cart button same shape/size as .bottomButton, but a different color. */
     .cart.bottomButton {
       background-color: #03A9F4;
     }
@@ -505,9 +499,9 @@ ANKI_HTML = """
     <div id="bottomEdit">
       <button id="editButton" class="bottomButton edit">Edit</button>
     </div>
-    <!-- 5) We do not place a cart button in the cart view. It's only in main view. -->
+    <!-- Cart button label changed to "Saved Cards" -->
     <div id="cartContainer">
-      <button id="cartButton" class="bottomButton cart">Cart</button>
+      <button id="cartButton" class="bottomButton cart">Saved Cards</button>
     </div>
     <div id="savedCardsContainer">
       <h3 style="text-align:center;">Saved Cards</h3>
@@ -674,8 +668,6 @@ ANKI_HTML = """
       showCard();
     });
 
-    // 1) Remove the special block that forced "Previous Card" to go to last card when in cart
-    //    so we can properly return to the correct sequence after returning from cart.
     undoButton.addEventListener("click", function(e) {
       e.stopPropagation();
       if (historyStack.length === 0) {
@@ -703,7 +695,6 @@ ANKI_HTML = """
       }, 2000);
     });
 
-    // 5) Hide cart button while in cart view, show it when returning to card
     cartButton.addEventListener("click", function(e) {
       e.stopPropagation();
       savedCardIndex = currentIndex;
@@ -735,9 +726,6 @@ ANKI_HTML = """
 </body>
 </html>
 """
-
-# 3) Add an immediate blur after highlighting correct/incorrect in the game
-#    so the phone highlight is removed right away, not waiting for user to tap.
 
 INTERACTIVE_HTML = """
 <!DOCTYPE html>
@@ -797,6 +785,12 @@ INTERACTIVE_HTML = """
     .timer { font-size: 24px; margin-bottom: 20px; }
     .score { font-size: 20px; margin-bottom: 20px; }
     .hidden { display: none; }
+    /* Hidden div for simulated tap below the buttons */
+    #phantomTapZone {
+      width: 100%;
+      height: 1px;
+      margin-top: 50px; /* ensure it's below the buttons */
+    }
   </style>
 </head>
 <body>
@@ -811,6 +805,8 @@ INTERACTIVE_HTML = """
     <!-- Options will be added here dynamically -->
   </ul>
   <div id="feedback" class="hidden"></div>
+  <!-- 3) We'll use this hidden div to simulate a tap. -->
+  <div id="phantomTapZone"></div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
 <script>
@@ -824,6 +820,7 @@ INTERACTIVE_HTML = """
   const questionBox = document.getElementById('questionBox');
   const optionsList = document.getElementById('optionsList');
   const feedbackEl = document.getElementById('feedback');
+  const phantomTapZone = document.getElementById('phantomTapZone');
 
   function startGame() {
     score = 0;
@@ -892,10 +889,9 @@ INTERACTIVE_HTML = """
       }
       button.disabled = true;
     });
-    // 3) Immediately blur after highlighting to remove phone focus
-    if (document.activeElement) {
-      document.activeElement.blur();
-    }
+
+    // Immediately simulate a tap on phantomTapZone
+    phantomTapZone.click();
 
     if (isCorrect) {
       score++;
@@ -906,12 +902,6 @@ INTERACTIVE_HTML = """
       });
     }
     updateScore();
-    // Additional small delay to re-blur if needed
-    setTimeout(() => {
-      if (document.activeElement) {
-        document.activeElement.blur();
-      }
-    }, 50);
 
     setTimeout(() => {
       currentQuestionIndex++;
@@ -947,7 +937,6 @@ def index():
             flash("Please paste a transcript.")
             return redirect(url_for("index"))
         user_preferences = request.form.get("preferences", "")
-        # 2) Default chunk size is now "10000"
         model = request.form.get("model", "gpt-4o-mini")
         max_size_str = request.form.get("max_size", "10000")
         try:
