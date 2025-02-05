@@ -327,8 +327,14 @@ INDEX_HTML = """
       max-width: 300px;
     }
   </style>
+  <!-- Include Lottie for the loading animation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.7.6/lottie.min.js"></script>
 </head>
 <body>
+  <!-- Loading Overlay added to the index page -->
+  <div id="loadingOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #121212; display: none; justify-content: center; align-items: center; z-index: 9999;">
+    <div id="lottieContainer" style="width: 300px; height: 300px;"></div>
+  </div>
   <h1>Transcript to Anki Cards or Interactive Game</h1>
   <p>
     Don't have a transcript? Use the <a href="https://tactiq.io/tools/youtube-transcript" target="_blank">Tactiq.io transcript tool</a> to generate one.
@@ -374,6 +380,18 @@ INDEX_HTML = """
           toggle.innerHTML = "Advanced Options &#9660;";
       }
     }
+    // Show loading overlay on form submission
+    document.querySelector("form").addEventListener("submit", function() {
+      var overlay = document.getElementById("loadingOverlay");
+      overlay.style.display = "flex";
+      lottie.loadAnimation({
+        container: document.getElementById('lottieContainer'),
+        renderer: 'svg',
+        loop: true,
+        autoplay: true,
+        path: 'https://lottie.host/embed/4500dbaf-9ac9-4b2b-b664-692cd9a3ccab/BGvTKQT8Tx.json'
+      });
+    });
   </script>
 </body>
 </html>
@@ -544,7 +562,7 @@ ANKI_HTML = """
       <button id="cartButton" class="bottomButton cart" onmousedown="event.preventDefault()" ontouchend="this.blur()">Saved Cards</button>
     </div>
     <div id="savedCardsContainer">
-      <h3 id="finishedHeader" style="text-align:center;">Review complete!</h3>
+      <h3 id="finishedHeader" style="text-align:center;">Saved Cards</h3>
       <textarea id="savedCardsText" readonly></textarea>
       <div style="text-align:center;">
         <button id="copyButton" onmousedown="event.preventDefault()" ontouchend="this.blur()">Copy Saved Cards</button>
