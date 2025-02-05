@@ -379,7 +379,12 @@ INDEX_HTML = """
 </html>
 """
 
-# Anki template with inline onmousedown and ontouchend attributes added to all <button> elements.
+# Anki template – Auggie Card Simulator.
+# Changes:
+#   • Added a "finished" flag.
+#   • When the user makes a save/discard on the last card, the finish screen (showing saved cards) is displayed with a header.
+#   • If the user clicks "Previous Card" while finished, the finished state is cleared and the last card is displayed again with progress.
+#   • Ensured that the card content remains vertically centered.
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -399,6 +404,8 @@ ANKI_HTML = """
       flex-direction: column;
       align-items: center;
       padding: 10px;
+      min-height: 100vh;
+      justify-content: center;
     }
     #progress { width: 100%; max-width: 700px; text-align: center; color: #A6ABB9; margin-bottom: 10px; }
     #kard {
@@ -449,7 +456,14 @@ ANKI_HTML = """
     .editButton { padding: 10px 20px; font-size: 16px; border: none; color: #fff; border-radius: 5px; cursor: pointer; flex: 1; margin: 0 5px; }
     .cancelEdit { background-color: gray; }
     .saveEdit { background-color: green; }
-    #savedCardsContainer { width: 100%; max-width: 700px; margin: 20px auto; color: #D7DEE9; display: none; }
+    #savedCardsContainer { 
+      width: 100%; max-width: 700px; margin: 20px auto; color: #D7DEE9; 
+      display: none; 
+      /* Ensure saved cards screen is also centered */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
     #savedCardsText {
       width: 100%;
       height: 200px;
@@ -511,7 +525,7 @@ ANKI_HTML = """
       <button id="cartButton" class="bottomButton cart" onmousedown="event.preventDefault()" ontouchend="this.blur()">Saved Cards</button>
     </div>
     <div id="savedCardsContainer">
-      <h3 style="text-align:center;">Saved Cards</h3>
+      <h3 id="finishedHeader" style="text-align:center;">Review complete!</h3>
       <textarea id="savedCardsText" readonly></textarea>
       <div style="text-align:center;">
         <button id="copyButton" onmousedown="event.preventDefault()" ontouchend="this.blur()">Copy Saved Cards</button>
@@ -558,7 +572,7 @@ ANKI_HTML = """
     let savedCards = [];
     let historyStack = [];
     let inEditMode = false;
-    let originalCardText = "";
+    let finished = false;
     let savedCardIndex = null; // For cart functionality
 
     const currentEl = document.getElementById("current");
@@ -575,6 +589,7 @@ ANKI_HTML = """
     const saveEditButton = document.getElementById("saveEditButton");
     const cancelEditButton = document.getElementById("cancelEditButton");
     const savedCardsContainer = document.getElementById("savedCardsContainer");
+    const finishedHeader = document.getElementById("finishedHeader");
     const savedCardsText = document.getElementById("savedCardsText");
     const copyButton = document.getElementById("copyButton");
     const cartButton = document.getElementById("cartButton");
@@ -600,37 +615,61 @@ ANKI_HTML = """
     });
     
     function showCard() {
+      finished = false;
+      document.getElementById("progress").textContent = "Card " + (currentIndex+1) + " of " + interactiveCards.length;
       if (!inEditMode) {
         actionControls.style.display = "none";
       }
-      currentEl.textContent = currentIndex + 1;
       cardContentEl.innerHTML = interactiveCards[currentIndex].displayText;
+      // Ensure the card content remains vertically centered.
+      document.getElementById("kard").style.display = "flex";
+      savedCardsContainer.style.display = "none";
     }
     function nextCard() {
-      // Instead of calling finish(), if already at the last card simply update the progress text.
       if (currentIndex < interactiveCards.length - 1) {
           currentIndex++;
           showCard();
       } else {
-          document.getElementById("progress").textContent = "Review complete! Card " + (currentIndex+1) + " of " + interactiveCards.length;
-          // Remain on the last card so that the Previous Card button can be used.
+          // On the last card, when a choice is made, we will show the finished (saved cards) screen.
+          finished = true;
       }
     }
-    // The finish() function is no longer used in Anki mode.
-    
+    // Modify the save and discard button event handlers:
     discardButton.addEventListener("click", function(e) {
       e.stopPropagation();
-      historyStack.push({ currentIndex: currentIndex, savedCards: savedCards.slice() });
+      historyStack.push({ currentIndex: currentIndex, savedCards: savedCards.slice(), finished: finished });
       updateUndoButtonState();
-      nextCard();
+      // If on last card, set finished flag and show finished screen.
+      if (currentIndex === interactiveCards.length - 1) {
+          finished = true;
+          showFinished();
+      } else {
+          nextCard();
+      }
     });
     saveButton.addEventListener("click", function(e) {
       e.stopPropagation();
-      historyStack.push({ currentIndex: currentIndex, savedCards: savedCards.slice() });
+      historyStack.push({ currentIndex: currentIndex, savedCards: savedCards.slice(), finished: finished });
       updateUndoButtonState();
       savedCards.push(interactiveCards[currentIndex].exportText);
-      nextCard();
+      if (currentIndex === interactiveCards.length - 1) {
+          finished = true;
+          showFinished();
+      } else {
+          nextCard();
+      }
     });
+
+    function showFinished() {
+      // Hide card display and action controls, update header and show saved cards.
+      document.getElementById("kard").style.display = "none";
+      actionControls.style.display = "none";
+      finishedHeader.textContent = "Review complete!";
+      savedCardsText.value = savedCards.join("\\n");
+      savedCardsContainer.style.display = "flex";
+      // Also update the progress text to indicate finished.
+      document.getElementById("progress").textContent = "Finished! (Card " + interactiveCards.length + " of " + interactiveCards.length + ")";
+    }
 
     editButton.addEventListener("click", function(e) {
       e.stopPropagation();
@@ -679,12 +718,19 @@ ANKI_HTML = """
       let snapshot = historyStack.pop();
       currentIndex = snapshot.currentIndex;
       savedCards = snapshot.savedCards.slice();
-      document.getElementById("kard").style.display = "block";
-      actionControls.style.display = "none";
-      savedCardsContainer.style.display = "none";
-      cartContainer.style.display = "flex";
-      cardContentEl.innerHTML = interactiveCards[currentIndex].displayText;
-      currentEl.textContent = currentIndex + 1;
+      finished = snapshot.finished;
+      // If we were finished and undo is pressed, revert to card display.
+      if (finished) {
+        finished = false;
+        showCard();
+      } else {
+        document.getElementById("kard").style.display = "flex";
+        actionControls.style.display = "none";
+        savedCardsContainer.style.display = "none";
+        cartContainer.style.display = "flex";
+        cardContentEl.innerHTML = interactiveCards[currentIndex].displayText;
+        currentEl.textContent = currentIndex + 1;
+      }
       updateUndoButtonState();
     });
 
@@ -706,7 +752,7 @@ ANKI_HTML = """
       bottomEdit.style.display = "none";
       cartContainer.style.display = "none";
       savedCardsText.value = savedCards.join("\\n");
-      savedCardsContainer.style.display = "block";
+      savedCardsContainer.style.display = "flex";
     });
     returnButton.addEventListener("click", function(e) {
       e.stopPropagation();
@@ -729,8 +775,11 @@ ANKI_HTML = """
 </html>
 """
 
-# Interactive Game template with new button styling (using the same resets, layout, and ripple effect as the provided sample,
-# while keeping our original button colors and glowing effects and now changing the inner color as well).
+# Interactive Game template – modifications:
+#   • The header now shows two pieces of information:
+#       - On the top left: "Question X of Y"
+#       - On the top right: "Score: Z"
+#   • The JavaScript updates these two values as the game progresses.
 INTERACTIVE_HTML = """
 <!DOCTYPE html>
 <html>
@@ -762,10 +811,20 @@ INTERACTIVE_HTML = """
       max-width: 800px;
       margin: 0 auto;
     }
-    h1 { color: #bb86fc; }
-    .score {
-      font-size: 20px;
+    /* Header with question progress on left and raw score on right */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       margin-bottom: 20px;
+    }
+    #questionProgress {
+      font-size: 20px;
+      text-align: left;
+    }
+    #rawScore {
+      font-size: 20px;
+      text-align: right;
     }
     .timer {
       font-size: 24px;
@@ -845,8 +904,10 @@ INTERACTIVE_HTML = """
 </head>
 <body>
   <div class="container">
-    <h1>Interactive Game</h1>
-    <div class="score" id="score">Score: 0 / 0</div>
+    <div class="header">
+      <div id="questionProgress">Question 1 of 0</div>
+      <div id="rawScore">Score: 0</div>
+    </div>
     <div class="timer" id="timer">Time: 15</div>
     <div class="question-box" id="questionBox"></div>
     <div id="optionsWrapper"></div>
@@ -859,7 +920,8 @@ INTERACTIVE_HTML = """
     let score = 0;
     let timerInterval;
     const totalQuestions = questions.length;
-    const scoreEl = document.getElementById('score');
+    const questionProgressEl = document.getElementById('questionProgress');
+    const rawScoreEl = document.getElementById('rawScore');
     const timerEl = document.getElementById('timer');
     const questionBox = document.getElementById('questionBox');
     const optionsWrapper = document.getElementById('optionsWrapper');
@@ -868,20 +930,21 @@ INTERACTIVE_HTML = """
     function startGame() {
       score = 0;
       currentQuestionIndex = 0;
-      updateScore();
+      updateHeader();
       showQuestion();
     }
 
-    function updateScore() {
-      scoreEl.textContent = `Score: ${score} / ${totalQuestions}`;
+    function updateHeader() {
+      questionProgressEl.textContent = "Question " + (currentQuestionIndex+1) + " of " + totalQuestions;
+      rawScoreEl.textContent = "Score: " + score;
     }
 
     function startTimer(duration, callback) {
       let timeRemaining = duration;
-      timerEl.textContent = `Time: ${timeRemaining}`;
+      timerEl.textContent = "Time: " + timeRemaining;
       timerInterval = setInterval(() => {
         timeRemaining--;
-        timerEl.textContent = `Time: ${timeRemaining}`;
+        timerEl.textContent = "Time: " + timeRemaining;
         if (timeRemaining <= 0) {
           clearInterval(timerInterval);
           callback();
@@ -932,6 +995,7 @@ INTERACTIVE_HTML = """
       startTimer(15, () => {
         selectAnswer(null);
       });
+      updateHeader();
     }
 
     function selectAnswer(selectedOption) {
@@ -955,7 +1019,7 @@ INTERACTIVE_HTML = """
           colors: ['#bb86fc', '#ffd700']
         });
       }
-      updateScore();
+      updateHeader();
       setTimeout(() => {
         currentQuestionIndex++;
         showQuestion();
@@ -967,7 +1031,7 @@ INTERACTIVE_HTML = """
       optionsWrapper.innerHTML = "";
       timerEl.textContent = "";
       feedbackEl.classList.remove('hidden');
-      feedbackEl.innerHTML = `<h2>Your final score is ${score} out of ${totalQuestions}</h2><button onclick="startGame()" class="option-button" ontouchend="this.blur()">Play Again</button>`;
+      feedbackEl.innerHTML = "<h2>Your final score is " + score + " out of " + totalQuestions + "</h2><button onclick='startGame()' class='option-button' ontouchend='this.blur()'>Play Again</button>";
     }
 
     startGame();
