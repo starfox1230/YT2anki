@@ -261,8 +261,7 @@ def get_all_interactive_questions(transcript, user_preferences="", max_chunk_siz
 # Embedded HTML Templates
 # ----------------------------
 
-# INDEX_HTML template now loads the dotlottie-player immediately in a container that is absolutely positioned
-# relative to the form. The form is set to position: relative, and the loading overlay is centered over it.
+# INDEX_HTML template now includes a div (#resultContainer) where the asynchronously loaded content (game or Anki page) will be injected.
 INDEX_HTML = """
 <!DOCTYPE html>
 <html>
@@ -389,6 +388,8 @@ INDEX_HTML = """
       </div>
     </div>
   </form>
+  <!-- Container for asynchronously loaded content (Anki or Game) -->
+  <div id="resultContainer"></div>
   <script>
     function toggleAdvanced(){
       var adv = document.getElementById("advancedOptions");
@@ -401,9 +402,29 @@ INDEX_HTML = """
           toggle.innerHTML = "Advanced Options &#9660;";
       }
     }
-    // The submit handler is unchanged here.
-    document.querySelector("form").addEventListener("submit", function() {
-      // Let the form submit normally.
+    // Asynchronous form submission using Ajax (fetch)
+    document.querySelector("form").addEventListener("submit", function(e) {
+      e.preventDefault();
+      var form = this;
+      var formData = new FormData(form);
+      // Send the request with the X-Requested-With header to indicate Ajax.
+      fetch(form.action || window.location.href, {
+        method: "POST",
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+        body: formData
+      })
+      .then(function(response) {
+        return response.text();
+      })
+      .then(function(html) {
+        var container = document.getElementById("resultContainer");
+        container.innerHTML = html;
+        // Hide the form since content has been loaded.
+        form.style.display = "none";
+      })
+      .catch(function(error) {
+        console.error("Error:", error);
+      });
     });
   </script>
 </body>
@@ -1441,7 +1462,7 @@ def index():
                 flash("Failed to generate any interactive questions.")
                 return redirect(url_for("index"))
             questions_json = json.dumps(questions)
-            return render_template_string(INTERACTIVE_HTML, questions_json=questions_json)
+            rendered = render_template_string(INTERACTIVE_HTML, questions_json=questions_json)
         else:
             cards = get_all_anki_cards(transcript, user_preferences, max_chunk_size=max_size, model=model)
             logger.debug("Final flashcards list: %s", cards)
@@ -1449,7 +1470,17 @@ def index():
                 flash("Failed to generate any Anki cards.")
                 return redirect(url_for("index"))
             cards_json = json.dumps(cards)
-            return render_template_string(ANKI_HTML, cards_json=cards_json)
+            rendered = render_template_string(ANKI_HTML, cards_json=cards_json)
+
+        # If this is an Ajax request, return only the content inside the <body> tag.
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            m = re.search(r"<body[^>]*>(.*?)</body>", rendered, re.DOTALL)
+            if m:
+                return m.group(1)
+            else:
+                return rendered
+        else:
+            return rendered
     return render_template_string(INDEX_HTML)
 
 if __name__ == "__main__":
