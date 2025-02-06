@@ -399,16 +399,22 @@ INDEX_HTML = """
       // Show the loading overlay immediately
       var overlay = document.getElementById("loadingOverlay");
       overlay.style.display = "flex";
-      // Initialize Lottie animation
-      lottie.loadAnimation({
-        container: document.getElementById('lottieContainer'),
-        renderer: 'svg',
-        loop: true,
-        autoplay: true,
-        path: 'https://lottie.host/embed/4500dbaf-9ac9-4b2b-b664-692cd9a3ccab/BGvTKQT8Tx.json'
-      });
+      // Delay Lottie initialization slightly so the container is rendered
+      setTimeout(function() {
+        lottie.loadAnimation({
+          container: document.getElementById('lottieContainer'),
+          renderer: 'svg',
+          loop: true,
+          autoplay: true,
+          path: 'https://lottie.host/embed/4500dbaf-9ac9-4b2b-b664-692cd9a3ccab/BGvTKQT8Tx.json'
+        });
+      }, 50);
       var form = event.target;
       var formData = new FormData(form);
+      // Use the clicked submit button’s value (if available) to set the mode
+      if(event.submitter && event.submitter.value) {
+          formData.set("mode", event.submitter.value);
+      }
       // Send the form data via fetch to the new /generate endpoint
       fetch("/generate", {
         method: "POST",
@@ -801,6 +807,7 @@ ANKI_HTML = """
       showCard();
     });
 
+    // FIX: Always call showCard() when undoing so that the progress text is updated.
     undoButton.addEventListener("click", function(e) {
       e.stopPropagation();
       if (historyStack.length === 0) {
@@ -811,17 +818,8 @@ ANKI_HTML = """
       currentIndex = snapshot.currentIndex;
       savedCards = snapshot.savedCards.slice();
       finished = snapshot.finished;
-      if (finished) {
-        finished = false;
-        showCard();
-      } else {
-        document.getElementById("kard").style.display = "flex";
-        actionControls.style.display = "none";
-        savedCardsContainer.style.display = "none";
-        cartContainer.style.display = "flex";
-        cardContentEl.innerHTML = interactiveCards[currentIndex].displayText;
-        currentEl.textContent = currentIndex + 1;
-      }
+      finished = false; // reset finished state
+      showCard();  // update entire display including progress
       updateUndoButtonState();
     });
 
