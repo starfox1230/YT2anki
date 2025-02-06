@@ -326,14 +326,28 @@ INDEX_HTML = """
       width: 80%;
       max-width: 300px;
     }
+    /* Loading Overlay Styles */
+    #loadingOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #121212;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
   </style>
   <!-- Include Lottie for the loading animation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.7.6/lottie.min.js"></script>
 </head>
 <body>
-  <!-- Loading Overlay added to the index page -->
-  <div id="loadingOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #121212; display: none; justify-content: center; align-items: center; z-index: 9999;">
+  <div id="loadingOverlay">
     <div id="lottieContainer" style="width: 300px; height: 300px;"></div>
+    <div id="loadingText" style="color: #D7DEE9; margin-top: 20px; font-size: 18px;">Generating. Please wait...</div>
   </div>
   <h1>Transcript to Anki Cards or Interactive Game</h1>
   <p>
@@ -346,7 +360,7 @@ INDEX_HTML = """
       {% endfor %}
     {% endif %}
   {% endwith %}
-  <form method="post">
+  <form id="transcriptForm">
     <!-- Advanced Options Toggle -->
     <div id="advancedToggle" onclick="toggleAdvanced()">Advanced Options &#9660;</div>
     <div id="advancedOptions" style="display: none;">
@@ -380,10 +394,12 @@ INDEX_HTML = """
           toggle.innerHTML = "Advanced Options &#9660;";
       }
     }
-    // Show loading overlay on form submission
-    document.querySelector("form").addEventListener("submit", function() {
+    document.getElementById("transcriptForm").addEventListener("submit", function(event) {
+      event.preventDefault();
+      // Show the loading overlay immediately
       var overlay = document.getElementById("loadingOverlay");
       overlay.style.display = "flex";
+      // Initialize Lottie animation
       lottie.loadAnimation({
         container: document.getElementById('lottieContainer'),
         renderer: 'svg',
@@ -391,57 +407,25 @@ INDEX_HTML = """
         autoplay: true,
         path: 'https://lottie.host/embed/4500dbaf-9ac9-4b2b-b664-692cd9a3ccab/BGvTKQT8Tx.json'
       });
-    });
-  </script>
-</body>
-</html>
-"""
-
-# Loading page template.
-LOADING_HTML = """
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Loading...</title>
-  <style>
-    body { background-color: #121212; margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
-  </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.7.6/lottie.min.js"></script>
-</head>
-<body>
-  <div id="lottieContainer" style="width: 300px; height: 300px;"></div>
-  <script>
-    // Immediately initialize Lottie animation
-    var animation = lottie.loadAnimation({
-        container: document.getElementById('lottieContainer'),
-        renderer: 'svg',
-        loop: true,
-        autoplay: true,
-        path: 'https://lottie.host/embed/4500dbaf-9ac9-4b2b-b664-692cd9a3ccab/BGvTKQT8Tx.json'
-    });
-
-    // form_data is embedded by the server
-    var formData = {{ form_data|tojson }};
-    
-    // Send the form data to /generate endpoint via fetch POST request.
-    fetch("/generate", {
+      var form = event.target;
+      var formData = new FormData(form);
+      // Send the form data via fetch to the new /generate endpoint
+      fetch("/generate", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(formData)
-    })
-    .then(response => response.text())
-    .then(html => {
-        // Replace the current document with the new HTML.
+        body: formData
+      })
+      .then(response => response.text())
+      .then(html => {
+        // Replace the current document with the returned HTML
         document.open();
         document.write(html);
         document.close();
-    })
-    .catch(error => {
-        console.error("Error fetching generated content:", error);
+      })
+      .catch(error => {
+        console.error("Error:", error);
+        alert("An error occurred. Please try again.");
+        overlay.style.display = "none";
+      });
     });
   </script>
 </body>
@@ -1223,63 +1207,36 @@ INTERACTIVE_HTML = """
 # Flask Routes
 # ----------------------------
 
-@app.route("/", methods=["GET", "POST", "HEAD"])
+@app.route("/", methods=["GET"])
 def index():
-    if request.method == "HEAD":
-        return ""
-    if request.method == "POST":
-        transcript = request.form.get("transcript")
-        if not transcript:
-            flash("Please paste a transcript.")
-            return redirect(url_for("index"))
-        user_preferences = request.form.get("preferences", "")
-        model = request.form.get("model", "gpt-4o-mini")
-        max_size_str = request.form.get("max_size", "10000")
-        try:
-            max_size = int(max_size_str)
-        except ValueError:
-            max_size = 10000
-
-        mode = request.form.get("mode", "Generate Anki Cards")
-        # Instead of processing here, package the form data into a dictionary and render the LOADING_HTML.
-        form_data = {
-            "transcript": transcript,
-            "preferences": user_preferences,
-            "model": model,
-            "max_size": max_size,
-            "mode": mode
-        }
-        return render_template_string(LOADING_HTML, form_data=form_data)
     return render_template_string(INDEX_HTML)
 
 @app.route("/generate", methods=["POST"])
 def generate():
-    # This endpoint receives the form data via JSON, processes it, and returns the final HTML.
+    transcript = request.form.get("transcript")
+    if not transcript:
+        return "Error: Please paste a transcript.", 400
+    user_preferences = request.form.get("preferences", "")
+    model = request.form.get("model", "gpt-4o-mini")
+    max_size_str = request.form.get("max_size", "10000")
     try:
-        data = request.get_json()
-    except Exception as e:
-        logger.error("Error parsing JSON in /generate: %s", e)
-        return "Error parsing request.", 400
+        max_size = int(max_size_str)
+    except ValueError:
+        max_size = 10000
 
-    transcript = data.get("transcript")
-    user_preferences = data.get("preferences", "")
-    model = data.get("model", "gpt-4o-mini")
-    max_size = data.get("max_size", 10000)
-    mode = data.get("mode", "Generate Anki Cards")
+    mode = request.form.get("mode", "Generate Anki Cards")
     if mode == "Generate Game":
         questions = get_all_interactive_questions(transcript, user_preferences, max_chunk_size=max_size, model=model)
         logger.debug("Final interactive questions list: %s", questions)
         if not questions:
-            flash("Failed to generate any interactive questions.")
-            return redirect(url_for("index"))
+            return "Failed to generate any interactive questions.", 500
         questions_json = json.dumps(questions)
         return render_template_string(INTERACTIVE_HTML, questions_json=questions_json)
     else:
         cards = get_all_anki_cards(transcript, user_preferences, max_chunk_size=max_size, model=model)
         logger.debug("Final flashcards list: %s", cards)
         if not cards:
-            flash("Failed to generate any Anki cards.")
-            return redirect(url_for("index"))
+            return "Failed to generate any Anki cards.", 500
         cards_json = json.dumps(cards)
         return render_template_string(ANKI_HTML, cards_json=cards_json)
 
