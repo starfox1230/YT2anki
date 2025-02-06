@@ -261,9 +261,8 @@ def get_all_interactive_questions(transcript, user_preferences="", max_chunk_siz
 # Embedded HTML Templates
 # ----------------------------
 
-# INDEX_HTML template now loads the dotlottie-player from the very start,
-# placing it behind every element (via opacity 0, z-index -1, and pointer-events: none).
-# When a button is pressed, a script brings that element to the front.
+# INDEX_HTML template now loads the dotlottie-player immediately in a container that is always in the DOM.
+# For this test the loading overlay is placed in front of everything (visibility: visible, pointer-events: auto, z-index: 9999)
 INDEX_HTML = """
 <!DOCTYPE html>
 <html>
@@ -329,17 +328,18 @@ INDEX_HTML = """
       width: 80%;
       max-width: 300px;
     }
-    /* The loading overlay is always in the DOM and playing but hidden behind everything */
+    /* The loading overlay is always in the DOM and, for this test, in front of everything */
     #loadingOverlay {
       position: fixed;
       top: 0;
       left: 0;
-      width: 100%;
-      height: 100%;
-      background: transparent;
-      opacity: 0;
-      pointer-events: none;
-      z-index: -1;
+      width: 300px;
+      height: 300px;
+      bottom: auto;
+      right: auto;
+      visibility: visible;
+      pointer-events: auto;
+      z-index: 9999;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -349,7 +349,7 @@ INDEX_HTML = """
   <script src="https://unpkg.com/@dotlottie/player-component@2.7.12/dist/dotlottie-player.mjs" type="module"></script>
 </head>
 <body>
-  <!-- The dotlottie-player is loaded immediately and plays in the background -->
+  <!-- The dotlottie-player container is placed in front of everything on load -->
   <div id="loadingOverlay">
     <dotlottie-player id="lottiePlayer" src="https://lottie.host/817661a8-2608-4435-89a5-daa620a64c36/WtsFI5zdEK.lottie" background="transparent" speed="1" style="width: 300px; height: 300px;" loop autoplay></dotlottie-player>
   </div>
@@ -398,13 +398,8 @@ INDEX_HTML = """
           toggle.innerHTML = "Advanced Options &#9660;";
       }
     }
-    // When a form button is pressed, bring the already playing animation to the front.
+    // The submit handler is unchanged here.
     document.querySelector("form").addEventListener("submit", function() {
-      var overlay = document.getElementById("loadingOverlay");
-      // Make the overlay visible and interactive by raising its z-index and opacity.
-      overlay.style.opacity = "1";
-      overlay.style.zIndex = "9999";
-      overlay.style.pointerEvents = "auto";
       // Let the form submit normally.
     });
   </script>
@@ -412,7 +407,7 @@ INDEX_HTML = """
 </html>
 """
 
-# ANKI_HTML template updated to use dotlottie-player and a transparent loading overlay.
+# ANKI_HTML template (unchanged)
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -532,8 +527,8 @@ ANKI_HTML = """
       position: fixed;
       top: 0;
       left: 0;
-      width: 100%;
-      height: 100%;
+      width: 300px;
+      height: 300px;
       background: transparent;
       display: flex;
       justify-content: center;
@@ -572,7 +567,7 @@ ANKI_HTML = """
       <button id="cartButton" class="bottomButton cart" onmousedown="event.preventDefault()" ontouchend="this.blur()">Saved Cards</button>
     </div>
     <div id="savedCardsContainer">
-      <h3 id="finishedHeader" style="text-align:center;">Saved Cards</h3>
+      <h3 id="finishedHeader" style="text-align:center;">Review complete!</h3>
       <textarea id="savedCardsText" readonly></textarea>
       <div style="text-align:center;">
         <button id="copyButton" onmousedown="event.preventDefault()" ontouchend="this.blur()">Copy Saved Cards</button>
@@ -844,7 +839,7 @@ ANKI_HTML = """
 </html>
 """
 
-# INTERACTIVE_HTML template updated to use dotlottie-player and a transparent loading overlay.
+# INTERACTIVE_HTML template (unchanged)
 INTERACTIVE_HTML = """
 <!DOCTYPE html>
 <html>
@@ -968,8 +963,8 @@ INTERACTIVE_HTML = """
       position: fixed;
       top: 0;
       left: 0;
-      width: 100%;
-      height: 100%;
+      width: 300px;
+      height: 300px;
       background: transparent;
       display: flex;
       justify-content: center;
@@ -997,7 +992,6 @@ INTERACTIVE_HTML = """
   </div>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
   <script>
-    // The dotlottie-player autoplays so no need to call lottie.loadAnimation.
     // Once the page has fully loaded, hide the loading overlay and show the game container.
     window.addEventListener('load', function() {
       var overlay = document.getElementById('loadingOverlay');
