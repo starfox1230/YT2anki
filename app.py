@@ -326,28 +326,14 @@ INDEX_HTML = """
       width: 80%;
       max-width: 300px;
     }
-    /* Loading Overlay Styles */
-    #loadingOverlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: #121212;
-      display: none;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      z-index: 9999;
-    }
   </style>
   <!-- Include Lottie for the loading animation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.7.6/lottie.min.js"></script>
 </head>
 <body>
-  <div id="loadingOverlay">
+  <!-- Loading Overlay added to the index page -->
+  <div id="loadingOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #121212; display: none; justify-content: center; align-items: center; z-index: 9999;">
     <div id="lottieContainer" style="width: 300px; height: 300px;"></div>
-    <div id="loadingText" style="color: #D7DEE9; margin-top: 20px; font-size: 18px;">Generating. Please wait...</div>
   </div>
   <h1>Transcript to Anki Cards or Interactive Game</h1>
   <p>
@@ -360,7 +346,7 @@ INDEX_HTML = """
       {% endfor %}
     {% endif %}
   {% endwith %}
-  <form id="transcriptForm">
+  <form method="post">
     <!-- Advanced Options Toggle -->
     <div id="advancedToggle" onclick="toggleAdvanced()">Advanced Options &#9660;</div>
     <div id="advancedOptions" style="display: none;">
@@ -394,43 +380,16 @@ INDEX_HTML = """
           toggle.innerHTML = "Advanced Options &#9660;";
       }
     }
-    document.getElementById("transcriptForm").addEventListener("submit", function(event) {
-      event.preventDefault();
-      // Show the loading overlay immediately
+    // Show loading overlay on form submission
+    document.querySelector("form").addEventListener("submit", function() {
       var overlay = document.getElementById("loadingOverlay");
       overlay.style.display = "flex";
-      // Delay Lottie initialization slightly so the container is rendered
-      setTimeout(function() {
-        lottie.loadAnimation({
-          container: document.getElementById('lottieContainer'),
-          renderer: 'svg',
-          loop: true,
-          autoplay: true,
-          path: 'https://lottie.host/embed/4500dbaf-9ac9-4b2b-b664-692cd9a3ccab/BGvTKQT8Tx.json'
-        });
-      }, 50);
-      var form = event.target;
-      var formData = new FormData(form);
-      // Use the clicked submit button’s value (if available) to set the mode
-      if(event.submitter && event.submitter.value) {
-          formData.set("mode", event.submitter.value);
-      }
-      // Send the form data via fetch to the new /generate endpoint
-      fetch("/generate", {
-        method: "POST",
-        body: formData
-      })
-      .then(response => response.text())
-      .then(html => {
-        // Replace the current document with the returned HTML
-        document.open();
-        document.write(html);
-        document.close();
-      })
-      .catch(error => {
-        console.error("Error:", error);
-        alert("An error occurred. Please try again.");
-        overlay.style.display = "none";
+      lottie.loadAnimation({
+        container: document.getElementById('lottieContainer'),
+        renderer: 'svg',
+        loop: true,
+        autoplay: true,
+        path: 'https://lottie.host/embed/4500dbaf-9ac9-4b2b-b664-692cd9a3ccab/BGvTKQT8Tx.json'
       });
     });
   </script>
@@ -438,6 +397,13 @@ INDEX_HTML = """
 </html>
 """
 
+# Anki template – Auggie Card Simulator.
+# Changes:
+#   • Finish Screen Behavior: When finishing, the progress text displays “Review Complete” and if a user navigates back, the card counter is restored.
+#   • Buttons on the Finish Screen (Edit, Saved Cards, Return to Card) are hidden.
+#   • Saved Cards Screen Behavior: When accessed before finishing, the Return to Card button text shows the card number.
+# 
+# Added Loading Overlay with Lottie animation.
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -807,7 +773,6 @@ ANKI_HTML = """
       showCard();
     });
 
-    // FIX: Always call showCard() when undoing so that the progress text is updated.
     undoButton.addEventListener("click", function(e) {
       e.stopPropagation();
       if (historyStack.length === 0) {
@@ -818,8 +783,17 @@ ANKI_HTML = """
       currentIndex = snapshot.currentIndex;
       savedCards = snapshot.savedCards.slice();
       finished = snapshot.finished;
-      finished = false; // reset finished state
-      showCard();  // update entire display including progress
+      if (finished) {
+        finished = false;
+        showCard();
+      } else {
+        document.getElementById("kard").style.display = "flex";
+        actionControls.style.display = "none";
+        savedCardsContainer.style.display = "none";
+        cartContainer.style.display = "flex";
+        cardContentEl.innerHTML = interactiveCards[currentIndex].displayText;
+        currentEl.textContent = currentIndex + 1;
+      }
       updateUndoButtonState();
     });
 
@@ -867,6 +841,12 @@ ANKI_HTML = """
 </html>
 """
 
+# Interactive Game template – modifications:
+#   • New “Show Anki Cards” Button added to the final results screen.
+#   • The revealed content displays each question followed by two <br><br> then the answer in cloze formatting.
+#   • A “Copy Anki Cards” button is provided to copy the formatted text.
+# 
+# Added Loading Overlay with Lottie animation.
 INTERACTIVE_HTML = """
 <!DOCTYPE html>
 <html>
@@ -1205,38 +1185,41 @@ INTERACTIVE_HTML = """
 # Flask Routes
 # ----------------------------
 
-@app.route("/", methods=["GET"])
+@app.route("/", methods=["GET", "POST", "HEAD"])
 def index():
+    if request.method == "HEAD":
+        return ""
+    if request.method == "POST":
+        transcript = request.form.get("transcript")
+        if not transcript:
+            flash("Please paste a transcript.")
+            return redirect(url_for("index"))
+        user_preferences = request.form.get("preferences", "")
+        model = request.form.get("model", "gpt-4o-mini")
+        max_size_str = request.form.get("max_size", "10000")
+        try:
+            max_size = int(max_size_str)
+        except ValueError:
+            max_size = 10000
+
+        mode = request.form.get("mode", "Generate Anki Cards")
+        if mode == "Generate Game":
+            questions = get_all_interactive_questions(transcript, user_preferences, max_chunk_size=max_size, model=model)
+            logger.debug("Final interactive questions list: %s", questions)
+            if not questions:
+                flash("Failed to generate any interactive questions.")
+                return redirect(url_for("index"))
+            questions_json = json.dumps(questions)
+            return render_template_string(INTERACTIVE_HTML, questions_json=questions_json)
+        else:
+            cards = get_all_anki_cards(transcript, user_preferences, max_chunk_size=max_size, model=model)
+            logger.debug("Final flashcards list: %s", cards)
+            if not cards:
+                flash("Failed to generate any Anki cards.")
+                return redirect(url_for("index"))
+            cards_json = json.dumps(cards)
+            return render_template_string(ANKI_HTML, cards_json=cards_json)
     return render_template_string(INDEX_HTML)
-
-@app.route("/generate", methods=["POST"])
-def generate():
-    transcript = request.form.get("transcript")
-    if not transcript:
-        return "Error: Please paste a transcript.", 400
-    user_preferences = request.form.get("preferences", "")
-    model = request.form.get("model", "gpt-4o-mini")
-    max_size_str = request.form.get("max_size", "10000")
-    try:
-        max_size = int(max_size_str)
-    except ValueError:
-        max_size = 10000
-
-    mode = request.form.get("mode", "Generate Anki Cards")
-    if mode == "Generate Game":
-        questions = get_all_interactive_questions(transcript, user_preferences, max_chunk_size=max_size, model=model)
-        logger.debug("Final interactive questions list: %s", questions)
-        if not questions:
-            return "Failed to generate any interactive questions.", 500
-        questions_json = json.dumps(questions)
-        return render_template_string(INTERACTIVE_HTML, questions_json=questions_json)
-    else:
-        cards = get_all_anki_cards(transcript, user_preferences, max_chunk_size=max_size, model=model)
-        logger.debug("Final flashcards list: %s", cards)
-        if not cards:
-            return "Failed to generate any Anki cards.", 500
-        cards_json = json.dumps(cards)
-        return render_template_string(ANKI_HTML, cards_json=cards_json)
 
 if __name__ == "__main__":
     app.run(debug=True, port=10000)
