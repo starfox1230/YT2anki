@@ -261,9 +261,6 @@ def get_all_interactive_questions(transcript, user_preferences="", max_chunk_siz
 # Embedded HTML Templates
 # ----------------------------
 
-# INDEX_HTML template uses dotlottie-player for the loading animation.
-# The loading overlay now has a transparent background and a flex-direction of column.
-# The “Generating. Please wait…” message is now above the Lottie animation, with a charcoal background and white border.
 INDEX_HTML = """
 <!DOCTYPE html>
 <html>
@@ -329,15 +326,28 @@ INDEX_HTML = """
       width: 80%;
       max-width: 300px;
     }
+    /* Loading Overlay Styles */
+    #loadingOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #121212;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
   </style>
-  <!-- Use dotlottie-player for the loading animation -->
-  <script src="https://unpkg.com/@dotlottie/player-component@2.7.12/dist/dotlottie-player.mjs" type="module"></script>
+  <!-- Include Lottie for the loading animation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.7.6/lottie.min.js"></script>
 </head>
 <body>
-  <!-- Loading Overlay using dotlottie-player with a transparent background -->
-  <div id="loadingOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: transparent; display: none; justify-content: center; align-items: center; flex-direction: column; z-index: 9999;">
-    <div class="loading-message" style="margin-bottom: 20px; background-color: #333333; border: 1px solid #fff; color: #fff; padding: 10px 20px; border-radius: 10px; font-size: 18px;">Generating. Please wait...</div>
-    <dotlottie-player id="lottiePlayer" src="https://lottie.host/817661a8-2608-4435-89a5-daa620a64c36/WtsFI5zdEK.lottie" background="transparent" speed="1" style="width: 300px; height: 300px;" loop autoplay></dotlottie-player>
+  <div id="loadingOverlay">
+    <div id="lottieContainer" style="width: 300px; height: 300px;"></div>
+    <div id="loadingText" style="color: #D7DEE9; margin-top: 20px; font-size: 18px;">Generating. Please wait...</div>
   </div>
   <h1>Transcript to Anki Cards or Interactive Game</h1>
   <p>
@@ -350,7 +360,7 @@ INDEX_HTML = """
       {% endfor %}
     {% endif %}
   {% endwith %}
-  <form method="post">
+  <form id="transcriptForm">
     <!-- Advanced Options Toggle -->
     <div id="advancedToggle" onclick="toggleAdvanced()">Advanced Options &#9660;</div>
     <div id="advancedOptions" style="display: none;">
@@ -384,23 +394,50 @@ INDEX_HTML = """
           toggle.innerHTML = "Advanced Options &#9660;";
       }
     }
-    // Intercept form submission to show the loading overlay and force the lottie animation to play
-    document.querySelector("form").addEventListener("submit", function(e) {
-      e.preventDefault();  // Prevent immediate submission
-      document.getElementById("loadingOverlay").style.display = "flex";
-      document.getElementById("lottiePlayer").play();
-      var form = this;
-      setTimeout(function(){
-         form.submit();
-      }, 100);
+    document.getElementById("transcriptForm").addEventListener("submit", function(event) {
+      event.preventDefault();
+      // Show the loading overlay immediately
+      var overlay = document.getElementById("loadingOverlay");
+      overlay.style.display = "flex";
+      // Delay Lottie initialization slightly so the container is rendered
+      setTimeout(function() {
+        lottie.loadAnimation({
+          container: document.getElementById('lottieContainer'),
+          renderer: 'svg',
+          loop: true,
+          autoplay: true,
+          path: 'https://lottie.host/embed/4500dbaf-9ac9-4b2b-b664-692cd9a3ccab/BGvTKQT8Tx.json'
+        });
+      }, 50);
+      var form = event.target;
+      var formData = new FormData(form);
+      // Use the clicked submit button’s value (if available) to set the mode
+      if(event.submitter && event.submitter.value) {
+          formData.set("mode", event.submitter.value);
+      }
+      // Send the form data via fetch to the new /generate endpoint
+      fetch("/generate", {
+        method: "POST",
+        body: formData
+      })
+      .then(response => response.text())
+      .then(html => {
+        // Replace the current document with the returned HTML
+        document.open();
+        document.write(html);
+        document.close();
+      })
+      .catch(error => {
+        console.error("Error:", error);
+        alert("An error occurred. Please try again.");
+        overlay.style.display = "none";
+      });
     });
   </script>
 </body>
 </html>
 """
 
-# ANKI_HTML template updated to use dotlottie-player and a transparent loading overlay.
-# The loading overlay now has the “Generating. Please wait…” message above the Lottie animation.
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -515,22 +552,26 @@ ANKI_HTML = """
     .cart.bottomButton:hover {
       background-color: #0288D1;
     }
-    /* Loading Overlay Styles with transparent background */
+    /* Loading Overlay Styles */
     #loadingOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #121212;
       display: flex;
       justify-content: center;
       align-items: center;
-      flex-direction: column;
+      z-index: 9999;
     }
   </style>
-  <!-- Use dotlottie-player for the loading animation -->
-  <script src="https://unpkg.com/@dotlottie/player-component@2.7.12/dist/dotlottie-player.mjs" type="module"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.7.6/lottie.min.js"></script>
 </head>
 <body>
-  <!-- Loading Overlay using dotlottie-player -->
-  <div id="loadingOverlay" style="display: flex; justify-content: center; align-items: center; flex-direction: column;">
-    <div class="loading-message" style="margin-bottom: 20px; background-color: #333333; border: 1px solid #fff; color: #fff; padding: 10px 20px; border-radius: 10px; font-size: 18px;">Generating. Please wait...</div>
-    <dotlottie-player id="lottiePlayer" src="https://lottie.host/817661a8-2608-4435-89a5-daa620a64c36/WtsFI5zdEK.lottie" background="transparent" speed="1" style="width: 300px; height: 300px;" loop autoplay></dotlottie-player>
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay">
+    <div id="lottieContainer" style="width: 300px; height: 300px;"></div>
   </div>
   <div id="reviewContainer" style="display: none;">
     <div id="progress">Card <span id="current">0</span> of <span id="total">0</span></div>
@@ -566,7 +607,14 @@ ANKI_HTML = """
     </div>
   </div>
   <script>
-    // The dotlottie-player autoplays so no need to call lottie.loadAnimation.
+    // Initialize Lottie animation
+    var animation = lottie.loadAnimation({
+      container: document.getElementById('lottieContainer'),
+      renderer: 'svg',
+      loop: true,
+      autoplay: true,
+      path: 'https://lottie.host/embed/4500dbaf-9ac9-4b2b-b664-692cd9a3ccab/BGvTKQT8Tx.json'
+    });
     // Once the page has fully loaded, hide the loading overlay and show the review container.
     window.addEventListener('load', function() {
       var overlay = document.getElementById('loadingOverlay');
@@ -759,7 +807,7 @@ ANKI_HTML = """
       showCard();
     });
 
-    // Updated undo (Previous Card) event handler to always call showCard()
+    // FIX: Always call showCard() when undoing so that the progress text is updated.
     undoButton.addEventListener("click", function(e) {
       e.stopPropagation();
       if (historyStack.length === 0) {
@@ -769,8 +817,9 @@ ANKI_HTML = """
       let snapshot = historyStack.pop();
       currentIndex = snapshot.currentIndex;
       savedCards = snapshot.savedCards.slice();
-      finished = false; // reset finished state on undo
-      showCard();
+      finished = snapshot.finished;
+      finished = false; // reset finished state
+      showCard();  // update entire display including progress
       updateUndoButtonState();
     });
 
@@ -818,8 +867,6 @@ ANKI_HTML = """
 </html>
 """
 
-# INTERACTIVE_HTML template updated to use dotlottie-player and a transparent loading overlay.
-# The loading overlay now has the “Generating. Please wait…” message above the Lottie animation.
 INTERACTIVE_HTML = """
 <!DOCTYPE html>
 <html>
@@ -938,22 +985,26 @@ INTERACTIVE_HTML = """
         opacity: 0;
       }
     }
-    /* Loading Overlay Styles with transparent background */
+    /* Loading Overlay Styles */
     #loadingOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #121212;
       display: flex;
       justify-content: center;
       align-items: center;
-      flex-direction: column;
+      z-index: 9999;
     }
   </style>
-  <!-- Use dotlottie-player for the loading animation -->
-  <script src="https://unpkg.com/@dotlottie/player-component@2.7.12/dist/dotlottie-player.mjs" type="module"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.7.6/lottie.min.js"></script>
 </head>
 <body>
-  <!-- Loading Overlay using dotlottie-player -->
-  <div id="loadingOverlay" style="display: flex; justify-content: center; align-items: center; flex-direction: column;">
-    <div class="loading-message" style="margin-bottom: 20px; background-color: #333333; border: 1px solid #fff; color: #fff; padding: 10px 20px; border-radius: 10px; font-size: 18px;">Generating. Please wait...</div>
-    <dotlottie-player id="lottiePlayer" src="https://lottie.host/817661a8-2608-4435-89a5-daa620a64c36/WtsFI5zdEK.lottie" background="transparent" speed="1" style="width: 300px; height: 300px;" loop autoplay></dotlottie-player>
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay">
+    <div id="lottieContainer" style="width: 300px; height: 300px;"></div>
   </div>
   <div class="container" id="gameContainer" style="display: none;">
     <div class="header">
@@ -967,7 +1018,14 @@ INTERACTIVE_HTML = """
   </div>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
   <script>
-    // The dotlottie-player autoplays so no need to call lottie.loadAnimation.
+    // Initialize Lottie animation
+    var animation = lottie.loadAnimation({
+      container: document.getElementById('lottieContainer'),
+      renderer: 'svg',
+      loop: true,
+      autoplay: true,
+      path: 'https://lottie.host/embed/4500dbaf-9ac9-4b2b-b664-692cd9a3ccab/BGvTKQT8Tx.json'
+    });
     // Once the page has fully loaded, hide the loading overlay and show the game container.
     window.addEventListener('load', function() {
       var overlay = document.getElementById('loadingOverlay');
@@ -1147,42 +1205,38 @@ INTERACTIVE_HTML = """
 # Flask Routes
 # ----------------------------
 
-@app.route("/", methods=["GET", "POST", "HEAD"])
+@app.route("/", methods=["GET"])
 def index():
-    if request.method == "HEAD":
-        return ""
-    if request.method == "POST":
-        transcript = request.form.get("transcript")
-        if not transcript:
-            flash("Please paste a transcript.")
-            return redirect(url_for("index"))
-        user_preferences = request.form.get("preferences", "")
-        model = request.form.get("model", "gpt-4o-mini")
-        max_size_str = request.form.get("max_size", "10000")
-        try:
-            max_size = int(max_size_str)
-        except ValueError:
-            max_size = 10000
-
-        mode = request.form.get("mode", "Generate Anki Cards").strip()
-        # Use a case-insensitive check so that "Generate Game" is properly recognized
-        if mode.lower() == "generate game":
-            questions = get_all_interactive_questions(transcript, user_preferences, max_chunk_size=max_size, model=model)
-            logger.debug("Final interactive questions list: %s", questions)
-            if not questions:
-                flash("Failed to generate any interactive questions.")
-                return redirect(url_for("index"))
-            questions_json = json.dumps(questions)
-            return render_template_string(INTERACTIVE_HTML, questions_json=questions_json)
-        else:
-            cards = get_all_anki_cards(transcript, user_preferences, max_chunk_size=max_size, model=model)
-            logger.debug("Final flashcards list: %s", cards)
-            if not cards:
-                flash("Failed to generate any Anki cards.")
-                return redirect(url_for("index"))
-            cards_json = json.dumps(cards)
-            return render_template_string(ANKI_HTML, cards_json=cards_json)
     return render_template_string(INDEX_HTML)
+
+@app.route("/generate", methods=["POST"])
+def generate():
+    transcript = request.form.get("transcript")
+    if not transcript:
+        return "Error: Please paste a transcript.", 400
+    user_preferences = request.form.get("preferences", "")
+    model = request.form.get("model", "gpt-4o-mini")
+    max_size_str = request.form.get("max_size", "10000")
+    try:
+        max_size = int(max_size_str)
+    except ValueError:
+        max_size = 10000
+
+    mode = request.form.get("mode", "Generate Anki Cards")
+    if mode == "Generate Game":
+        questions = get_all_interactive_questions(transcript, user_preferences, max_chunk_size=max_size, model=model)
+        logger.debug("Final interactive questions list: %s", questions)
+        if not questions:
+            return "Failed to generate any interactive questions.", 500
+        questions_json = json.dumps(questions)
+        return render_template_string(INTERACTIVE_HTML, questions_json=questions_json)
+    else:
+        cards = get_all_anki_cards(transcript, user_preferences, max_chunk_size=max_size, model=model)
+        logger.debug("Final flashcards list: %s", cards)
+        if not cards:
+            return "Failed to generate any Anki cards.", 500
+        cards_json = json.dumps(cards)
+        return render_template_string(ANKI_HTML, cards_json=cards_json)
 
 if __name__ == "__main__":
     app.run(debug=True, port=10000)
