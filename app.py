@@ -261,6 +261,9 @@ def get_all_interactive_questions(transcript, user_preferences="", max_chunk_siz
 # Embedded HTML Templates
 # ----------------------------
 
+# INDEX_HTML template uses dotlottie-player for the loading animation.
+# The loading overlay now has a transparent background.
+# The form submit event now delays submission briefly so the animation can animate.
 INDEX_HTML = """
 <!DOCTYPE html>
 <html>
@@ -327,13 +330,13 @@ INDEX_HTML = """
       max-width: 300px;
     }
   </style>
-  <!-- Include Lottie for the loading animation -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.7.6/lottie.min.js"></script>
+  <!-- Use dotlottie-player for the loading animation -->
+  <script src="https://unpkg.com/@dotlottie/player-component@2.7.12/dist/dotlottie-player.mjs" type="module"></script>
 </head>
 <body>
-  <!-- Loading Overlay added to the index page -->
-  <div id="loadingOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #121212; display: none; justify-content: center; align-items: center; z-index: 9999;">
-    <div id="lottieContainer" style="width: 300px; height: 300px;"></div>
+  <!-- Loading Overlay using dotlottie-player with a transparent background -->
+  <div id="loadingOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: transparent; display: none; justify-content: center; align-items: center; z-index: 9999;">
+    <dotlottie-player id="lottiePlayer" src="https://lottie.host/817661a8-2608-4435-89a5-daa620a64c36/WtsFI5zdEK.lottie" background="transparent" speed="1" style="width: 300px; height: 300px;" loop autoplay></dotlottie-player>
   </div>
   <h1>Transcript to Anki Cards or Interactive Game</h1>
   <p>
@@ -380,30 +383,22 @@ INDEX_HTML = """
           toggle.innerHTML = "Advanced Options &#9660;";
       }
     }
-    // Show loading overlay on form submission
-    document.querySelector("form").addEventListener("submit", function() {
-      var overlay = document.getElementById("loadingOverlay");
-      overlay.style.display = "flex";
-      lottie.loadAnimation({
-        container: document.getElementById('lottieContainer'),
-        renderer: 'svg',
-        loop: true,
-        autoplay: true,
-        path: 'https://lottie.host/embed/4500dbaf-9ac9-4b2b-b664-692cd9a3ccab/BGvTKQT8Tx.json'
-      });
+    // Intercept form submission to show the loading overlay and force the lottie animation to play
+    document.querySelector("form").addEventListener("submit", function(e) {
+      e.preventDefault();  // Prevent immediate submission
+      document.getElementById("loadingOverlay").style.display = "flex";
+      document.getElementById("lottiePlayer").play();
+      var form = this;
+      setTimeout(function(){
+         form.submit();
+      }, 100);
     });
   </script>
 </body>
 </html>
 """
 
-# Anki template – Auggie Card Simulator.
-# Changes:
-#   • Finish Screen Behavior: When finishing, the progress text displays “Review Complete” and if a user navigates back, the card counter is restored.
-#   • Buttons on the Finish Screen (Edit, Saved Cards, Return to Card) are hidden.
-#   • Saved Cards Screen Behavior: When accessed before finishing, the Return to Card button text shows the card number.
-# 
-# Added Loading Overlay with Lottie animation.
+# ANKI_HTML template updated to use dotlottie-player and a transparent loading overlay.
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -518,26 +513,27 @@ ANKI_HTML = """
     .cart.bottomButton:hover {
       background-color: #0288D1;
     }
-    /* Loading Overlay Styles */
+    /* Loading Overlay Styles with transparent background */
     #loadingOverlay {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background: #121212;
+      background: transparent;
       display: flex;
       justify-content: center;
       align-items: center;
       z-index: 9999;
     }
   </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.7.6/lottie.min.js"></script>
+  <!-- Use dotlottie-player for the loading animation -->
+  <script src="https://unpkg.com/@dotlottie/player-component@2.7.12/dist/dotlottie-player.mjs" type="module"></script>
 </head>
 <body>
-  <!-- Loading Overlay -->
+  <!-- Loading Overlay using dotlottie-player -->
   <div id="loadingOverlay">
-    <div id="lottieContainer" style="width: 300px; height: 300px;"></div>
+    <dotlottie-player id="lottiePlayer" src="https://lottie.host/817661a8-2608-4435-89a5-daa620a64c36/WtsFI5zdEK.lottie" background="transparent" speed="1" style="width: 300px; height: 300px;" loop autoplay></dotlottie-player>
   </div>
   <div id="reviewContainer" style="display: none;">
     <div id="progress">Card <span id="current">0</span> of <span id="total">0</span></div>
@@ -573,14 +569,7 @@ ANKI_HTML = """
     </div>
   </div>
   <script>
-    // Initialize Lottie animation
-    var animation = lottie.loadAnimation({
-      container: document.getElementById('lottieContainer'),
-      renderer: 'svg',
-      loop: true,
-      autoplay: true,
-      path: 'https://lottie.host/embed/4500dbaf-9ac9-4b2b-b664-692cd9a3ccab/BGvTKQT8Tx.json'
-    });
+    // The dotlottie-player autoplays so no need to call lottie.loadAnimation.
     // Once the page has fully loaded, hide the loading overlay and show the review container.
     window.addEventListener('load', function() {
       var overlay = document.getElementById('loadingOverlay');
@@ -841,12 +830,7 @@ ANKI_HTML = """
 </html>
 """
 
-# Interactive Game template – modifications:
-#   • New “Show Anki Cards” Button added to the final results screen.
-#   • The revealed content displays each question followed by two <br><br> then the answer in cloze formatting.
-#   • A “Copy Anki Cards” button is provided to copy the formatted text.
-# 
-# Added Loading Overlay with Lottie animation.
+# INTERACTIVE_HTML template updated to use dotlottie-player and a transparent loading overlay.
 INTERACTIVE_HTML = """
 <!DOCTYPE html>
 <html>
@@ -965,26 +949,27 @@ INTERACTIVE_HTML = """
         opacity: 0;
       }
     }
-    /* Loading Overlay Styles */
+    /* Loading Overlay Styles with transparent background */
     #loadingOverlay {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background: #121212;
+      background: transparent;
       display: flex;
       justify-content: center;
       align-items: center;
       z-index: 9999;
     }
   </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.7.6/lottie.min.js"></script>
+  <!-- Use dotlottie-player for the loading animation -->
+  <script src="https://unpkg.com/@dotlottie/player-component@2.7.12/dist/dotlottie-player.mjs" type="module"></script>
 </head>
 <body>
-  <!-- Loading Overlay -->
+  <!-- Loading Overlay using dotlottie-player -->
   <div id="loadingOverlay">
-    <div id="lottieContainer" style="width: 300px; height: 300px;"></div>
+    <dotlottie-player id="lottiePlayer" src="https://lottie.host/817661a8-2608-4435-89a5-daa620a64c36/WtsFI5zdEK.lottie" background="transparent" speed="1" style="width: 300px; height: 300px;" loop autoplay></dotlottie-player>
   </div>
   <div class="container" id="gameContainer" style="display: none;">
     <div class="header">
@@ -998,14 +983,7 @@ INTERACTIVE_HTML = """
   </div>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
   <script>
-    // Initialize Lottie animation
-    var animation = lottie.loadAnimation({
-      container: document.getElementById('lottieContainer'),
-      renderer: 'svg',
-      loop: true,
-      autoplay: true,
-      path: 'https://lottie.host/embed/4500dbaf-9ac9-4b2b-b664-692cd9a3ccab/BGvTKQT8Tx.json'
-    });
+    // The dotlottie-player autoplays so no need to call lottie.loadAnimation.
     // Once the page has fully loaded, hide the loading overlay and show the game container.
     window.addEventListener('load', function() {
       var overlay = document.getElementById('loadingOverlay');
