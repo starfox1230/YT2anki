@@ -178,6 +178,10 @@ def get_all_anki_cards(transcript, user_preferences="", max_chunk_size=4000, mod
     logger.debug("Total flashcards generated: %d", len(all_cards))
     return all_cards
 
+# ----------------------------
+# New Functions for Interactive Mode
+# ----------------------------
+
 def get_interactive_questions_for_chunk(transcript_chunk, user_preferences="", model="gpt-4o"):
     """
     Calls the OpenAI API with a transcript chunk and returns a list of interactive multiple-choice questions.
@@ -254,23 +258,6 @@ def get_all_interactive_questions(transcript, user_preferences="", max_chunk_siz
     return all_questions
 
 # ----------------------------
-# New Helper Function for Ajax Response
-# ----------------------------
-def extract_content(html):
-    """
-    Extracts and returns the content inside the <div id="content">...</div> tags.
-    If not found, falls back to the entire <body> content.
-    """
-    match = re.search(r'<div id="content">(.*?)</div>', html, re.DOTALL)
-    if match:
-        return match.group(1)
-    # fallback to body if no content div is found
-    match = re.search(r"<body.*?>(.*?)</body>", html, re.DOTALL)
-    if match:
-        return match.group(1)
-    return html
-
-# ----------------------------
 # Embedded HTML Templates
 # ----------------------------
 
@@ -339,26 +326,13 @@ INDEX_HTML = """
       width: 80%;
       max-width: 300px;
     }
-    /* Transparent loading overlay so the animation shows behind it */
-    #loadingOverlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.5);
-      display: none;
-      justify-content: center;
-      align-items: center;
-      z-index: 9999;
-    }
   </style>
   <!-- Include Lottie for the loading animation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.7.6/lottie.min.js"></script>
 </head>
 <body>
-  <!-- Loading Overlay on the index page -->
-  <div id="loadingOverlay">
+  <!-- Loading Overlay added to the index page -->
+  <div id="loadingOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #121212; display: none; justify-content: center; align-items: center; z-index: 9999;">
     <div id="lottieContainer" style="width: 300px; height: 300px;"></div>
   </div>
   <h1>Transcript to Anki Cards or Interactive Game</h1>
@@ -394,8 +368,6 @@ INDEX_HTML = """
       <input type="submit" name="mode" value="Generate Game">
     </div>
   </form>
-  <!-- Container for asynchronous results -->
-  <div id="resultContainer"></div>
   <script>
     function toggleAdvanced(){
       var adv = document.getElementById("advancedOptions");
@@ -408,11 +380,8 @@ INDEX_HTML = """
           toggle.innerHTML = "Advanced Options &#9660;";
       }
     }
-    // Asynchronous form submission using fetch
-    document.querySelector("form").addEventListener("submit", async function(e) {
-      e.preventDefault();
-      var form = e.target;
-      var formData = new FormData(form);
+    // Show loading overlay on form submission
+    document.querySelector("form").addEventListener("submit", function() {
       var overlay = document.getElementById("loadingOverlay");
       overlay.style.display = "flex";
       lottie.loadAnimation({
@@ -422,22 +391,57 @@ INDEX_HTML = """
         autoplay: true,
         path: 'https://lottie.host/embed/4500dbaf-9ac9-4b2b-b664-692cd9a3ccab/BGvTKQT8Tx.json'
       });
-      try {
-          let response = await fetch(form.action || window.location.href, {
-              method: form.method,
-              body: formData,
-              headers: {
-                  "X-Requested-With": "XMLHttpRequest"
-              }
-          });
-          let responseHTML = await response.text();
-          form.style.display = "none";
-          document.getElementById("resultContainer").innerHTML = responseHTML;
-      } catch(error) {
-          console.error("Error submitting form:", error);
-      } finally {
-          overlay.style.display = "none";
-      }
+    });
+  </script>
+</body>
+</html>
+"""
+
+# Loading page template.
+LOADING_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Loading...</title>
+  <style>
+    body { background-color: #121212; margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.7.6/lottie.min.js"></script>
+</head>
+<body>
+  <div id="lottieContainer" style="width: 300px; height: 300px;"></div>
+  <script>
+    // Immediately initialize Lottie animation
+    var animation = lottie.loadAnimation({
+        container: document.getElementById('lottieContainer'),
+        renderer: 'svg',
+        loop: true,
+        autoplay: true,
+        path: 'https://lottie.host/embed/4500dbaf-9ac9-4b2b-b664-692cd9a3ccab/BGvTKQT8Tx.json'
+    });
+
+    // form_data is embedded by the server
+    var formData = {{ form_data|tojson }};
+    
+    // Send the form data to /generate endpoint via fetch POST request.
+    fetch("/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.text())
+    .then(html => {
+        // Replace the current document with the new HTML.
+        document.open();
+        document.write(html);
+        document.close();
+    })
+    .catch(error => {
+        console.error("Error fetching generated content:", error);
     });
   </script>
 </body>
@@ -517,6 +521,8 @@ ANKI_HTML = """
     .saveEdit { background-color: green; }
     #savedCardsContainer { 
       width: 100%; max-width: 700px; margin: 20px auto; color: #D7DEE9; 
+      display: none; 
+      /* Ensure saved cards screen is also centered */
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -556,281 +562,325 @@ ANKI_HTML = """
     .cart.bottomButton:hover {
       background-color: #0288D1;
     }
+    /* Loading Overlay Styles */
+    #loadingOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #121212;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.7.6/lottie.min.js"></script>
 </head>
 <body>
-  <div id="content">
-    <div id="reviewContainer" style="display: none;">
-      <div id="progress">Card <span id="current">0</span> of <span id="total">0</span></div>
-      <div id="kard">
-        <div class="card" id="cardContent"></div>
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay">
+    <div id="lottieContainer" style="width: 300px; height: 300px;"></div>
+  </div>
+  <div id="reviewContainer" style="display: none;">
+    <div id="progress">Card <span id="current">0</span> of <span id="total">0</span></div>
+    <div id="kard">
+      <div class="card" id="cardContent"></div>
+    </div>
+    <div id="actionControls">
+      <button id="discardButton" class="actionButton discard" onmousedown="event.preventDefault()" ontouchend="this.blur()">Discard</button>
+      <button id="saveButton" class="actionButton save" onmousedown="event.preventDefault()" ontouchend="this.blur()">Save</button>
+    </div>
+    <div id="editControls">
+      <button id="cancelEditButton" class="editButton cancelEdit" onmousedown="event.preventDefault()" ontouchend="this.blur()">Cancel Edit</button>
+      <button id="saveEditButton" class="editButton saveEdit" onmousedown="event.preventDefault()" ontouchend="this.blur()">Save Edit</button>
+    </div>
+    <div id="bottomUndo">
+      <button id="undoButton" class="bottomButton undo" onmousedown="event.preventDefault()" ontouchend="this.blur()">Previous Card</button>
+    </div>
+    <div id="bottomEdit">
+      <button id="editButton" class="bottomButton edit" onmousedown="event.preventDefault()" ontouchend="this.blur()">Edit</button>
+    </div>
+    <div id="cartContainer">
+      <button id="cartButton" class="bottomButton cart" onmousedown="event.preventDefault()" ontouchend="this.blur()">Saved Cards</button>
+    </div>
+    <div id="savedCardsContainer">
+      <h3 id="finishedHeader" style="text-align:center;">Saved Cards</h3>
+      <textarea id="savedCardsText" readonly></textarea>
+      <div style="text-align:center;">
+        <button id="copyButton" onmousedown="event.preventDefault()" ontouchend="this.blur()">Copy Saved Cards</button>
       </div>
-      <div id="actionControls">
-        <button id="discardButton" class="actionButton discard" onmousedown="event.preventDefault()" ontouchend="this.blur()">Discard</button>
-        <button id="saveButton" class="actionButton save" onmousedown="event.preventDefault()" ontouchend="this.blur()">Save</button>
-      </div>
-      <div id="editControls">
-        <button id="cancelEditButton" class="editButton cancelEdit" onmousedown="event.preventDefault()" ontouchend="this.blur()">Cancel Edit</button>
-        <button id="saveEditButton" class="editButton saveEdit" onmousedown="event.preventDefault()" ontouchend="this.blur()">Save Edit</button>
-      </div>
-      <div id="bottomUndo">
-        <button id="undoButton" class="bottomButton undo" onmousedown="event.preventDefault()" ontouchend="this.blur()">Previous Card</button>
-      </div>
-      <div id="bottomEdit">
-        <button id="editButton" class="bottomButton edit" onmousedown="event.preventDefault()" ontouchend="this.blur()">Edit</button>
-      </div>
-      <div id="cartContainer">
-        <button id="cartButton" class="bottomButton cart" onmousedown="event.preventDefault()" ontouchend="this.blur()">Saved Cards</button>
-      </div>
-      <div id="savedCardsContainer">
-        <h3 id="finishedHeader" style="text-align:center;">Saved Cards</h3>
-        <textarea id="savedCardsText" readonly></textarea>
-        <div style="text-align:center;">
-          <button id="copyButton" onmousedown="event.preventDefault()" ontouchend="this.blur()">Copy Saved Cards</button>
-        </div>
-        <div style="text-align:center; margin-top:10px;">
-          <button id="returnButton" class="bottomButton return" onmousedown="event.preventDefault()" ontouchend="this.blur()">Return to Card</button>
-        </div>
+      <div style="text-align:center; margin-top:10px;">
+        <button id="returnButton" class="bottomButton return" onmousedown="event.preventDefault()" ontouchend="this.blur()">Return to Card</button>
       </div>
     </div>
-    <script>
-      const cards = {{ cards_json|safe }};
-  {% raw %}
-      let interactiveCards = [];
-      function generateInteractiveCards(cardText) {
-        const regex = /{{c(\d+)::(.*?)}}/g;
-        const numbers = new Set();
-        let m;
-        while ((m = regex.exec(cardText)) !== null) {
-          numbers.add(m[1]);
-        }
-        if (numbers.size === 0) {
-          return [{ target: null, displayText: cardText, exportText: cardText }];
-        }
-        const cardsForNote = [];
-        Array.from(numbers).sort().forEach(num => {
-          const display = processCloze(cardText, num);
-          cardsForNote.push({ target: num, displayText: display, exportText: cardText });
-        });
-        return cardsForNote;
+  </div>
+  <script>
+    // Initialize Lottie animation
+    var animation = lottie.loadAnimation({
+      container: document.getElementById('lottieContainer'),
+      renderer: 'svg',
+      loop: true,
+      autoplay: true,
+      path: 'https://lottie.host/embed/4500dbaf-9ac9-4b2b-b664-692cd9a3ccab/BGvTKQT8Tx.json'
+    });
+    // Once the page has fully loaded, hide the loading overlay and show the review container.
+    window.addEventListener('load', function() {
+      var overlay = document.getElementById('loadingOverlay');
+      var reviewContainer = document.getElementById('reviewContainer');
+      overlay.style.transition = 'opacity 0.5s ease';
+      overlay.style.opacity = '0';
+      setTimeout(function() {
+        overlay.style.display = 'none';
+        reviewContainer.style.display = 'flex';
+      }, 500);
+    });
+  </script>
+  <script>
+    const cards = {{ cards_json|safe }};
+{% raw %}
+    let interactiveCards = [];
+    function generateInteractiveCards(cardText) {
+      const regex = /{{c(\d+)::(.*?)}}/g;
+      const numbers = new Set();
+      let m;
+      while ((m = regex.exec(cardText)) !== null) {
+        numbers.add(m[1]);
       }
-      function processCloze(text, target) {
-        return text.replace(/{{c(\d+)::(.*?)}}/g, function(match, clozeNum, answer) {
-          if (clozeNum === target) {
-            return '<span class="cloze" data-answer="' + answer.replace(/"/g, '&quot;') + '">[...]</span>';
-          } else {
-            return answer;
-          }
-        });
+      if (numbers.size === 0) {
+        return [{ target: null, displayText: cardText, exportText: cardText }];
       }
-      cards.forEach(cardText => {
-        interactiveCards = interactiveCards.concat(generateInteractiveCards(cardText));
+      const cardsForNote = [];
+      Array.from(numbers).sort().forEach(num => {
+        const display = processCloze(cardText, num);
+        cardsForNote.push({ target: num, displayText: display, exportText: cardText });
       });
-      let currentIndex = 0;
-      let savedCards = [];
-      let historyStack = [];
-      let inEditMode = false;
-      let finished = false;
-      let savedCardIndex = null; // For cart functionality
+      return cardsForNote;
+    }
+    function processCloze(text, target) {
+      return text.replace(/{{c(\d+)::(.*?)}}/g, function(match, clozeNum, answer) {
+        if (clozeNum === target) {
+          return '<span class="cloze" data-answer="' + answer.replace(/"/g, '&quot;') + '">[...]</span>';
+        } else {
+          return answer;
+        }
+      });
+    }
+    cards.forEach(cardText => {
+      interactiveCards = interactiveCards.concat(generateInteractiveCards(cardText));
+    });
+    let currentIndex = 0;
+    let savedCards = [];
+    let historyStack = [];
+    let inEditMode = false;
+    let finished = false;
+    let savedCardIndex = null; // For cart functionality
 
-      const currentEl = document.getElementById("current");
-      const totalEl = document.getElementById("total");
-      const cardContentEl = document.getElementById("cardContent");
-      const actionControls = document.getElementById("actionControls");
-      const bottomUndo = document.getElementById("bottomUndo");
-      const bottomEdit = document.getElementById("bottomEdit");
-      const undoButton = document.getElementById("undoButton");
-      const editButton = document.getElementById("editButton");
-      const discardButton = document.getElementById("discardButton");
-      const saveButton = document.getElementById("saveButton");
-      const editControls = document.getElementById("editControls");
-      const saveEditButton = document.getElementById("saveEditButton");
-      const cancelEditButton = document.getElementById("cancelEditButton");
-      const savedCardsContainer = document.getElementById("savedCardsContainer");
-      const finishedHeader = document.getElementById("finishedHeader");
-      const savedCardsText = document.getElementById("savedCardsText");
-      const copyButton = document.getElementById("copyButton");
-      const cartButton = document.getElementById("cartButton");
-      const returnButton = document.getElementById("returnButton");
-      const cartContainer = document.getElementById("cartContainer");
+    const currentEl = document.getElementById("current");
+    const totalEl = document.getElementById("total");
+    const cardContentEl = document.getElementById("cardContent");
+    const actionControls = document.getElementById("actionControls");
+    const bottomUndo = document.getElementById("bottomUndo");
+    const bottomEdit = document.getElementById("bottomEdit");
+    const undoButton = document.getElementById("undoButton");
+    const editButton = document.getElementById("editButton");
+    const discardButton = document.getElementById("discardButton");
+    const saveButton = document.getElementById("saveButton");
+    const editControls = document.getElementById("editControls");
+    const saveEditButton = document.getElementById("saveEditButton");
+    const cancelEditButton = document.getElementById("cancelEditButton");
+    const savedCardsContainer = document.getElementById("savedCardsContainer");
+    const finishedHeader = document.getElementById("finishedHeader");
+    const savedCardsText = document.getElementById("savedCardsText");
+    const copyButton = document.getElementById("copyButton");
+    const cartButton = document.getElementById("cartButton");
+    const returnButton = document.getElementById("returnButton");
+    const cartContainer = document.getElementById("cartContainer");
 
-      totalEl.textContent = interactiveCards.length;
+    totalEl.textContent = interactiveCards.length;
 
-      function updateUndoButtonState() {
-        undoButton.disabled = historyStack.length === 0;
+    function updateUndoButtonState() {
+      undoButton.disabled = historyStack.length === 0;
+    }
+    updateUndoButtonState();
+    
+    document.getElementById("kard").addEventListener("click", function(e) {
+      if (inEditMode) return;
+      if (actionControls.style.display === "none" || actionControls.style.display === "") {
+        const clozes = document.querySelectorAll("#cardContent .cloze");
+        clozes.forEach(span => {
+          span.innerHTML = span.getAttribute("data-answer");
+        });
+        actionControls.style.display = "flex";
+      }
+    });
+    
+    function showCard() {
+      finished = false;
+      document.getElementById("progress").textContent = "Card " + (currentIndex+1) + " of " + interactiveCards.length;
+      if (!inEditMode) {
+        actionControls.style.display = "none";
+      }
+      cardContentEl.innerHTML = interactiveCards[currentIndex].displayText;
+      // Ensure the card content remains vertically centered.
+      document.getElementById("kard").style.display = "flex";
+      savedCardsContainer.style.display = "none";
+      // Restore buttons if coming back from finished state.
+      document.getElementById("bottomEdit").style.display = "flex";
+      document.getElementById("cartContainer").style.display = "flex";
+      document.getElementById("returnButton").style.display = "none";
+    }
+    function nextCard() {
+      if (currentIndex < interactiveCards.length - 1) {
+          currentIndex++;
+          showCard();
+      } else {
+          finished = true;
+      }
+    }
+    // Modify the save and discard button event handlers:
+    discardButton.addEventListener("click", function(e) {
+      e.stopPropagation();
+      historyStack.push({ currentIndex: currentIndex, savedCards: savedCards.slice(), finished: finished });
+      updateUndoButtonState();
+      if (currentIndex === interactiveCards.length - 1) {
+          finished = true;
+          showFinished();
+      } else {
+          nextCard();
+      }
+    });
+    saveButton.addEventListener("click", function(e) {
+      e.stopPropagation();
+      historyStack.push({ currentIndex: currentIndex, savedCards: savedCards.slice(), finished: finished });
+      updateUndoButtonState();
+      savedCards.push(interactiveCards[currentIndex].exportText);
+      if (currentIndex === interactiveCards.length - 1) {
+          finished = true;
+          showFinished();
+      } else {
+          nextCard();
+      }
+    });
+
+    function showFinished() {
+      // Hide card display and action controls, update header and show finish screen.
+      document.getElementById("kard").style.display = "none";
+      actionControls.style.display = "none";
+      finishedHeader.textContent = "Review complete!";
+      savedCardsText.value = savedCards.join("\\n");
+      savedCardsContainer.style.display = "flex";
+      // Update progress to show "Review Complete"
+      document.getElementById("progress").textContent = "Review Complete";
+      // Hide buttons that should not appear on the finish screen.
+      document.getElementById("bottomEdit").style.display = "none";
+      document.getElementById("cartContainer").style.display = "none";
+      document.getElementById("returnButton").style.display = "none";
+    }
+
+    editButton.addEventListener("click", function(e) {
+      e.stopPropagation();
+      if (!inEditMode) enterEditMode();
+    });
+    function enterEditMode() {
+      inEditMode = true;
+      originalCardText = interactiveCards[currentIndex].exportText;
+      cardContentEl.innerHTML = '<textarea id="editArea">' + interactiveCards[currentIndex].exportText + '</textarea>';
+      actionControls.style.display = "none";
+      bottomUndo.style.display = "none";
+      bottomEdit.style.display = "none";
+      editControls.style.display = "flex";
+    }
+    saveEditButton.addEventListener("click", function(e) {
+      e.stopPropagation();
+      const editedText = document.getElementById("editArea").value;
+      interactiveCards[currentIndex].exportText = editedText;
+      let target = interactiveCards[currentIndex].target;
+      if (target) {
+        interactiveCards[currentIndex].displayText = processCloze(editedText, target);
+      } else {
+        interactiveCards[currentIndex].displayText = editedText;
+      }
+      inEditMode = false;
+      editControls.style.display = "none";
+      bottomUndo.style.display = "flex";
+      bottomEdit.style.display = "flex";
+      showCard();
+    });
+    cancelEditButton.addEventListener("click", function(e) {
+      e.stopPropagation();
+      inEditMode = false;
+      editControls.style.display = "none";
+      bottomUndo.style.display = "flex";
+      bottomEdit.style.display = "flex";
+      showCard();
+    });
+
+    undoButton.addEventListener("click", function(e) {
+      e.stopPropagation();
+      if (historyStack.length === 0) {
+        alert("No actions to undo.");
+        return;
+      }
+      let snapshot = historyStack.pop();
+      currentIndex = snapshot.currentIndex;
+      savedCards = snapshot.savedCards.slice();
+      finished = snapshot.finished;
+      if (finished) {
+        finished = false;
+        showCard();
+      } else {
+        document.getElementById("kard").style.display = "flex";
+        actionControls.style.display = "none";
+        savedCardsContainer.style.display = "none";
+        cartContainer.style.display = "flex";
+        cardContentEl.innerHTML = interactiveCards[currentIndex].displayText;
+        currentEl.textContent = currentIndex + 1;
       }
       updateUndoButtonState();
+    });
 
-      document.getElementById("kard").addEventListener("click", function(e) {
-        if (inEditMode) return;
-        if (actionControls.style.display === "none" || actionControls.style.display === "") {
-          const clozes = document.querySelectorAll("#cardContent .cloze");
-          clozes.forEach(span => {
-            span.innerHTML = span.getAttribute("data-answer");
-          });
-          actionControls.style.display = "flex";
-        }
-      });
+    copyButton.addEventListener("click", function() {
+      savedCardsText.select();
+      document.execCommand("copy");
+      copyButton.textContent = "Copied!";
+      setTimeout(function() {
+        copyButton.textContent = "Copy Saved Cards";
+      }, 2000);
+    });
 
-      function showCard() {
-        finished = false;
-        document.getElementById("progress").textContent = "Card " + (currentIndex+1) + " of " + interactiveCards.length;
-        if (!inEditMode) {
-          actionControls.style.display = "none";
-        }
-        cardContentEl.innerHTML = interactiveCards[currentIndex].displayText;
-        document.getElementById("kard").style.display = "flex";
-        savedCardsContainer.style.display = "none";
-        document.getElementById("bottomEdit").style.display = "flex";
-        document.getElementById("cartContainer").style.display = "flex";
-        document.getElementById("returnButton").style.display = "none";
+    cartButton.addEventListener("click", function(e) {
+      e.stopPropagation();
+      savedCardIndex = currentIndex;
+      document.getElementById("kard").style.display = "none";
+      actionControls.style.display = "none";
+      bottomUndo.style.display = "none";
+      bottomEdit.style.display = "none";
+      cartContainer.style.display = "none";
+      savedCardsText.value = savedCards.join("\\n");
+      savedCardsContainer.style.display = "flex";
+      // Show and update the Return to Card button for non-finished saved cards view.
+      document.getElementById("returnButton").style.display = "block";
+      document.getElementById("returnButton").textContent = "Return to Card " + (savedCardIndex+1);
+    });
+    returnButton.addEventListener("click", function(e) {
+      e.stopPropagation();
+      if (savedCardIndex !== null) {
+        currentIndex = savedCardIndex;
       }
-      function nextCard() {
-        if (currentIndex < interactiveCards.length - 1) {
-            currentIndex++;
-            showCard();
-        } else {
-            finished = true;
-        }
-      }
-      discardButton.addEventListener("click", function(e) {
-        e.stopPropagation();
-        historyStack.push({ currentIndex: currentIndex, savedCards: savedCards.slice(), finished: finished });
-        updateUndoButtonState();
-        if (currentIndex === interactiveCards.length - 1) {
-            finished = true;
-            showFinished();
-        } else {
-            nextCard();
-        }
-      });
-      saveButton.addEventListener("click", function(e) {
-        e.stopPropagation();
-        historyStack.push({ currentIndex: currentIndex, savedCards: savedCards.slice(), finished: finished });
-        updateUndoButtonState();
-        savedCards.push(interactiveCards[currentIndex].exportText);
-        if (currentIndex === interactiveCards.length - 1) {
-            finished = true;
-            showFinished();
-        } else {
-            nextCard();
-        }
-      });
-
-      function showFinished() {
-        document.getElementById("kard").style.display = "none";
-        actionControls.style.display = "none";
-        finishedHeader.textContent = "Review complete!";
-        savedCardsText.value = savedCards.join("\\n");
-        savedCardsContainer.style.display = "flex";
-        document.getElementById("progress").textContent = "Review Complete";
-        document.getElementById("bottomEdit").style.display = "none";
-        document.getElementById("cartContainer").style.display = "none";
-        document.getElementById("returnButton").style.display = "none";
-      }
-
-      editButton.addEventListener("click", function(e) {
-        e.stopPropagation();
-        if (!inEditMode) enterEditMode();
-      });
-      function enterEditMode() {
-        inEditMode = true;
-        originalCardText = interactiveCards[currentIndex].exportText;
-        cardContentEl.innerHTML = '<textarea id="editArea">' + interactiveCards[currentIndex].exportText + '</textarea>';
-        actionControls.style.display = "none";
-        bottomUndo.style.display = "none";
-        bottomEdit.style.display = "none";
-        editControls.style.display = "flex";
-      }
-      saveEditButton.addEventListener("click", function(e) {
-        e.stopPropagation();
-        const editedText = document.getElementById("editArea").value;
-        interactiveCards[currentIndex].exportText = editedText;
-        let target = interactiveCards[currentIndex].target;
-        if (target) {
-          interactiveCards[currentIndex].displayText = processCloze(editedText, target);
-        } else {
-          interactiveCards[currentIndex].displayText = editedText;
-        }
-        inEditMode = false;
-        editControls.style.display = "none";
-        bottomUndo.style.display = "flex";
-        bottomEdit.style.display = "flex";
-        showCard();
-      });
-      cancelEditButton.addEventListener("click", function(e) {
-        e.stopPropagation();
-        inEditMode = false;
-        editControls.style.display = "none";
-        bottomUndo.style.display = "flex";
-        bottomEdit.style.display = "flex";
-        showCard();
-      });
-
-      undoButton.addEventListener("click", function(e) {
-        e.stopPropagation();
-        if (historyStack.length === 0) {
-          alert("No actions to undo.");
-          return;
-        }
-        let snapshot = historyStack.pop();
-        currentIndex = snapshot.currentIndex;
-        savedCards = snapshot.savedCards.slice();
-        finished = snapshot.finished;
-        if (finished) {
-          finished = false;
-          showCard();
-        } else {
-          document.getElementById("kard").style.display = "flex";
-          actionControls.style.display = "none";
-          savedCardsContainer.style.display = "none";
-          cartContainer.style.display = "flex";
-          cardContentEl.innerHTML = interactiveCards[currentIndex].displayText;
-          currentEl.textContent = currentIndex + 1;
-        }
-        updateUndoButtonState();
-      });
-
-      copyButton.addEventListener("click", function() {
-        savedCardsText.select();
-        document.execCommand("copy");
-        copyButton.textContent = "Copied!";
-        setTimeout(function() {
-          copyButton.textContent = "Copy Saved Cards";
-        }, 2000);
-      });
-
-      cartButton.addEventListener("click", function(e) {
-        e.stopPropagation();
-        savedCardIndex = currentIndex;
-        document.getElementById("kard").style.display = "none";
-        actionControls.style.display = "none";
-        bottomUndo.style.display = "none";
-        bottomEdit.style.display = "none";
-        cartContainer.style.display = "none";
-        savedCardsText.value = savedCards.join("\\n");
-        savedCardsContainer.style.display = "flex";
-        document.getElementById("returnButton").style.display = "block";
-        document.getElementById("returnButton").textContent = "Return to Card " + (savedCardIndex+1);
-      });
-      returnButton.addEventListener("click", function(e) {
-        e.stopPropagation();
-        if (savedCardIndex !== null) {
-          currentIndex = savedCardIndex;
-        }
-        savedCardsContainer.style.display = "none";
-        document.getElementById("kard").style.display = "flex";
-        actionControls.style.display = "none";
-        bottomUndo.style.display = "flex";
-        bottomEdit.style.display = "flex";
-        cartContainer.style.display = "flex";
-        showCard();
-      });
-
+      savedCardsContainer.style.display = "none";
+      document.getElementById("kard").style.display = "flex";
+      actionControls.style.display = "none";
+      bottomUndo.style.display = "flex";
+      bottomEdit.style.display = "flex";
+      cartContainer.style.display = "flex";
       showCard();
-  {% endraw %}
-    </script>
-  </div>
+    });
+
+    showCard();
+{% endraw %}
+  </script>
 </body>
 </html>
 """
@@ -953,179 +1003,218 @@ INTERACTIVE_HTML = """
         opacity: 0;
       }
     }
+    /* Loading Overlay Styles */
+    #loadingOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #121212;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.7.6/lottie.min.js"></script>
 </head>
 <body>
-  <div id="content">
-    <div class="container" id="gameContainer" style="display: none;">
-      <div class="header">
-        <div id="questionProgress">Question 1 of 0</div>
-        <div id="rawScore">Score: 0</div>
-      </div>
-      <div class="timer" id="timer">Time: 15</div>
-      <div class="question-box" id="questionBox"></div>
-      <div id="optionsWrapper"></div>
-      <div id="feedback" class="hidden"></div>
-    </div>
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
-    <script>
-      const questions = {{ questions_json|safe }};
-      let currentQuestionIndex = 0;
-      let score = 0;
-      let timerInterval;
-      const totalQuestions = questions.length;
-      const questionProgressEl = document.getElementById('questionProgress');
-      const rawScoreEl = document.getElementById('rawScore');
-      const timerEl = document.getElementById('timer');
-      const questionBox = document.getElementById('questionBox');
-      const optionsWrapper = document.getElementById('optionsWrapper');
-      const feedbackEl = document.getElementById('feedback');
-
-      function startGame() {
-        score = 0;
-        currentQuestionIndex = 0;
-        updateHeader();
-        showQuestion();
-      }
-
-      function updateHeader() {
-        questionProgressEl.textContent = "Question " + (currentQuestionIndex+1) + " of " + totalQuestions;
-        rawScoreEl.textContent = "Score: " + score;
-      }
-
-      function startTimer(duration, callback) {
-        let timeRemaining = duration;
-        timerEl.textContent = "Time: " + timeRemaining;
-        timerInterval = setInterval(() => {
-          timeRemaining--;
-          timerEl.textContent = "Time: " + timeRemaining;
-          if (timeRemaining <= 0) {
-            clearInterval(timerInterval);
-            callback();
-          }
-        }, 1000);
-      }
-
-      function showQuestion() {
-        feedbackEl.classList.add('hidden');
-        if (currentQuestionIndex >= totalQuestions) {
-          endGame();
-          return;
-        }
-        const currentQuestion = questions[currentQuestionIndex];
-        questionBox.textContent = currentQuestion.question;
-        optionsWrapper.innerHTML = "";
-        const ul = document.createElement('ul');
-        ul.className = 'options';
-
-        const optionsShuffled = currentQuestion.options.slice();
-        for (let i = optionsShuffled.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [optionsShuffled[i], optionsShuffled[j]] = [optionsShuffled[j], optionsShuffled[i]];
-        }
-        optionsShuffled.forEach(option => {
-          const li = document.createElement('li');
-          const button = document.createElement('button');
-          button.textContent = option;
-          button.className = 'option-button';
-          button.onmousedown = function(e) { e.preventDefault(); };
-          button.setAttribute("ontouchend", "this.blur()");
-          button.onclick = () => selectAnswer(option);
-          button.addEventListener('click', function(e) {
-            const rect = button.getBoundingClientRect();
-            const ripple = document.createElement('span');
-            ripple.className = 'ripple';
-            ripple.style.left = (e.clientX - rect.left) + 'px';
-            ripple.style.top = (e.clientY - rect.top) + 'px';
-            button.appendChild(ripple);
-            setTimeout(() => {
-              ripple.remove();
-            }, 600);
-          });
-          li.appendChild(button);
-          ul.appendChild(li);
-        });
-        optionsWrapper.appendChild(ul);
-        startTimer(15, () => {
-          selectAnswer(null);
-        });
-        updateHeader();
-      }
-
-      function selectAnswer(selectedOption) {
-        clearInterval(timerInterval);
-        const currentQuestion = questions[currentQuestionIndex];
-        const buttons = document.querySelectorAll('.option-button');
-        const isCorrect = (selectedOption === currentQuestion.correctAnswer);
-        buttons.forEach(button => {
-          if (button.textContent === currentQuestion.correctAnswer) {
-            button.classList.add('correct');
-          } else if (button.textContent === selectedOption) {
-            button.classList.add('incorrect');
-          }
-          button.disabled = true;
-        });
-        if (isCorrect) {
-          score++;
-          confetti({
-            particleCount: 100,
-            spread: 70,
-            colors: ['#bb86fc', '#ffd700']
-          });
-        }
-        updateHeader();
-        setTimeout(() => {
-          currentQuestionIndex++;
-          showQuestion();
-        }, 2000);
-      }
-
-      function endGame() {
-        questionBox.textContent = "Game Over!";
-        optionsWrapper.innerHTML = "";
-        timerEl.textContent = "";
-        feedbackEl.classList.remove('hidden');
-        feedbackEl.innerHTML = "<h2>Your final score is " + score + " out of " + totalQuestions + "</h2>" +
-          "<button onclick='startGame()' class='option-button' ontouchend='this.blur()'>Play Again</button>" +
-          "<button id='toggleAnkiBtn' class='option-button' ontouchend='this.blur()' style='margin-top:10px;'>Show Anki Cards</button>" +
-          "<div id='ankiCardsContainer' style='display:none; margin-top:10px; text-align:left; background-color:#1e1e1e; padding:10px; border:1px solid #bb86fc; border-radius:10px;'></div>" +
-          "<button id='copyAnkiBtn' class='option-button' ontouchend='this.blur()' style='display:none; margin-top:10px;'>Copy Anki Cards</button>";
-        document.getElementById('toggleAnkiBtn').addEventListener('click', function(){
-          let container = document.getElementById('ankiCardsContainer');
-          let copyBtn = document.getElementById('copyAnkiBtn');
-          if (container.style.display === 'none') {
-             let content = "";
-             questions.forEach(q => {
-                 content += q.question + "&lt;br&gt;&lt;br&gt;" + "{" + "{" + "c1::" + q.correctAnswer + "}" + "}" + "<br>";
-             });
-             container.innerHTML = content;
-             container.style.display = 'block';
-             copyBtn.style.display = 'block';
-             this.textContent = "Hide Anki Cards";
-          } else {
-             container.style.display = 'none';
-             copyBtn.style.display = 'none';
-             this.textContent = "Show Anki Cards";
-          }
-        });
-        document.getElementById('copyAnkiBtn').addEventListener('click', function(){
-           let container = document.getElementById('ankiCardsContainer');
-           let tempInput = document.createElement('textarea');
-           tempInput.value = container.innerText;
-           document.body.appendChild(tempInput);
-           tempInput.select();
-           document.execCommand('copy');
-           document.body.removeChild(tempInput);
-           this.textContent = "Copied!";
-           setTimeout(() => {
-               this.textContent = "Copy Anki Cards";
-           }, 2000);
-        });
-      }
-
-      startGame();
-    </script>
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay">
+    <div id="lottieContainer" style="width: 300px; height: 300px;"></div>
   </div>
+  <div class="container" id="gameContainer" style="display: none;">
+    <div class="header">
+      <div id="questionProgress">Question 1 of 0</div>
+      <div id="rawScore">Score: 0</div>
+    </div>
+    <div class="timer" id="timer">Time: 15</div>
+    <div class="question-box" id="questionBox"></div>
+    <div id="optionsWrapper"></div>
+    <div id="feedback" class="hidden"></div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+  <script>
+    // Initialize Lottie animation
+    var animation = lottie.loadAnimation({
+      container: document.getElementById('lottieContainer'),
+      renderer: 'svg',
+      loop: true,
+      autoplay: true,
+      path: 'https://lottie.host/embed/4500dbaf-9ac9-4b2b-b664-692cd9a3ccab/BGvTKQT8Tx.json'
+    });
+    // Once the page has fully loaded, hide the loading overlay and show the game container.
+    window.addEventListener('load', function() {
+      var overlay = document.getElementById('loadingOverlay');
+      var gameContainer = document.getElementById('gameContainer');
+      overlay.style.transition = 'opacity 0.5s ease';
+      overlay.style.opacity = '0';
+      setTimeout(function() {
+        overlay.style.display = 'none';
+        gameContainer.style.display = 'block';
+      }, 500);
+    });
+  </script>
+  <script>
+    const questions = {{ questions_json|safe }};
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let timerInterval;
+    const totalQuestions = questions.length;
+    const questionProgressEl = document.getElementById('questionProgress');
+    const rawScoreEl = document.getElementById('rawScore');
+    const timerEl = document.getElementById('timer');
+    const questionBox = document.getElementById('questionBox');
+    const optionsWrapper = document.getElementById('optionsWrapper');
+    const feedbackEl = document.getElementById('feedback');
+
+    function startGame() {
+      score = 0;
+      currentQuestionIndex = 0;
+      updateHeader();
+      showQuestion();
+    }
+
+    function updateHeader() {
+      questionProgressEl.textContent = "Question " + (currentQuestionIndex+1) + " of " + totalQuestions;
+      rawScoreEl.textContent = "Score: " + score;
+    }
+
+    function startTimer(duration, callback) {
+      let timeRemaining = duration;
+      timerEl.textContent = "Time: " + timeRemaining;
+      timerInterval = setInterval(() => {
+        timeRemaining--;
+        timerEl.textContent = "Time: " + timeRemaining;
+        if (timeRemaining <= 0) {
+          clearInterval(timerInterval);
+          callback();
+        }
+      }, 1000);
+    }
+
+    function showQuestion() {
+      feedbackEl.classList.add('hidden');
+      if (currentQuestionIndex >= totalQuestions) {
+        endGame();
+        return;
+      }
+      const currentQuestion = questions[currentQuestionIndex];
+      questionBox.textContent = currentQuestion.question;
+      optionsWrapper.innerHTML = "";
+      const ul = document.createElement('ul');
+      ul.className = 'options';
+
+      const optionsShuffled = currentQuestion.options.slice();
+      for (let i = optionsShuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [optionsShuffled[i], optionsShuffled[j]] = [optionsShuffled[j], optionsShuffled[i]];
+      }
+      optionsShuffled.forEach(option => {
+        const li = document.createElement('li');
+        const button = document.createElement('button');
+        button.textContent = option;
+        button.className = 'option-button';
+        button.onmousedown = function(e) { e.preventDefault(); };
+        button.setAttribute("ontouchend", "this.blur()");
+        button.onclick = () => selectAnswer(option);
+        button.addEventListener('click', function(e) {
+          const rect = button.getBoundingClientRect();
+          const ripple = document.createElement('span');
+          ripple.className = 'ripple';
+          ripple.style.left = (e.clientX - rect.left) + 'px';
+          ripple.style.top = (e.clientY - rect.top) + 'px';
+          button.appendChild(ripple);
+          setTimeout(() => {
+            ripple.remove();
+          }, 600);
+        });
+        li.appendChild(button);
+        ul.appendChild(li);
+      });
+      optionsWrapper.appendChild(ul);
+      startTimer(15, () => {
+        selectAnswer(null);
+      });
+      updateHeader();
+    }
+
+    function selectAnswer(selectedOption) {
+      clearInterval(timerInterval);
+      const currentQuestion = questions[currentQuestionIndex];
+      const buttons = document.querySelectorAll('.option-button');
+      const isCorrect = (selectedOption === currentQuestion.correctAnswer);
+      buttons.forEach(button => {
+        if (button.textContent === currentQuestion.correctAnswer) {
+          button.classList.add('correct');
+        } else if (button.textContent === selectedOption) {
+          button.classList.add('incorrect');
+        }
+        button.disabled = true;
+      });
+      if (isCorrect) {
+        score++;
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          colors: ['#bb86fc', '#ffd700']
+        });
+      }
+      updateHeader();
+      setTimeout(() => {
+        currentQuestionIndex++;
+        showQuestion();
+      }, 2000);
+    }
+
+    function endGame() {
+      questionBox.textContent = "Game Over!";
+      optionsWrapper.innerHTML = "";
+      timerEl.textContent = "";
+      feedbackEl.classList.remove('hidden');
+      // Set up final results with Play Again, Show Anki Cards toggle, and Copy Anki Cards button.
+      feedbackEl.innerHTML = "<h2>Your final score is " + score + " out of " + totalQuestions + "</h2>" +
+        "<button onclick='startGame()' class='option-button' ontouchend='this.blur()'>Play Again</button>" +
+        "<button id='toggleAnkiBtn' class='option-button' ontouchend='this.blur()' style='margin-top:10px;'>Show Anki Cards</button>" +
+        "<div id='ankiCardsContainer' style='display:none; margin-top:10px; text-align:left; background-color:#1e1e1e; padding:10px; border:1px solid #bb86fc; border-radius:10px;'></div>" +
+        "<button id='copyAnkiBtn' class='option-button' ontouchend='this.blur()' style='display:none; margin-top:10px;'>Copy Anki Cards</button>";
+      // Add event listeners for the new buttons.
+      document.getElementById('toggleAnkiBtn').addEventListener('click', function(){
+        let container = document.getElementById('ankiCardsContainer');
+        let copyBtn = document.getElementById('copyAnkiBtn');
+        if (container.style.display === 'none') {
+           let content = "";
+           questions.forEach(q => {
+               content += q.question + "&lt;br&gt;&lt;br&gt;" + "{" + "{" + "c1::" + q.correctAnswer + "}" + "}" + "<br>";
+           });
+           container.innerHTML = content;
+           container.style.display = 'block';
+           copyBtn.style.display = 'block';
+           this.textContent = "Hide Anki Cards";
+        } else {
+           container.style.display = 'none';
+           copyBtn.style.display = 'none';
+           this.textContent = "Show Anki Cards";
+        }
+      });
+      document.getElementById('copyAnkiBtn').addEventListener('click', function(){
+         let container = document.getElementById('ankiCardsContainer');
+         let tempInput = document.createElement('textarea');
+         tempInput.value = container.innerText;
+         document.body.appendChild(tempInput);
+         tempInput.select();
+         document.execCommand('copy');
+         document.body.removeChild(tempInput);
+         this.textContent = "Copied!";
+         setTimeout(() => {
+             this.textContent = "Copy Anki Cards";
+         }, 2000);
+      });
+    }
+
+    startGame();
+  </script>
 </body>
 </html>
 """
@@ -1152,27 +1241,47 @@ def index():
             max_size = 10000
 
         mode = request.form.get("mode", "Generate Anki Cards")
-        if mode == "Generate Game":
-            questions = get_all_interactive_questions(transcript, user_preferences, max_chunk_size=max_size, model=model)
-            logger.debug("Final interactive questions list: %s", questions)
-            if not questions:
-                flash("Failed to generate any interactive questions.")
-                return redirect(url_for("index"))
-            questions_json = json.dumps(questions)
-            html_full = render_template_string(INTERACTIVE_HTML, questions_json=questions_json)
-        else:
-            cards = get_all_anki_cards(transcript, user_preferences, max_chunk_size=max_size, model=model)
-            logger.debug("Final flashcards list: %s", cards)
-            if not cards:
-                flash("Failed to generate any Anki cards.")
-                return redirect(url_for("index"))
-            cards_json = json.dumps(cards)
-            html_full = render_template_string(ANKI_HTML, cards_json=cards_json)
-        
-        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-            return extract_content(html_full)
-        return html_full
+        # Instead of processing here, package the form data into a dictionary and render the LOADING_HTML.
+        form_data = {
+            "transcript": transcript,
+            "preferences": user_preferences,
+            "model": model,
+            "max_size": max_size,
+            "mode": mode
+        }
+        return render_template_string(LOADING_HTML, form_data=form_data)
     return render_template_string(INDEX_HTML)
+
+@app.route("/generate", methods=["POST"])
+def generate():
+    # This endpoint receives the form data via JSON, processes it, and returns the final HTML.
+    try:
+        data = request.get_json()
+    except Exception as e:
+        logger.error("Error parsing JSON in /generate: %s", e)
+        return "Error parsing request.", 400
+
+    transcript = data.get("transcript")
+    user_preferences = data.get("preferences", "")
+    model = data.get("model", "gpt-4o-mini")
+    max_size = data.get("max_size", 10000)
+    mode = data.get("mode", "Generate Anki Cards")
+    if mode == "Generate Game":
+        questions = get_all_interactive_questions(transcript, user_preferences, max_chunk_size=max_size, model=model)
+        logger.debug("Final interactive questions list: %s", questions)
+        if not questions:
+            flash("Failed to generate any interactive questions.")
+            return redirect(url_for("index"))
+        questions_json = json.dumps(questions)
+        return render_template_string(INTERACTIVE_HTML, questions_json=questions_json)
+    else:
+        cards = get_all_anki_cards(transcript, user_preferences, max_chunk_size=max_size, model=model)
+        logger.debug("Final flashcards list: %s", cards)
+        if not cards:
+            flash("Failed to generate any Anki cards.")
+            return redirect(url_for("index"))
+        cards_json = json.dumps(cards)
+        return render_template_string(ANKI_HTML, cards_json=cards_json)
 
 if __name__ == "__main__":
     app.run(debug=True, port=10000)
