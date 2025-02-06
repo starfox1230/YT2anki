@@ -178,6 +178,10 @@ def get_all_anki_cards(transcript, user_preferences="", max_chunk_size=4000, mod
     logger.debug("Total flashcards generated: %d", len(all_cards))
     return all_cards
 
+# ----------------------------
+# New Functions for Interactive Mode
+# ----------------------------
+
 def get_interactive_questions_for_chunk(transcript_chunk, user_preferences="", model="gpt-4o"):
     """
     Calls the OpenAI API with a transcript chunk and returns a list of interactive multiple-choice questions.
@@ -1226,7 +1230,7 @@ def index():
                 flash("Failed to generate any interactive questions.")
                 return redirect(url_for("index"))
             questions_json = json.dumps(questions)
-            html_full = render_template_string(INTERACTIVE_HTML, questions_json=questions_json)
+            return render_template_string(INTERACTIVE_HTML, questions_json=questions_json)
         else:
             cards = get_all_anki_cards(transcript, user_preferences, max_chunk_size=max_size, model=model)
             logger.debug("Final flashcards list: %s", cards)
@@ -1234,12 +1238,8 @@ def index():
                 flash("Failed to generate any Anki cards.")
                 return redirect(url_for("index"))
             cards_json = json.dumps(cards)
-            html_full = render_template_string(ANKI_HTML, cards_json=cards_json)
-        
-        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-            return extract_body(html_full)
-        return html_full
-    return render_template_string(INDEX_HTML)
+            return render_template_string(ANKI_HTML, cards_json=cards_json)
+     return render_template_string(INDEX_HTML)
 
 if __name__ == "__main__":
     app.run(debug=True, port=10000)
