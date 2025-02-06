@@ -263,8 +263,7 @@ def get_all_interactive_questions(transcript, user_preferences="", max_chunk_siz
 
 # INDEX_HTML template uses dotlottie-player for the loading animation.
 # The loading overlay now has a transparent background and a flex-direction of column.
-# A new rounded square beneath the Lottie file displays “Generating. Please wait…”.
-# The form submit event now delays submission briefly so the animation can animate.
+# The “Generating. Please wait…” message is now above the Lottie animation, with a charcoal background and white border.
 INDEX_HTML = """
 <!DOCTYPE html>
 <html>
@@ -337,8 +336,8 @@ INDEX_HTML = """
 <body>
   <!-- Loading Overlay using dotlottie-player with a transparent background -->
   <div id="loadingOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: transparent; display: none; justify-content: center; align-items: center; flex-direction: column; z-index: 9999;">
+    <div class="loading-message" style="margin-bottom: 20px; background-color: #333333; border: 1px solid #fff; color: #fff; padding: 10px 20px; border-radius: 10px; font-size: 18px;">Generating. Please wait...</div>
     <dotlottie-player id="lottiePlayer" src="https://lottie.host/817661a8-2608-4435-89a5-daa620a64c36/WtsFI5zdEK.lottie" background="transparent" speed="1" style="width: 300px; height: 300px;" loop autoplay></dotlottie-player>
-    <div class="loading-message" style="margin-top: 20px; background-color: #6200ee; color: #fff; padding: 10px 20px; border-radius: 10px; font-size: 18px;">Generating. Please wait...</div>
   </div>
   <h1>Transcript to Anki Cards or Interactive Game</h1>
   <p>
@@ -401,7 +400,7 @@ INDEX_HTML = """
 """
 
 # ANKI_HTML template updated to use dotlottie-player and a transparent loading overlay.
-# The loading overlay now includes the new “Generating. Please wait…” rounded square.
+# The loading overlay now has the “Generating. Please wait…” message above the Lottie animation.
 ANKI_HTML = """
 <!DOCTYPE html>
 <html>
@@ -530,8 +529,8 @@ ANKI_HTML = """
 <body>
   <!-- Loading Overlay using dotlottie-player -->
   <div id="loadingOverlay" style="display: flex; justify-content: center; align-items: center; flex-direction: column;">
+    <div class="loading-message" style="margin-bottom: 20px; background-color: #333333; border: 1px solid #fff; color: #fff; padding: 10px 20px; border-radius: 10px; font-size: 18px;">Generating. Please wait...</div>
     <dotlottie-player id="lottiePlayer" src="https://lottie.host/817661a8-2608-4435-89a5-daa620a64c36/WtsFI5zdEK.lottie" background="transparent" speed="1" style="width: 300px; height: 300px;" loop autoplay></dotlottie-player>
-    <div class="loading-message" style="margin-top: 20px; background-color: #6200ee; color: #fff; padding: 10px 20px; border-radius: 10px; font-size: 18px;">Generating. Please wait...</div>
   </div>
   <div id="reviewContainer" style="display: none;">
     <div id="progress">Card <span id="current">0</span> of <span id="total">0</span></div>
@@ -820,7 +819,7 @@ ANKI_HTML = """
 """
 
 # INTERACTIVE_HTML template updated to use dotlottie-player and a transparent loading overlay.
-# The loading overlay now includes the new “Generating. Please wait…” rounded square.
+# The loading overlay now has the “Generating. Please wait…” message above the Lottie animation.
 INTERACTIVE_HTML = """
 <!DOCTYPE html>
 <html>
@@ -953,8 +952,8 @@ INTERACTIVE_HTML = """
 <body>
   <!-- Loading Overlay using dotlottie-player -->
   <div id="loadingOverlay" style="display: flex; justify-content: center; align-items: center; flex-direction: column;">
+    <div class="loading-message" style="margin-bottom: 20px; background-color: #333333; border: 1px solid #fff; color: #fff; padding: 10px 20px; border-radius: 10px; font-size: 18px;">Generating. Please wait...</div>
     <dotlottie-player id="lottiePlayer" src="https://lottie.host/817661a8-2608-4435-89a5-daa620a64c36/WtsFI5zdEK.lottie" background="transparent" speed="1" style="width: 300px; height: 300px;" loop autoplay></dotlottie-player>
-    <div class="loading-message" style="margin-top: 20px; background-color: #6200ee; color: #fff; padding: 10px 20px; border-radius: 10px; font-size: 18px;">Generating. Please wait...</div>
   </div>
   <div class="container" id="gameContainer" style="display: none;">
     <div class="header">
@@ -1166,7 +1165,8 @@ def index():
             max_size = 10000
 
         mode = request.form.get("mode", "Generate Anki Cards").strip()
-        if mode == "Generate Game":
+        # Use a case-insensitive check so that "Generate Game" is properly recognized
+        if mode.lower() == "generate game":
             questions = get_all_interactive_questions(transcript, user_preferences, max_chunk_size=max_size, model=model)
             logger.debug("Final interactive questions list: %s", questions)
             if not questions:
