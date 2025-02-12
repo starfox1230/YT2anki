@@ -123,7 +123,7 @@ In addition, you must make sure to follow the following instructions:
 Ensure you output ONLY a valid JSON array of strings, with no additional commentary or markdown.
     
 Transcript:
-\"\"\"{transcript_chunk}\"\"\" 
+\"\"\"{transcript_chunk}\"\"\"
 """
     try:
         response = client.chat.completions.create(
@@ -703,6 +703,7 @@ ANKI_HTML = """
   <form id="downloadApkgForm" method="POST" action="/download_apkg" style="display:none;">
     <input type="hidden" name="cards_json" id="cardsJsonInput">
   </form>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.7.6/lottie.min.js"></script>
   <script>
     // Initialize Lottie animation
     var animation = lottie.loadAnimation({
@@ -783,16 +784,7 @@ ANKI_HTML = """
     const copyButton = document.getElementById("copyButton");
     const cartButton = document.getElementById("cartButton");
     const returnButton = document.getElementById("returnButton");
-    // Conditionally attach the APKG download event listener if the button exists
     const downloadApkgButton = document.getElementById("downloadApkgButton");
-    if (downloadApkgButton) {
-      downloadApkgButton.addEventListener("click", function() {
-        downloadApkgButton.disabled = true;
-        downloadApkgButton.textContent = "Generating APKG file...";
-        document.getElementById("cardsJsonInput").value = JSON.stringify(cards);
-        document.getElementById("downloadApkgForm").submit();
-      });
-    }
 
     totalEl.textContent = interactiveCards.length;
 
@@ -873,14 +865,6 @@ ANKI_HTML = """
       document.getElementById("bottomEdit").style.display = "none";
       document.getElementById("cartContainer").style.display = "none";
       document.getElementById("returnButton").style.display = "none";
-
-      // For the saved cards view in the review screen, we also attach a download listener if not already attached.
-      const savedDownloadBtn = document.getElementById("downloadApkgButton");
-      if (savedDownloadBtn) {
-          savedDownloadBtn.disabled = false;
-          savedDownloadBtn.textContent = "Download APKG File";
-          // (The event listener may already be attached from above.)
-      }
     }
 
     editButton.addEventListener("click", function(e) {
@@ -944,6 +928,21 @@ ANKI_HTML = """
       setTimeout(function() {
         copyButton.textContent = "Copy Saved Cards";
       }, 2000);
+    });
+
+    // New event listener for the Download APKG button in the Anki view.
+    downloadApkgButton.addEventListener("click", function() {
+      downloadApkgButton.disabled = true;
+      downloadApkgButton.textContent = "Generating APKG file...";
+      // Use the 'cards' array (generated on the server and embedded)
+      document.getElementById("cardsJsonInput").value = JSON.stringify(
+        questions.map(q =>
+          q.question +
+          "<br><br>" +
+          "{{ '{{' }}" + "c1::" + q.correctAnswer + "{{ '}}' }}"
+        )
+      );
+      document.getElementById("downloadApkgForm").submit();
     });
 
     returnButton.addEventListener("click", function(e) {
@@ -1283,7 +1282,12 @@ INTERACTIVE_HTML = """
         let copyBtn = document.getElementById('copyAnkiBtn');
         let downloadBtn = document.getElementById('downloadApkgButton');
         if (container.style.display === 'none') {
-           let ankiCards = questions.map(q => q.question + "<br><br>{{c1::" + q.correctAnswer + "}}");
+           // Build an array of Anki cards from questions.
+           let ankiCards = questions.map(q =>
+             q.question +
+             "<br><br>" +
+             "{{ '{{' }}" + "c1::" + q.correctAnswer + "{{ '}}' }}"
+           );
            let content = "";
            ankiCards.forEach(card => {
                content += card + "<br>";
@@ -1293,16 +1297,6 @@ INTERACTIVE_HTML = """
            copyBtn.style.display = 'block';
            downloadBtn.style.display = 'block';
            this.textContent = "Hide Anki Cards";
-           // Attach the download button event listener if not already attached.
-           if (!downloadBtn.hasAttribute("data-listener-attached")) {
-             downloadBtn.addEventListener('click', function(){
-                this.disabled = true;
-                this.textContent = "Generating APKG file...";
-                document.getElementById("cardsJsonInput").value = JSON.stringify(ankiCards);
-                document.getElementById("downloadApkgForm").submit();
-             });
-             downloadBtn.setAttribute("data-listener-attached", "true");
-           }
         } else {
            container.style.display = 'none';
            copyBtn.style.display = 'none';
@@ -1323,9 +1317,23 @@ INTERACTIVE_HTML = """
              this.textContent = "Copy Anki Cards";
          }, 2000);
       });
+      // New event listener for Download APKG in the interactive game.
+      document.getElementById('downloadApkgButton').addEventListener('click', function(){
+         this.disabled = true;
+         this.textContent = "Generating APKG file...";
+         // Build an array of Anki cards from questions.
+         let ankiCards = questions.map(q =>
+           q.question +
+           "<br><br>" +
+           "{{ '{{' }}" + "c1::" + q.correctAnswer + "{{ '}}' }}"
+         );
+         document.getElementById("cardsJsonInput").value = JSON.stringify(ankiCards);
+         document.getElementById("downloadApkgForm").submit();
+      });
     }
 
     startGame();
+{% endraw %}
   </script>
 </body>
 </html>
