@@ -2,7 +2,9 @@ import os
 import re
 import json
 import logging
-from flask import Flask, request, redirect, url_for, flash, render_template_string
+import tempfile
+import genanki
+from flask import Flask, request, redirect, url_for, flash, render_template_string, send_file
 
 # Updated OpenAI API import and initialization.
 from openai import OpenAI  # Ensure you have the correct version installed
@@ -538,6 +540,17 @@ ANKI_HTML = """
       border-radius: 5px;
       cursor: pointer;
     }
+    /* New Download Button Styling */
+    #downloadButton {
+      margin-top: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #03A9F4;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
     #cartContainer {
       display: flex;
       justify-content: center;
@@ -603,6 +616,9 @@ ANKI_HTML = """
       </div>
       <div style="text-align:center; margin-top:10px;">
         <button id="returnButton" class="bottomButton return" onmousedown="event.preventDefault()" ontouchend="this.blur()">Return to Card</button>
+      </div>
+      <div style="text-align:center; margin-top:10px;">
+        <button id="downloadButton" class="bottomButton" onmousedown="event.preventDefault()" ontouchend="this.blur()">Download APKG</button>
       </div>
     </div>
   </div>
@@ -862,6 +878,40 @@ ANKI_HTML = """
 
     showCard();
 {% endraw %}
+    // New event listener for downloading the saved cards as an APKG file using Genanki.
+    document.getElementById("downloadButton").addEventListener("click", function() {
+        if (savedCards.length === 0) {
+            alert("No saved cards to download.");
+            return;
+        }
+        fetch("/download_apkg", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ saved_cards: savedCards })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error("Network response was not ok");
+            }
+            return response.blob();
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "saved_cards.apkg";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        })
+        .catch(error => {
+            console.error("Download failed:", error);
+            alert("Download failed.");
+        });
+    });
   </script>
 </body>
 </html>
@@ -1237,6 +1287,54 @@ def generate():
             return "Failed to generate any Anki cards.", 500
         cards_json = json.dumps(cards)
         return render_template_string(ANKI_HTML, cards_json=cards_json)
+
+@app.route("/download_apkg", methods=["POST"])
+def download_apkg():
+    data = request.get_json()
+    if not data or "saved_cards" not in data:
+        return "No saved cards provided", 400
+    saved_cards = data["saved_cards"]
+    if not saved_cards:
+        return "No saved cards provided", 400
+
+    deck = genanki.Deck(
+        2059400110,
+        'Saved Cards Deck'
+    )
+    model = genanki.Model(
+        1607392319,
+        'Cloze Model',
+        fields=[{'name': 'Text'}],
+        templates=[
+            {
+                'name': 'Cloze',
+                'qfmt': '{{cloze:Text}}',
+                'afmt': '{{cloze:Text}}',
+            },
+        ],
+        model_type=genanki.Model.CLOZE
+    )
+    for card in saved_cards:
+        note = genanki.Note(
+            model=model,
+            fields=[card]
+        )
+        deck.add_note(note)
+    package = genanki.Package(deck)
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".apkg")
+    temp_file.close()
+    package.write_to_file(temp_file.name)
+    
+    from flask import after_this_request
+    @after_this_request
+    def remove_file(response):
+        try:
+            os.remove(temp_file.name)
+        except Exception as e:
+            logger.error("Error removing temporary file: %s", e)
+        return response
+
+    return send_file(temp_file.name, mimetype='application/octet-stream', as_attachment=True, download_name='saved_cards.apkg')
 
 if __name__ == "__main__":
     app.run(debug=True, port=10000)
