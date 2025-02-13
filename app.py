@@ -1297,170 +1297,27 @@ def download_apkg():
     if not saved_cards:
         return "No saved cards provided", 400
 
-    # Define a custom Genanki model that mirrors your provided template.
-    custom_model = genanki.Model(
-        1234567890,  # Use a unique model ID
-        'Custom Cloze Model',
-        fields=[
-            {'name': 'Tags'},
-            {'name': 'Text'},
-            {'name': 'Extra'},
-        ],
-        templates=[
-            {
-                'name': 'Cloze Card',
-                'qfmt': r'''
-<div id="kard">
-
-<div class="tags">{{Tags}}</div>
-{{cloze:Text}}
-</div>
-
-
-
-<span class="timer" id="s2" style='font-size:16px; color: #A6ABB9;'></span>
-<script>
-function countdown( elementName, minutes, seconds )
-{
-var element, endTime, hours, mins, msLeft, time;
-function twoDigits( n )
-{
-return (n <= 9 ? "0" + n : n); 
-}
-function updateTimer()
-{
-msLeft = endTime - (+new Date);
-if ( msLeft < 1000 ) {
-element.innerHTML = "<span style='color:#CC5B5B'>TIME</span>";
-} else {
-time = new Date( msLeft );
-hours = time.getUTCHours();
-mins = time.getUTCMinutes();
-element.innerHTML = (hours ? hours + ':' + twoDigits( mins ) : mins) + ':' + twoDigits( time.getUTCSeconds() );
-setTimeout( updateTimer, time.getUTCMilliseconds() + 500 );
-}
-}
-element = document.getElementById( elementName );
-endTime = (+new Date) + 1000 * (60*minutes + seconds) + 500;
-updateTimer();
-}
-countdown("s2", 0, 25 ); //2nd value is the minute, 3rd is the seconds
-</script>
-
-<br>
-
-<!--{{tts en_US voices=Apple_Evan_(Enhanced) speed=1.1:cloze:Text}}-->
-''',
-                'afmt': r'''
-<div id="kard">
-
-<div class="tags" id='tags'>{{Tags}}</div>
-{{cloze:Text}}
-<div>&nbsp;</div>
-<div id='extra'>{{Extra}}</div>
-
-</div>
-
-
-
-<span class="timer" id="s2" style='font-size:16px; color: #A6ABB9;'></span>
-<script>
-function countdown( elementName, minutes, seconds )
-{
-var element, endTime, hours, mins, msLeft, time;
-function twoDigits( n )
-{
-return (n <= 9 ? "0" + n : n); 
-}
-function updateTimer()
-{
-msLeft = endTime - (+new Date);
-if ( msLeft < 1000 ) {
-element.innerHTML = "<span style='color:#CC5B5B'>TIME</span>";
-} else {
-time = new Date( msLeft );
-hours = time.getUTCHours();
-mins = time.getUTCMinutes();
-element.innerHTML = (hours ? hours + ':' + twoDigits( mins ) : mins) + ':' + twoDigits( time.getUTCSeconds() );
-setTimeout( updateTimer, time.getUTCMilliseconds() + 500 );
-}
-}
-element = document.getElementById( elementName );
-endTime = (+new Date) + 1000 * (60*minutes + seconds) + 500;
-updateTimer();
-}
-countdown("s2", 0, 10 ); //2nd value is the minute, 3rd is the seconds
-</script>
-
-<br>
-
-<!--{{tts en_US voices=Apple_Evan_(Enhanced) speed=1.1:cloze-only:Text}}-->
-'''
-            }
-        ],
-        css=r'''
-html { overflow: scroll; overflow-x: hidden; }
-
-#kard {
-padding: 0px 0px;
-background-color:;
-max-width: 700px;
-margin: 0 auto;
-word-wrap: break-word;
-background-color: ;
-}
-
-.card {
-font-family: helvetica;
-font-size: 20px;
-text-align: center;
-color: #D7DEE9; /* FONT COLOR */
-line-height: 1.6em;
-background-color: #2F2F31; /* BACKGROUND COLOR */
-}
-
-.cloze, .cloze b, .cloze u, .cloze i { font-weight: bold; color: MediumSeaGreen !important;}
-
-#extra, #extra i { font-size: 15px; color:#D7DEE9; font-style: italic; }
-
-#list { color: #A6ABB9; font-size: 10px; width: 100%; text-align: center; }
-
-.tags { color: #A6ABB9; opacity: 0; font-size: 10px; background-color: ; width: 100%; height: ; text-align: center; text-transform: uppercase; position: fixed; padding: 0px; top:0; right: 0;}
-
-img { display: block; max-width: 100%; max-height: none; margin-left: auto; margin: 10px auto 10px auto;}
-img:active { width: 100%; }
-tr {font-size: 12px; }
-
-/* CHANGE COLOR ACCENTS HERE */
-b { color: #C695C6 !important; }
-u { text-decoration: none; color: #5EB3B3;}
-i { color: IndianRed; }
-a { color: LightBlue !important; text-decoration: none; font-size: 14px; font-style: normal; }
-
-::-webkit-scrollbar {
-background: #fff;
-width: 0px; }
-::-webkit-scrollbar-thumb { background: #bbb; }
-
-/* .mobile for all mobile devices */
-.mobile .card { color: #D7DEE9; font-size: ; font-weight: ; background-color: #2F2F31; } 
-.iphone .card img {max-width: 100%; max-height: none;}
-.mobile .card img:active { width: inherit; max-height: none;}
-'''
-    )
-
-    # Create a deck.
     deck = genanki.Deck(
         2059400110,
         'Saved Cards Deck'
     )
-
-    # For each saved card (which is a plain string), we insert it into the 'Text' field.
-    # (Tags and Extra are left blank; you can adjust as needed.)
+    model = genanki.Model(
+        1607392319,
+        'Cloze Model',
+        fields=[{'name': 'Text'}],
+        templates=[
+            {
+                'name': 'Cloze',
+                'qfmt': '{{cloze:Text}}',
+                'afmt': '{{cloze:Text}}',
+            },
+        ],
+        model_type=genanki.Model.CLOZE
+    )
     for card in saved_cards:
         note = genanki.Note(
-            model=custom_model,
-            fields=["", card, ""]
+            model=model,
+            fields=[card]
         )
         deck.add_note(note)
     package = genanki.Package(deck)
