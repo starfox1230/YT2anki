@@ -1297,7 +1297,7 @@ def download_apkg():
     if not saved_cards:
         return "No saved cards provided", 400
 
-    # Define a custom Genanki model that exactly mirrors the provided templates.
+    # Define a custom Genanki model that mirrors your provided template.
     custom_model = genanki.Model(
         1234567890,  # Use a unique model ID
         'Custom Cloze Model',
@@ -1313,7 +1313,7 @@ def download_apkg():
 <div id="kard">
 
 <div class="tags">{{Tags}}</div>
-{{edit:cloze:Text}}
+{{cloze:Text}}
 </div>
 
 
@@ -1349,16 +1349,15 @@ countdown("s2", 0, 25 ); //2nd value is the minute, 3rd is the seconds
 
 <br>
 
-
-<!--{{edit:tts en_US voices=Apple_Evan_(Enhanced) speed=1.1:cloze:Text}}-->
+<!--{{tts en_US voices=Apple_Evan_(Enhanced) speed=1.1:cloze:Text}}-->
 ''',
                 'afmt': r'''
 <div id="kard">
 
 <div class="tags" id='tags'>{{Tags}}</div>
-{{edit:cloze:Text}}
+{{cloze:Text}}
 <div>&nbsp;</div>
-<div id='extra'>{{edit:Extra}}</div>
+<div id='extra'>{{Extra}}</div>
 
 </div>
 
@@ -1395,7 +1394,7 @@ countdown("s2", 0, 10 ); //2nd value is the minute, 3rd is the seconds
 
 <br>
 
-<!--{{edit:tts en_US voices=Apple_Evan_(Enhanced) speed=1.1:cloze-only:Text}}-->
+<!--{{tts en_US voices=Apple_Evan_(Enhanced) speed=1.1:cloze-only:Text}}-->
 '''
             }
         ],
@@ -1417,7 +1416,7 @@ font-size: 20px;
 text-align: center;
 color: #D7DEE9; /* FONT COLOR */
 line-height: 1.6em;
-background-color: #2F2F31; /* BACKGROUND COLOR -- "#333B45" is original */
+background-color: #2F2F31; /* BACKGROUND COLOR */
 }
 
 .cloze, .cloze b, .cloze u, .cloze i { font-weight: bold; color: MediumSeaGreen !important;}
@@ -1450,12 +1449,14 @@ width: 0px; }
 '''
     )
 
+    # Create a deck.
     deck = genanki.Deck(
         2059400110,
         'Saved Cards Deck'
     )
 
-    # For each saved card (which is a plain string), use it as the Text field.
+    # For each saved card (which is a plain string), we insert it into the 'Text' field.
+    # (Tags and Extra are left blank; you can adjust as needed.)
     for card in saved_cards:
         note = genanki.Note(
             model=custom_model,
