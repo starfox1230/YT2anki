@@ -4,13 +4,13 @@ import json
 import logging
 import tempfile
 import genanki
-from flask import Flask, request, redirect, url_for, flash, render_template_string, send_file
+from flask import Flask, request, redirect, url_for, flash, render_template_string, send_file, after_this_request # Added after_this_request
 
 # Updated OpenAI API import and initialization.
 from openai import OpenAI  # Ensure you have the correct version installed
 
 app = Flask(__name__)
-app.secret_key = "your-secret-key"  # Replace with a secure secret
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "a-default-fallback-secret-key-if-not-set") # Use env var or fallback
 
 # Set up logging
 logging.basicConfig(level=logging.INFO) # Changed to INFO for production, DEBUG is very verbose
@@ -124,7 +124,7 @@ def fix_cloze_formatting(card):
     # This is less precise but acts as a fallback
     if "{{" not in corrected_card and "}}" not in corrected_card:
          corrected_card = corrected_card.replace("{c", "{{c")
-         corrected_card = corrected_card.replace("::", "::") # No change needed usually
+         # corrected_card = corrected_card.replace("::", "::") # No change needed usually
          corrected_card = re.sub(r'(?<!})}(?!})', '}}', corrected_card) # Fix single closing braces
 
     # Ensure hints are correctly formatted if present (double check)
@@ -139,7 +139,7 @@ def get_anki_cards_for_chunk(transcript_chunk, user_preferences="", model="gpt-4
     user_instr = ""
     if user_preferences.strip():
         user_instr = f'\nUser Request: {user_preferences.strip()}\nIf no content relevant to the user request is found in this chunk, output a dummy card in the format: "User request not found in {{{{c1::this chunk}}}}."'
-    
+
     # Added hint instruction
     prompt = f"""
 You are an expert at creating study flashcards in Anki using cloze deletion.
@@ -299,7 +299,7 @@ def get_interactive_questions_for_chunk(transcript_chunk, user_preferences="", m
     user_instr = ""
     if user_preferences.strip():
         user_instr = f'\nUser Request: {user_preferences.strip()}\nIf no content relevant to the user request is found in this chunk, output a dummy question in the required JSON format.'
-    
+
     prompt = f"""
 You are an expert at creating interactive multiple-choice questions for educational purposes based on a transcript.
 Given the transcript below, generate a list of interactive multiple-choice questions.
@@ -411,6 +411,7 @@ def get_all_interactive_questions(transcript, user_preferences="", max_chunk_siz
 # Embedded HTML Templates
 # ----------------------------
 
+# INDEX_HTML remains the same as before
 INDEX_HTML = """
 <!DOCTYPE html>
 <html>
@@ -924,14 +925,17 @@ ANKI_HTML = """
         return { processedText: processed, hint: hintText }; // Return processed text and the hint for the target
     }
 
+    // *** THE FIX IS HERE ***
     function escapeHtml(unsafe) {
-        if (!unsafe) return "";
-        return unsafe
-             .replace(/&/g, "&")
-             .replace(/</g, "<")
-             .replace(/>/g, ">")
-             .replace(/"/g, """)
-             .replace(/'/g, "'");
+        // Use standard Python string replacement for HTML entities
+        if (not unsafe):
+             return ""
+        return unsafe \
+             .replace('&', '&') \
+             .replace('<', '<') \
+             .replace('>', '>') \
+             .replace('"', '"') \
+             .replace("'", ''') # Use ' for single quote
     }
 
     function updateDisplay() {
@@ -1042,7 +1046,7 @@ ANKI_HTML = """
             clozes.forEach(span => {
                 const answer = span.getAttribute("data-answer");
                 // Replace [...] and hint with the answer, keep the cloze class for styling
-                span.innerHTML = escapeHtml(answer); // Display the answer
+                span.innerHTML = answer; // Display the escaped answer directly
             });
         }
 
@@ -1469,6 +1473,7 @@ ANKI_HTML = """
 </html>
 """
 
+# INTERACTIVE_HTML remains the same as before
 INTERACTIVE_HTML = """
 <!DOCTYPE html>
 <html>
@@ -1739,7 +1744,7 @@ INTERACTIVE_HTML = """
          // Create a temporary textarea to copy the *plain text* representation
          const tempTextarea = document.createElement('textarea');
          // Convert HTML breaks and hr to newlines for plain text copy
-         tempTextarea.value = container.innerHTML.replace(/<br\s*\/?>/gi, '\n').replace(/<hr>/gi, '\n\n');
+         tempTextarea.value = container.innerHTML.replace(/<br\s*\/?>/gi, '\\n').replace(/<hr>/gi, '\\n\\n');
          document.body.appendChild(tempTextarea);
          tempTextarea.select();
          try {
@@ -1886,6 +1891,7 @@ def download_apkg():
 
     logger.info("Generating .apkg file for %d cards.", len(saved_cards))
 
+    temp_file_path = None # Initialize outside try block
     try:
         # Create a unique deck ID based on current time (or use a fixed one)
         deck_id = genanki.guid_for(os.urandom(16)) # More robust ID generation
@@ -1938,25 +1944,37 @@ def download_apkg():
 
         logger.info("Successfully created .apkg file at %s", temp_file_path)
 
+        # Use a closure to ensure the file path is captured correctly for removal
+        file_path_to_remove = temp_file_path
         @after_this_request
         def remove_file(response):
             try:
-                os.remove(temp_file_path)
-                logger.debug("Temporary file %s removed.", temp_file_path)
+                if file_path_to_remove and os.path.exists(file_path_to_remove):
+                    os.remove(file_path_to_remove)
+                    logger.debug("Temporary file %s removed.", file_path_to_remove)
+                else:
+                    logger.warning("Temporary file %s not found for removal.", file_path_to_remove)
             except Exception as error:
-                logger.error("Error removing temporary file %s: %s", temp_file_path, error)
+                logger.error("Error removing temporary file %s: %s", file_path_to_remove, error)
             return response
 
         # Send the file
         return send_file(
             temp_file_path,
-            mimetype='application/vnd.anki.apkg', # More specific mimetype if available
+            mimetype='application/vnd.anki.apkg', # Standard mimetype
             as_attachment=True,
             download_name='generated_anki_deck.apkg' # Filename for the user
         )
 
     except Exception as e:
         logger.exception("Failed to generate or send .apkg file: %s", e)
+        # Clean up the temp file if it exists and an error occurred before sending
+        if temp_file_path and os.path.exists(temp_file_path):
+            try:
+                os.remove(temp_file_path)
+                logger.debug("Cleaned up temporary file %s after error.", temp_file_path)
+            except Exception as cleanup_error:
+                 logger.error("Error cleaning up temp file %s after exception: %s", temp_file_path, cleanup_error)
         return f"Error creating Anki package: {e}", 500
 
 
@@ -1964,5 +1982,6 @@ if __name__ == "__main__":
     # Recommended: Use a production-ready WSGI server like Gunicorn or Waitress
     # For development:
     # Use host='0.0.0.0' to make it accessible on your network
-    print("Starting Flask server on http://localhost:10000")
-    app.run(debug=False, host='0.0.0.0', port=10000) # Turn debug off for deployment
+    port = int(os.environ.get("PORT", 10000)) # Use PORT env var for deployment platforms like Render
+    print(f"Starting Flask server on http://0.0.0.0:{port}")
+    app.run(debug=False, host='0.0.0.0', port=port) # Turn debug off for deployment
