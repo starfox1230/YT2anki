@@ -607,7 +607,16 @@ ANKI_HTML = """
     </div>
     <div id="cartContainer">
       <button id="cartButton" class="bottomButton cart" onmousedown="event.preventDefault()" ontouchend="this.blur()">Saved Cards</button>
+    </div> <!-- This closes cartContainer -->
+    
+    <!-- START: Add this new div and button for TTS -->
+    <div id="ttsContainer" style="display: flex; justify-content: center; margin: 5px auto; width: 100%; max-width: 700px; padding: 0 10px;">
+        <button id="ttsToggleButton" class="bottomButton" style="background-color: grey;" onmousedown="event.preventDefault()" ontouchend="this.blur()">TTS: Off</button>
     </div>
+    <!-- END: Add this new div and button for TTS -->
+
+    <div id="savedCardsContainer">
+        <!-- Rest of the savedCardsContainer content... -->
     <div id="savedCardsContainer">
       <h3 id="finishedHeader" style="text-align:center;">Saved Cards</h3>
       <textarea id="savedCardsText" readonly></textarea>
@@ -665,17 +674,65 @@ ANKI_HTML = """
       return cardsForNote;
     }
     function processCloze(text, target) {
-      return text.replace(/{{c(\d+)::(.*?)}}/g, function(match, clozeNum, answer) {
+      // Regex to capture cloze number, answer text, and optional hint
+      const regex = /{{c(\d+)::(.*?)(?:::([^}]+))?}}/g; 
+      return text.replace(regex, function(match, clozeNum, answer, hint) {
+        const hintText = hint ? hint.trim() : ''; // Get hint or empty string
+        // Display the hint inside the brackets if it exists, otherwise [...]
+        const displayContent = hintText ? `[${hintText}]` : '[...]'; 
         if (clozeNum === target) {
-          return '<span class="cloze" data-answer="' + answer.replace(/"/g, '&quot;') + '">[...]</span>';
+          // Store both answer and hint (even if empty) in data attributes
+          return `<span class="cloze" data-answer="${answer.replace(/"/g, '"')}" data-hint="${hintText.replace(/"/g, '"')}">${displayContent}</span>`;
         } else {
-          return answer;
+          // For non-target clozes, just show the answer text directly
+         return answer; 
         }
       });
     }
+// END of replacement for processCloze
     cards.forEach(cardText => {
       interactiveCards = interactiveCards.concat(generateInteractiveCards(cardText));
     });
+    // START: Add these new TTS variables and functions
+let isTtsEnabled = false; // TTS is off by default
+const synth = window.speechSynthesis; // Get the speech synthesis interface
+
+function speakText(text) {
+    if (!isTtsEnabled || !text || !text.trim()) return; // Only speak if enabled and text exists
+    synth.cancel(); // Stop any previous speech
+    const utterance = new SpeechSynthesisUtterance(text);
+    // Optional: You could add configurations like language, rate, pitch here
+    // utterance.lang = 'en-US';
+    // utterance.rate = 1;
+    // utterance.pitch = 1;
+    synth.speak(utterance);
+}
+
+function getFrontTextToSpeak(cardElement) {
+    // Clone the card content to avoid modifying the displayed card directly
+    const tempDiv = cardElement.cloneNode(true);
+    
+    // Find all cloze spans within the cloned content
+    const clozeSpans = tempDiv.querySelectorAll('.cloze');
+
+    clozeSpans.forEach(span => {
+        const hint = span.dataset.hint;
+        // Replace the span node with a text node containing the hint or "blank"
+        const replacementText = document.createTextNode(" " + (hint ? hint : "blank") + " ");
+        span.parentNode.replaceChild(replacementText, span);
+    });
+
+    // Get the text content after replacements, clean up whitespace
+    let textToSpeak = (tempDiv.textContent || tempDiv.innerText || "").replace(/\s+/g, ' ').trim();
+    return textToSpeak;
+}
+
+function stopSpeech() {
+    if (synth.speaking) {
+        synth.cancel();
+    }
+}
+// END: Add these new TTS variables and functions
     let currentIndex = 0;
     let savedCards = [];
     let historyStack = [];
@@ -703,6 +760,7 @@ ANKI_HTML = """
     const cartButton = document.getElementById("cartButton");
     const returnButton = document.getElementById("returnButton");
     const cartContainer = document.getElementById("cartContainer");
+    const ttsToggleButton = document.getElementById("ttsToggleButton"); 
 
     totalEl.textContent = interactiveCards.length;
 
@@ -713,22 +771,40 @@ ANKI_HTML = """
     
     document.getElementById("kard").addEventListener("click", function(e) {
       if (inEditMode) return;
-      if (actionControls.style.display === "none" || actionControls.style.display === "") {
+      // Only proceed if the answer hasn't been shown yet
+      if (actionControls.style.display === "none" || actionControls.style.display === "") { 
+        stopSpeech(); // Stop front-side speech if it's still going
         const clozes = document.querySelectorAll("#cardContent .cloze");
+        let answersToSpeak = []; // Collect answers to speak
+    
         clozes.forEach(span => {
-          span.innerHTML = span.getAttribute("data-answer");
+          const answer = span.getAttribute("data-answer");
+          answersToSpeak.push(answer); // Add answer for speaking
+          span.innerHTML = answer;     // Visually reveal the answer
+          // Optional: remove the cloze class to prevent re-clicking/styling issues
+          // span.classList.remove('cloze'); 
         });
-        actionControls.style.display = "flex";
+
+        actionControls.style.display = "flex"; // Show Save/Discard buttons
+    
+        // Speak the collected answers (joined by comma-space)
+        speakText(answersToSpeak.join(", ")); 
       }
     });
-    
+    // START: Add this block to initialize TTS button
+    ttsToggleButton.textContent = `TTS: ${isTtsEnabled ? 'On' : 'Off'}`;
+    ttsToggleButton.style.backgroundColor = isTtsEnabled ? '#03A9F4' : 'grey';
+    // END: Add this block
     function showCard() {
+      stopSpeech(); // Stop any speech from previous card/action
       finished = false;
       document.getElementById("progress").textContent = "Card " + (currentIndex+1) + " of " + interactiveCards.length;
       if (!inEditMode) {
         actionControls.style.display = "none";
       }
-      cardContentEl.innerHTML = interactiveCards[currentIndex].displayText;
+      // MAKE SURE this line comes BEFORE getFrontTextToSpeak
+      cardContentEl.innerHTML = interactiveCards[currentIndex].displayText; 
+
       // Ensure the card content remains vertically centered.
       document.getElementById("kard").style.display = "flex";
       savedCardsContainer.style.display = "none";
@@ -736,6 +812,11 @@ ANKI_HTML = """
       document.getElementById("bottomEdit").style.display = "flex";
       document.getElementById("cartContainer").style.display = "flex";
       document.getElementById("returnButton").style.display = "none";
+      
+      // START: Add TTS call for front side
+      const frontText = getFrontTextToSpeak(cardContentEl);
+      speakText(frontText);
+      // END: Add TTS call
     }
     function nextCard() {
       if (currentIndex < interactiveCards.length - 1) {
@@ -748,6 +829,7 @@ ANKI_HTML = """
     // Modify the save and discard button event handlers:
     discardButton.addEventListener("click", function(e) {
       e.stopPropagation();
+      stopSpeech(); // ADD THIS LINE
       historyStack.push({ currentIndex: currentIndex, savedCards: savedCards.slice(), finished: finished });
       updateUndoButtonState();
       if (currentIndex === interactiveCards.length - 1) {
@@ -790,6 +872,7 @@ ANKI_HTML = """
       if (!inEditMode) enterEditMode();
     });
     function enterEditMode() {
+      stopSpeech(); // ADD THIS LINE
       inEditMode = true;
       originalCardText = interactiveCards[currentIndex].exportText;
       cardContentEl.innerHTML = '<textarea id="editArea">' + interactiveCards[currentIndex].exportText + '</textarea>';
@@ -847,6 +930,29 @@ ANKI_HTML = """
         copyButton.textContent = "Copy Saved Cards";
       }, 2000);
     });
+
+    // START: Add TTS Toggle Button Listener
+    ttsToggleButton.addEventListener("click", function(e) {
+        e.stopPropagation();
+        isTtsEnabled = !isTtsEnabled; // Toggle the state
+    
+        // Update button appearance
+        this.textContent = `TTS: ${isTtsEnabled ? 'On' : 'Off'}`;
+        this.style.backgroundColor = isTtsEnabled ? '#03A9F4' : 'grey'; 
+    
+        if (isTtsEnabled) {
+            // If TTS was just turned on, try to speak the current card's front side
+            // Check if we are viewing the front of a card (answer not revealed)
+            if (!inEditMode && (actionControls.style.display === "none" || actionControls.style.display === "") && !finished) {
+                 const frontText = getFrontTextToSpeak(cardContentEl);
+                 speakText(frontText);
+            }
+        } else {
+            stopSpeech(); // If turning TTS off, stop any current speech
+        }
+    });
+    // END: Add TTS Toggle Button Listener
+
 
     cartButton.addEventListener("click", function(e) {
       e.stopPropagation();
