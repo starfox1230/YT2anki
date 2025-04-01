@@ -983,6 +983,90 @@ function stopSpeech() {
     });
 
     showCard();
+// START: Add Keyboard Shortcut Listener
+    document.addEventListener('keydown', function(event) {
+        // Ignore shortcuts if in edit mode, finished screen, or cart view is active
+        if (inEditMode || finished || savedCardsContainer.style.display === 'flex') {
+            return; 
+        }
+
+        // Determine card state
+        const isFrontSide = (actionControls.style.display === "none" || actionControls.style.display === "");
+        const isBackSide = !isFrontSide;
+
+        switch (event.code) {
+            case 'Space':
+                event.preventDefault(); // Prevent page scrolling
+                if (isFrontSide) {
+                    // Simulate click on card to reveal answer
+                    cardContentEl.click(); 
+                } else { // isBackSide
+                    // Simulate click on Save button
+                    saveButton.click(); 
+                }
+                break;
+
+            case 'ArrowLeft':
+                if (isBackSide) {
+                    event.preventDefault(); 
+                    // Simulate click on Discard button
+                    discardButton.click(); 
+                }
+                // No action on front side for Left Arrow
+                break;
+
+            case 'F4':
+                event.preventDefault(); // Prevent browser default F4 actions
+                
+                // --- Get Front Text representation for speaking ---
+                // Create a temporary element from the stored display text to process it
+                const tempDivFront = document.createElement('div');
+                tempDivFront.innerHTML = interactiveCards[currentIndex].displayText; 
+                // Use helper on the temp div to get text with hints/"blank"
+                const frontTextToSpeak = getFrontTextToSpeak(tempDivFront); 
+
+                if (isFrontSide) {
+                    // Replay front audio only
+                    speakText(frontTextToSpeak); 
+                } else { // isBackSide
+                    // Replay front THEN back audio
+                    stopSpeech(); // Stop any current speech first
+
+                    // --- Get Back Text representation for speaking ---
+                    // Find the revealed answers in the *live* DOM
+                    const answerSpans = cardContentEl.querySelectorAll('.cloze[data-answer]'); 
+                    let answersToSpeak = [];
+                    // Use the data-answer which holds the actual cloze content
+                    answerSpans.forEach(span => answersToSpeak.push(span.dataset.answer)); 
+                    const backTextToSpeak = answersToSpeak.join(", ");
+                    
+                    // Create utterance for the front part
+                    const utteranceFront = new SpeechSynthesisUtterance(frontTextToSpeak);
+                    
+                    // Define what happens when the front speech ends
+                    utteranceFront.onend = () => {
+                        // Check TTS is still enabled and we haven't navigated away
+                        if (isTtsEnabled && !inEditMode && !finished && (actionControls.style.display === "flex")) {
+                            speakText(backTextToSpeak); // Speak the back text
+                        }
+                    };
+
+                    // Speak the front part only if TTS is enabled
+                    if (isTtsEnabled) {
+                        synth.speak(utteranceFront); 
+                    }
+                }
+                break;
+
+            case 'F12':
+                 event.preventDefault(); // Prevent browser dev tools opening
+                // Simulate click on Undo (Previous Card) button
+                 undoButton.click(); 
+                break;
+        }
+    });
+    // END: Add Keyboard Shortcut Listener
+
 {% endraw %}
     // New event listener for downloading the saved cards as an APKG file using Genanki.
     document.getElementById("downloadButton").addEventListener("click", function() {
