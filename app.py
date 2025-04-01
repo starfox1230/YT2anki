@@ -1063,6 +1063,16 @@ function stopSpeech() {
                 // Simulate click on Undo (Previous Card) button
                  undoButton.click(); 
                 break;
+        
+            // New case: Toggle TTS play/pause when "." is pressed.
+                 case 'Period':  // Alternatively, you can check event.key === "."
+                 event.preventDefault();
+                 if (synth.speaking && !synth.paused) {
+                     synth.pause();
+                 } else if (synth.paused) {
+                     synth.resume();
+                 }
+                 break;
         }
     });
     // END: Add Keyboard Shortcut Listener
