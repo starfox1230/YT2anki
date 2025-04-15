@@ -268,7 +268,7 @@ INDEX_HTML = """
 <html>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <title>Transcript to Anki Cards or Interactive Game</title>
   <style>
     /* Remove tap highlight on mobile */
@@ -445,7 +445,7 @@ ANKI_HTML = """
 <html>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Anki Cloze Review</title>
   <style>
     /* Remove tap highlight on mobile */
@@ -453,6 +453,7 @@ ANKI_HTML = """
     /* Remove focus outline */
     button:focus { outline: none; }
     html, body { height: 100%; margin: 0; padding: 0; }
+    html { touch-action: manipulation; } /* Add this line */
     body { background-color: #1E1E20; font-family: helvetica, Arial, sans-serif; }
     #reviewContainer {
       display: flex;
@@ -599,6 +600,12 @@ ANKI_HTML = """
       <button id="cancelEditButton" class="editButton cancelEdit" onmousedown="event.preventDefault()" ontouchend="this.blur()">Cancel Edit</button>
       <button id="saveEditButton" class="editButton saveEdit" onmousedown="event.preventDefault()" ontouchend="this.blur()">Save Edit</button>
     </div>
+    <!-- START: Add this new div and its buttons right AFTER the closing </div id="editControls"> -->
+    <div id="clozeEditControls" style="display: none; justify-content: space-around; width: 100%; max-width: 700px; margin: 10px auto;">
+      <button id="removeAllClozeButton" class="editButton" style="background-color: #dc3545;" onmousedown="event.preventDefault()" ontouchend="this.blur()">Remove All Cloze</button>
+      <button id="addClozeButton" class="editButton" style="background-color: #007bff;" onmousedown="event.preventDefault()" ontouchend="this.blur()">Add Cloze</button>
+    </div>
+    <!-- END: Add this new div and its buttons -->
     <div id="bottomUndo">
       <button id="undoButton" class="bottomButton undo" onmousedown="event.preventDefault()" ontouchend="this.blur()">Previous Card</button>
     </div>
@@ -761,6 +768,9 @@ function stopSpeech() {
     const returnButton = document.getElementById("returnButton");
     const cartContainer = document.getElementById("cartContainer");
     const ttsToggleButton = document.getElementById("ttsToggleButton"); 
+    const clozeEditControls = document.getElementById("clozeEditControls");
+    const removeAllClozeButton = document.getElementById("removeAllClozeButton");
+    const addClozeButton = document.getElementById("addClozeButton");
 
     totalEl.textContent = interactiveCards.length;
 
@@ -880,6 +890,7 @@ function stopSpeech() {
       bottomUndo.style.display = "none";
       bottomEdit.style.display = "none";
       editControls.style.display = "flex";
+      clozeEditControls.style.display = "flex"; // Add this line
     }
     saveEditButton.addEventListener("click", function(e) {
       e.stopPropagation();
@@ -893,6 +904,7 @@ function stopSpeech() {
       }
       inEditMode = false;
       editControls.style.display = "none";
+      clozeEditControls.style.display = "none"; // Add this line
       bottomUndo.style.display = "flex";
       bottomEdit.style.display = "flex";
       showCard();
@@ -901,10 +913,74 @@ function stopSpeech() {
       e.stopPropagation();
       inEditMode = false;
       editControls.style.display = "none";
+      clozeEditControls.style.display = "none"; // Add this line
       bottomUndo.style.display = "flex";
       bottomEdit.style.display = "flex";
       showCard();
     });
+
+// START: Add Cloze Editing Logic
+
+// Function to remove all cloze deletions from the editor
+removeAllClozeButton.addEventListener("click", function(e) {
+    e.stopPropagation();
+    const editArea = document.getElementById("editArea");
+    if (!editArea) return; // Should not happen in edit mode
+
+    const currentText = editArea.value;
+    // Regex to find {{c<number>::<content>}}
+    const clozeRegex = /{{c\d+::(.*?)}}/g;
+    // Replace the whole cloze tag with just the content inside
+    const cleanedText = currentText.replace(clozeRegex, '$1');
+
+    editArea.value = cleanedText;
+});
+
+// Function to add a new cloze deletion around selected text
+addClozeButton.addEventListener("click", function(e) {
+    e.stopPropagation();
+    const editArea = document.getElementById("editArea");
+    if (!editArea) return; // Should not happen
+
+    const start = editArea.selectionStart;
+    const end = editArea.selectionEnd;
+    const selectedText = editArea.value.substring(start, end);
+
+    if (!selectedText) {
+        alert("Please select the text you want to hide.");
+        return;
+    }
+
+    const currentFullText = editArea.value;
+
+    // Find the highest existing cloze number
+    const clozeRegex = /{{c(\d+)::.*?}}/g;
+    let match;
+    let maxClozeNum = 0;
+    while ((match = clozeRegex.exec(currentFullText)) !== null) {
+        const num = parseInt(match[1], 10);
+        if (num > maxClozeNum) {
+            maxClozeNum = num;
+        }
+    }
+
+    const nextClozeNum = maxClozeNum + 1;
+    const newClozeText = `{{c${nextClozeNum}::${selectedText}}}`;
+
+    // Reconstruct the text in the textarea
+    const textBefore = currentFullText.substring(0, start);
+    const textAfter = currentFullText.substring(end);
+    editArea.value = textBefore + newClozeText + textAfter;
+
+    // Optional: Keep the newly added cloze selected (or place cursor after it)
+    editArea.focus();
+    editArea.selectionStart = start + newClozeText.length;
+    editArea.selectionEnd = start + newClozeText.length;
+});
+
+// END: Add Cloze Editing Logic
+
+
 
     // FIX: Always call showCard() when undoing so that the progress text is updated.
     undoButton.addEventListener("click", function(e) {
