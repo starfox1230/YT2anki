@@ -268,7 +268,7 @@ INDEX_HTML = """
 <html>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Transcript to Anki Cards or Interactive Game</title>
   <style>
     /* Remove tap highlight on mobile */
@@ -445,7 +445,7 @@ ANKI_HTML = """
 <html>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Anki Cloze Review</title>
   <style>
     /* Remove tap highlight on mobile */
@@ -875,7 +875,13 @@ function stopSpeech() {
       stopSpeech(); // ADD THIS LINE
       inEditMode = true;
       originalCardText = interactiveCards[currentIndex].exportText;
-      cardContentEl.innerHTML = '<textarea id="editArea">' + interactiveCards[currentIndex].exportText + '</textarea>';
+      // After setting the edit area, insert the new editing buttons:
+cardContentEl.innerHTML = '<textarea id="editArea" style="width:100%;height:150px;font-size:16px;padding:10px;">' + interactiveCards[currentIndex].exportText + '</textarea>' +
+  '<div id="editExtras" style="margin-top:10px;text-align:center;">' +
+    '<button id="removeDeletionsButton" style="margin:5px;padding:10px 20px;font-size:16px;" onclick="removeAllDeletions()">Remove All Closed Deletions</button>' +
+    '<button id="addDeletionButton" style="margin:5px;padding:10px 20px;font-size:16px;" onclick="addClosedDeletion()">Add Closed Deletion</button>' +
+  '</div>';
+
       actionControls.style.display = "none";
       bottomUndo.style.display = "none";
       bottomEdit.style.display = "none";
@@ -1112,6 +1118,54 @@ function stopSpeech() {
             alert("Download failed.");
         });
     });
+    // NEW FUNCTION: Remove all closed deletions from the edit text.
+// This function finds any occurrences of cloze deletion syntax and replaces them with just the inner text.
+function removeAllDeletions() {
+    var editArea = document.getElementById("editArea");
+    if (!editArea) return;
+    // Regex: match {{c<number>:: ... }} and replace with just the content between :: and }}
+    var cleanedText = editArea.value.replace(/{{c\d+::(.*?)}}/g, '$1');
+    editArea.value = cleanedText;
+}
+
+// NEW FUNCTION: Add a closed deletion to the selected text.
+// This function takes the highlighted text in the textarea and wraps it with the next available cloze deletion number.
+function addClosedDeletion() {
+    var editArea = document.getElementById("editArea");
+    if (!editArea) return;
+    
+    // Get current selection range from the textarea.
+    var start = editArea.selectionStart;
+    var end = editArea.selectionEnd;
+    if (start === end) {
+        alert("Please highlight the text you want to convert to a closed deletion.");
+        return;
+    }
+    
+    var selectedText = editArea.value.substring(start, end);
+    
+    // Find existing cloze deletion markers in the text (e.g., "{{c1::", "{{c2::", etc.)
+    var regex = /{{c(\d+)::/g;
+    var clozeNumbers = [];
+    var match;
+    while ((match = regex.exec(editArea.value)) !== null) {
+        clozeNumbers.push(parseInt(match[1], 10));
+    }
+    var nextNumber = 1;
+    if (clozeNumbers.length > 0) {
+        nextNumber = Math.max.apply(null, clozeNumbers) + 1;
+    }
+    
+    // Build the cloze deletion syntax for the selected text.
+    var clozeText = '{{c' + nextNumber + '::' + selectedText + '}}';
+    
+    // Replace the selected text with the cloze version.
+    editArea.value = editArea.value.substring(0, start) + clozeText + editArea.value.substring(end);
+    
+    // Optionally, reposition the cursor after the inserted text.
+    editArea.selectionStart = editArea.selectionEnd = start + clozeText.length;
+}
+
   </script>
 </body>
 </html>
@@ -1122,7 +1176,7 @@ INTERACTIVE_HTML = """
 <html>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Interactive Game</title>
   <style>
     /* Global resets and mobile-friendly properties */
