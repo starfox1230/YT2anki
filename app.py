@@ -368,7 +368,7 @@ INDEX_HTML = """
     <div id="advancedOptions" style="display: none;">
       <label for="modelSelect">Model:</label>
       <select name="model" id="modelSelect">
-        <option value="gpt-4.1-nano selected">gpt-4.1-nano</option>
+        <option value="gpt-4.1-nano" selected>gpt-4.1-nano</option>
         <option value="gpt-4.1-mini">gpt-4.1-mini</option>
         <option value="gpt-4.1">gpt-4.1</option>
         <option value="gpt-4o-mini">gpt-4o-mini</option>
