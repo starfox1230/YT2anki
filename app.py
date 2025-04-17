@@ -1549,9 +1549,11 @@ INTERACTIVE_HTML = """
             // 🆕🛠️🚀 New Download APKG button listener
       document.getElementById("downloadApkgBtn").addEventListener("click", function() {
         // ✨ Assemble cloze‑formatted strings from questions
+        {% raw %}
         const ankiCards = questions.map(q =>
           `${q.question}<br><br>{{c1::${q.correctAnswer}}}`
         );
+        {% endraw %}
         fetch("/download_apkg", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
