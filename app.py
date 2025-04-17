@@ -189,10 +189,16 @@ def get_interactive_questions_for_chunk(transcript_chunk, user_preferences="", m
     Calls the OpenAI API with a transcript chunk and returns a list of interactive multiple-choice questions.
     Each question is a JSON object with keys: "question", "options", "correctAnswer" (and optionally "explanation").
     """
+    # Build any user‑preference instructions
     user_instr = ""
     if user_preferences.strip():
-        user_instr = f'\nUser Request: {user_preferences.strip()}\nIf no content relevant to the user request is found in this chunk, output a dummy question in the required JSON format.'
-    
+        user_instr = (
+            f'\nUser Request: {user_preferences.strip()}'
+            "\nIf no content relevant to the user request is found in this chunk, "
+            "output a dummy question in the required JSON format."
+        )
+
+    # Construct the prompt
     prompt = f"""
 You are an expert at creating interactive multiple-choice questions for educational purposes.
 Given the transcript below, generate a list of interactive multiple-choice questions.
@@ -206,27 +212,46 @@ Ensure that the output is ONLY a valid JSON array of such objects, with no addit
 Transcript:
 \"\"\"{transcript_chunk}\"\"\"
 """
+
     try:
+        # Call the OpenAI API
         response = client.chat.completions.create(
             model=model,
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": prompt}
+                {"role": "user",   "content": prompt}
             ],
             temperature=0.7,
             max_tokens=2000,
             timeout=60
         )
+
+        # 🍟 Grab and clean the raw assistant output
         result_text = response.choices[0].message.content.strip()
-        logger.debug("Raw API response for interactive questions: %s", result_text)
+
+        # 🍟 Strip common markdown fences if present
+        if result_text.startswith("```"):
+            lines = result_text.splitlines()
+            # drop the opening ``` line
+            if lines and lines[0].startswith("```"):
+                lines = lines[1:]
+            # drop the closing ``` line if present
+            if lines and lines[-1].strip().startswith("```"):
+                lines = lines[:-1]
+            result_text = "\n".join(lines)
+
+        logger.debug("Cleaned API response for interactive questions: %s", result_text)
+
+        # Attempt to parse as JSON
         try:
             questions = json.loads(result_text)
             if isinstance(questions, list):
                 return questions
         except Exception as parse_err:
             logger.error("JSON parsing error for interactive questions: %s", parse_err)
+            # Fallback: attempt to extract JSON array manually
             start_idx = result_text.find('[')
-            end_idx = result_text.rfind(']')
+            end_idx   = result_text.rfind(']')
             if start_idx != -1 and end_idx != -1:
                 json_str = result_text[start_idx:end_idx+1]
                 try:
@@ -234,9 +259,12 @@ Transcript:
                     if isinstance(questions, list):
                         return questions
                 except Exception as e:
-                    logger.error("Fallback JSON parsing failed for interactive questions: %s", e)
+                    logger.error("Fallback JSON parsing failed: %s", e)
+
+        # If we get here, parsing ultimately failed
         flash("Failed to generate interactive questions for a chunk. API response: " + result_text)
         return []
+
     except Exception as e:
         logger.error("OpenAI API error for interactive questions: %s", e)
         flash("OpenAI API error for a chunk: " + str(e))
