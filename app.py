@@ -226,27 +226,24 @@ Transcript:
             timeout=60
         )
 
-        # 🍟 Grab and clean the raw assistant output
-# 🍟 Grab the raw assistant output
-raw = response.choices[0].message.content
+        # 🍟 Grab the raw assistant output
+        raw = response.choices[0].message.content
 
-# 🔧 START robust JSON cleanup 🔧
-import re
-# 1) Remove any markdown fences anywhere
-clean = re.sub(r"```(?:json)?\n?|```", "", raw).strip()
-# 2) Remove trailing commas before } or ]
-clean = re.sub(r",\s*([}\]])", r"\1", clean)
-# 3) Extract the first JSON array
-m = re.search(r"$begin:math:display$.*$end:math:display$", clean, flags=re.DOTALL)
-if m:
-    clean = m.group(0)
-# 4) Final trimmed text
-result_text = clean.strip()
-logger.debug("Cleaned JSON payload for interactive questions:\n%s", result_text)
-# 🔧 END robust JSON cleanup 🔧
+        # 🔧 START robust JSON cleanup 🔧
+        import re
+        # 1) Remove any markdown fences anywhere
+        clean = re.sub(r"```(?:json)?\n?|```", "", raw).strip()
+        # 2) Remove trailing commas before } or ]
+        clean = re.sub(r",\s*([}\]])", r"\1", clean)
+        # 3) Extract the first JSON array (everything between [ and ])
+        m = re.search(r"\[.*\]", clean, flags=re.DOTALL)
+        if m:
+            clean = m.group(0)
+        # 4) Final trimmed text
+        result_text = clean.strip()
+        logger.debug("Cleaned JSON payload for interactive questions:\n%s", result_text)
+        # 🔧 END robust JSON cleanup 🔧
 
-
-        
         # Attempt to parse as JSON
         try:
             questions = json.loads(result_text)
@@ -274,6 +271,7 @@ logger.debug("Cleaned JSON payload for interactive questions:\n%s", result_text)
         logger.error("OpenAI API error for interactive questions: %s", e)
         flash("OpenAI API error for a chunk: " + str(e))
         return []
+        
 
 def get_all_interactive_questions(transcript, user_preferences="", max_chunk_size=4000, model="gpt-4o"):
     """
