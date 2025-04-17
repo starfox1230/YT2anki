@@ -189,16 +189,10 @@ def get_interactive_questions_for_chunk(transcript_chunk, user_preferences="", m
     Calls the OpenAI API with a transcript chunk and returns a list of interactive multiple-choice questions.
     Each question is a JSON object with keys: "question", "options", "correctAnswer" (and optionally "explanation").
     """
-    # Build any user‑preference instructions
     user_instr = ""
     if user_preferences.strip():
-        user_instr = (
-            f'\nUser Request: {user_preferences.strip()}'
-            "\nIf no content relevant to the user request is found in this chunk, "
-            "output a dummy question in the required JSON format."
-        )
-
-    # Construct the prompt
+        user_instr = f'\nUser Request: {user_preferences.strip()}\nIf no content relevant to the user request is found in this chunk, output a dummy question in the required JSON format.'
+    
     prompt = f"""
 You are an expert at creating interactive multiple-choice questions for educational purposes.
 Given the transcript below, generate a list of interactive multiple-choice questions.
@@ -212,56 +206,27 @@ Ensure that the output is ONLY a valid JSON array of such objects, with no addit
 Transcript:
 \"\"\"{transcript_chunk}\"\"\"
 """
-
     try:
-        # Call the OpenAI API
         response = client.chat.completions.create(
             model=model,
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user",   "content": prompt}
+                {"role": "user", "content": prompt}
             ],
             temperature=0.7,
             max_tokens=2000,
             timeout=60
         )
-
-        # 🍟 Grab the raw assistant output
-        raw = response.choices[0].message.content
-
-        # 🔧 START robust JSON cleanup 🔧
-        import re
-        # 1) Remove any markdown fences (``` or ```json)
-        clean = re.sub(r"```(?:json)?\n?|```", "", raw).strip()
-        # 2) Remove trailing commas before } or ]
-        clean = re.sub(r",\s*([}\]])", r"\1", clean)
-        # 3) Extract the first JSON array block
-        m = re.search(r"\[.*\]", clean, flags=re.DOTALL)
-        if m:
-            clean = m.group(0)
-        # 4) Final trim
-        result_text = clean.strip()
-        # 5) Balance brackets if the closing ']' was dropped
-        opens  = result_text.count('[')
-        closes = result_text.count(']')
-        if closes < opens:
-            result_text += ']' * (opens - closes)
-        logger.debug(
-            "Cleaned JSON payload for interactive questions (first/last chars: %r...%r):\n%s",
-            result_text[:1], result_text[-1:], result_text
-        )
-        # 🔧 END robust JSON cleanup 🔧
-
-        # Attempt to parse
+        result_text = response.choices[0].message.content.strip()
+        logger.debug("Raw API response for interactive questions: %s", result_text)
         try:
             questions = json.loads(result_text)
             if isinstance(questions, list):
                 return questions
         except Exception as parse_err:
             logger.error("JSON parsing error for interactive questions: %s", parse_err)
-            # Fallback: manual slice
             start_idx = result_text.find('[')
-            end_idx   = result_text.rfind(']')
+            end_idx = result_text.rfind(']')
             if start_idx != -1 and end_idx != -1:
                 json_str = result_text[start_idx:end_idx+1]
                 try:
@@ -269,12 +234,9 @@ Transcript:
                     if isinstance(questions, list):
                         return questions
                 except Exception as e:
-                    logger.error("Fallback JSON parsing failed: %s", e)
-
-        # If we get here, parsing ultimately failed
+                    logger.error("Fallback JSON parsing failed for interactive questions: %s", e)
         flash("Failed to generate interactive questions for a chunk. API response: " + result_text)
         return []
-
     except Exception as e:
         logger.error("OpenAI API error for interactive questions: %s", e)
         flash("OpenAI API error for a chunk: " + str(e))
