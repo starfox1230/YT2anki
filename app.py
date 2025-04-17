@@ -1368,7 +1368,7 @@ INTERACTIVE_HTML = """
     });
   </script>
   <script>
-    const questions = {{ questions_json|safe }};
+    const questions = {{ questions|tojson }};
     let currentQuestionIndex = 0;
     let score = 0;
     let timerInterval;
@@ -1565,8 +1565,7 @@ def generate():
         logger.debug("Final interactive questions list: %s", questions)
         if not questions:
             return "Failed to generate any interactive questions.", 500
-        questions_json = json.dumps(questions)
-        return render_template_string(INTERACTIVE_HTML, questions_json=questions_json)
+        return render_template_string(INTERACTIVE_HTML, questions=questions)
     else:
         cards = get_all_anki_cards(transcript, user_preferences, max_chunk_size=max_size, model=model)
         logger.debug("Final flashcards list: %s", cards)
