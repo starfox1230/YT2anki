@@ -1368,7 +1368,7 @@ INTERACTIVE_HTML = """
     });
   </script>
   <script>
-    const questions = {{ questions|tojson }};
+    const questions = {{ questions_json|safe }};
     let currentQuestionIndex = 0;
     let score = 0;
     let timerInterval;
@@ -1491,45 +1491,37 @@ INTERACTIVE_HTML = """
         "<div id='ankiCardsContainer' style='display:none; margin-top:10px; text-align:left; background-color:#1e1e1e; padding:10px; border:1px solid #bb86fc; border-radius:10px;'></div>" +
         "<button id='copyAnkiBtn' class='option-button' ontouchend='this.blur()' style='display:none; margin-top:10px;'>Copy Anki Cards</button>";
       // Add event listeners for the new buttons.
-      // replace your existing toggleAnkiBtn listener with this:
-      {% raw %}
       document.getElementById('toggleAnkiBtn').addEventListener('click', function(){
-        const container = document.getElementById('ankiCardsContainer');
-        const copyBtn   = document.getElementById('copyAnkiBtn');
-
+        let container = document.getElementById('ankiCardsContainer');
+        let copyBtn = document.getElementById('copyAnkiBtn');
         if (container.style.display === 'none') {
-          // build each card as: Question \n\n Cloze
-          const cardText = questions
-            .map(q => `${q.question}\n\n{{c1::${q.correctAnswer}}}`)
-            .join('\n\n');            // two newlines BETWEEN cards
-
-          // render with real line breaks
-          container.textContent     = cardText;
-          container.style.whiteSpace = 'pre-wrap';
-          container.style.display    = 'block';
-          copyBtn.style.display      = 'inline-block';
-          this.textContent           = "Hide Anki Cards";
+           let content = "";
+           questions.forEach(q => {
+               content += q.question + "&lt;br&gt;&lt;br&gt;" + "{" + "{" + "c1::" + q.correctAnswer + "}" + "}" + "<br>";
+           });
+           container.innerHTML = content;
+           container.style.display = 'block';
+           copyBtn.style.display = 'block';
+           this.textContent = "Hide Anki Cards";
         } else {
-          container.style.display = 'none';
-          copyBtn.style.display   = 'none';
-          this.textContent        = "Show Anki Cards";
+           container.style.display = 'none';
+           copyBtn.style.display = 'none';
+           this.textContent = "Show Anki Cards";
         }
       });
-      // replace your existing copyAnkiBtn listener with this:
-      document.getElementById('copyAnkiBtn').addEventListener("click", function(){
-        const container = document.getElementById('ankiCardsContainer');
-        // grab the plain‑text we already populated
-        const text = container.textContent;
-        const tmp  = document.createElement('textarea');
-        tmp.value  = text;
-        document.body.appendChild(tmp);
-        tmp.select();
-        document.execCommand('copy');
-        document.body.removeChild(tmp);
-        this.textContent = "Copied!";
-        setTimeout(() => { this.textContent = "Copy Anki Cards"; }, 2000);
+      document.getElementById('copyAnkiBtn').addEventListener('click', function(){
+         let container = document.getElementById('ankiCardsContainer');
+         let tempInput = document.createElement('textarea');
+         tempInput.value = container.innerText;
+         document.body.appendChild(tempInput);
+         tempInput.select();
+         document.execCommand('copy');
+         document.body.removeChild(tempInput);
+         this.textContent = "Copied!";
+         setTimeout(() => {
+             this.textContent = "Copy Anki Cards";
+         }, 2000);
       });
-      {% endraw %}
     }
 
     startGame();
@@ -1565,7 +1557,8 @@ def generate():
         logger.debug("Final interactive questions list: %s", questions)
         if not questions:
             return "Failed to generate any interactive questions.", 500
-        return render_template_string(INTERACTIVE_HTML, questions=questions)
+        questions_json = json.dumps(questions)
+        return render_template_string(INTERACTIVE_HTML, questions_json=questions_json)
     else:
         cards = get_all_anki_cards(transcript, user_preferences, max_chunk_size=max_size, model=model)
         logger.debug("Final flashcards list: %s", cards)
