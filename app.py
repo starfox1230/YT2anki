@@ -231,27 +231,35 @@ Transcript:
 
         # 🔧 START robust JSON cleanup 🔧
         import re
-        # 1) Remove any markdown fences anywhere
+        # 1) Remove any markdown fences (``` or ```json)
         clean = re.sub(r"```(?:json)?\n?|```", "", raw).strip()
         # 2) Remove trailing commas before } or ]
         clean = re.sub(r",\s*([}\]])", r"\1", clean)
-        # 3) Extract the first JSON array (everything between [ and ])
+        # 3) Extract the first JSON array block
         m = re.search(r"\[.*\]", clean, flags=re.DOTALL)
         if m:
             clean = m.group(0)
-        # 4) Final trimmed text
+        # 4) Final trim
         result_text = clean.strip()
-        logger.debug("Cleaned JSON payload for interactive questions:\n%s", result_text)
+        # 5) Balance brackets if the closing ']' was dropped
+        opens  = result_text.count('[')
+        closes = result_text.count(']')
+        if closes < opens:
+            result_text += ']' * (opens - closes)
+        logger.debug(
+            "Cleaned JSON payload for interactive questions (first/last chars: %r...%r):\n%s",
+            result_text[:1], result_text[-1:], result_text
+        )
         # 🔧 END robust JSON cleanup 🔧
 
-        # Attempt to parse as JSON
+        # Attempt to parse
         try:
             questions = json.loads(result_text)
             if isinstance(questions, list):
                 return questions
         except Exception as parse_err:
             logger.error("JSON parsing error for interactive questions: %s", parse_err)
-            # Fallback: attempt to extract JSON array manually
+            # Fallback: manual slice
             start_idx = result_text.find('[')
             end_idx   = result_text.rfind(']')
             if start_idx != -1 and end_idx != -1:
@@ -271,7 +279,6 @@ Transcript:
         logger.error("OpenAI API error for interactive questions: %s", e)
         flash("OpenAI API error for a chunk: " + str(e))
         return []
-        
 
 def get_all_interactive_questions(transcript, user_preferences="", max_chunk_size=4000, model="gpt-4o"):
     """
