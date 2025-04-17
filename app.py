@@ -1211,8 +1211,6 @@ addClozeButton.addEventListener("click", function(e) {
 # 🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠 ANKI_HTML TEMPLATE 🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠
 # 🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠 ANKI_HTML TEMPLATE 🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠
 # 🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠 ANKI_HTML TEMPLATE 🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠
-# 🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠 ANKI_HTML TEMPLATE 🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠🧠
-# 🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮 INTERACTIVE_HTML TEMPLATE 🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮
 # 🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮 INTERACTIVE_HTML TEMPLATE 🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮
 # 🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮 INTERACTIVE_HTML TEMPLATE 🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮
 # 🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮 INTERACTIVE_HTML TEMPLATE 🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮
@@ -1273,11 +1271,6 @@ INTERACTIVE_HTML = """
       border: 2px solid #bb86fc;
       border-radius: 10px;
       margin-bottom: 20px;
-      min-height: 50px; /* Ensure minimum height */
-      display: flex; /* Added for centering */
-      align-items: center; /* Added for centering */
-      justify-content: center; /* Added for centering */
-      text-align: center; /* Added for centering */
     }
     .options {
       list-style: none;
@@ -1315,12 +1308,12 @@ INTERACTIVE_HTML = """
     .option-button.correct {
       background: #03dac6 !important;
       box-shadow: 0 0 10px #03dac6;
-      color: #121212 !important; /* Darker text for better contrast */
+      color: #fff !important;
     }
     .option-button.incorrect {
       background: #cf6679 !important;
       box-shadow: 0 0 10px #cf6679;
-      color: #121212 !important; /* Darker text for better contrast */
+      color: #fff !important;
     }
     .hidden {
       display: none;
@@ -1352,23 +1345,6 @@ INTERACTIVE_HTML = """
       justify-content: center;
       align-items: center;
       z-index: 9999;
-    }
-    /* Style for the Anki cards textarea */
-    #ankiCardsContainer {
-        display: none;
-        width: 95%; /* Make it wide */
-        height: 200px; /* Give it some height */
-        resize: vertical; /* Allow vertical resizing */
-        margin-top: 10px;
-        text-align: left;
-        background-color: #1e1e1e;
-        color: #f0f0f0; /* Ensure text is visible */
-        padding: 10px;
-        border: 1px solid #bb86fc;
-        border-radius: 10px;
-        font-family: monospace; /* Use monospace for consistent spacing */
-        white-space: pre-wrap; /* Preserve whitespace and line breaks */
-        overflow-x: auto; /* Add horizontal scroll if needed */
     }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.7.6/lottie.min.js"></script>
@@ -1407,8 +1383,6 @@ INTERACTIVE_HTML = """
       setTimeout(function() {
         overlay.style.display = 'none';
         gameContainer.style.display = 'block';
-        // Start the game only after the container is visible
-        startGame();
       }, 500);
     });
   </script>
@@ -1428,172 +1402,125 @@ INTERACTIVE_HTML = """
     function startGame() {
       score = 0;
       currentQuestionIndex = 0;
-      feedbackEl.classList.add('hidden'); // Hide feedback if restarting
-      questionBox.style.display = 'flex'; // Ensure question box is visible
-      optionsWrapper.style.display = 'block'; // Ensure options are visible
-      timerEl.style.display = 'block'; // Ensure timer is visible
       updateHeader();
       showQuestion();
     }
 
     function updateHeader() {
-      questionProgressEl.textContent = "Question " + (currentQuestionIndex + 1) + " of " + totalQuestions;
+      questionProgressEl.textContent = "Question " + (currentQuestionIndex+1) + " of " + totalQuestions;
       rawScoreEl.textContent = "Score: " + score;
     }
 
     function startTimer(duration, callback) {
-      // Clear any existing timer before starting a new one
-      clearInterval(timerInterval);
       let timeRemaining = duration;
       timerEl.textContent = "Time: " + timeRemaining;
       timerInterval = setInterval(() => {
         timeRemaining--;
         timerEl.textContent = "Time: " + timeRemaining;
-        if (timeRemaining < 0) { // Check if time is up
+        if (timeRemaining <= 0) {
           clearInterval(timerInterval);
-          callback(); // Execute the timeout callback
+          callback();
         }
       }, 1000);
     }
 
     function showQuestion() {
-      feedbackEl.classList.add('hidden'); // Ensure feedback is hidden during question
+      feedbackEl.classList.add('hidden');
       if (currentQuestionIndex >= totalQuestions) {
         endGame();
         return;
       }
       const currentQuestion = questions[currentQuestionIndex];
       questionBox.textContent = currentQuestion.question;
-      optionsWrapper.innerHTML = ""; // Clear previous options
+      optionsWrapper.innerHTML = "";
       const ul = document.createElement('ul');
       ul.className = 'options';
 
-      // Simple shuffle function
-      const shuffleArray = (array) => {
-          for (let i = array.length - 1; i > 0; i--) {
-              const j = Math.floor(Math.random() * (i + 1));
-              [array[i], array[j]] = [array[j], array[i]];
-          }
-          return array;
+      const optionsShuffled = currentQuestion.options.slice();
+      for (let i = optionsShuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [optionsShuffled[i], optionsShuffled[j]] = [optionsShuffled[j], optionsShuffled[i]];
       }
-
-      const optionsShuffled = shuffleArray([...currentQuestion.options]); // Use spread syntax to avoid modifying original
-
       optionsShuffled.forEach(option => {
         const li = document.createElement('li');
         const button = document.createElement('button');
         button.textContent = option;
         button.className = 'option-button';
-        // Prevent default behaviors that might interfere on touch devices
         button.onmousedown = function(e) { e.preventDefault(); };
-        button.setAttribute("ontouchend", "this.blur()"); // Remove focus outline on touch end
-        button.onclick = () => selectAnswer(button, option); // Pass button itself for styling
-
-        // Add ripple effect listener
+        button.setAttribute("ontouchend", "this.blur()");
+        button.onclick = () => selectAnswer(option);
         button.addEventListener('click', function(e) {
           const rect = button.getBoundingClientRect();
           const ripple = document.createElement('span');
           ripple.className = 'ripple';
-          // Calculate position relative to button, handle potential scrolling
-          const scrollX = window.scrollX || document.documentElement.scrollLeft;
-          const scrollY = window.scrollY || document.documentElement.scrollTop;
-          ripple.style.left = (e.clientX - rect.left - scrollX) + 'px';
-          ripple.style.top = (e.clientY - rect.top - scrollY) + 'px';
-
+          ripple.style.left = (e.clientX - rect.left) + 'px';
+          ripple.style.top = (e.clientY - rect.top) + 'px';
           button.appendChild(ripple);
-          // Remove ripple after animation completes
           setTimeout(() => {
             ripple.remove();
           }, 600);
         });
-
         li.appendChild(button);
         ul.appendChild(li);
       });
       optionsWrapper.appendChild(ul);
-      // Start timer for the question. If it runs out, call selectAnswer with null
       startTimer(15, () => {
-        selectAnswer(null, null); // Pass null button and option for timeout
+        selectAnswer(null);
       });
-      updateHeader(); // Update question number/score display
+      updateHeader();
     }
 
-    function selectAnswer(selectedButton, selectedOption) {
-      clearInterval(timerInterval); // Stop the timer
+    function selectAnswer(selectedOption) {
+      clearInterval(timerInterval);
       const currentQuestion = questions[currentQuestionIndex];
-      const isCorrect = (selectedOption === currentQuestion.correctAnswer);
-
       const buttons = document.querySelectorAll('.option-button');
+      const isCorrect = (selectedOption === currentQuestion.correctAnswer);
       buttons.forEach(button => {
-        button.disabled = true; // Disable all buttons
-        // Highlight correct answer
         if (button.textContent === currentQuestion.correctAnswer) {
           button.classList.add('correct');
-        }
-        // If an incorrect answer was selected, mark it as incorrect
-        else if (button === selectedButton && !isCorrect) {
+        } else if (button.textContent === selectedOption) {
           button.classList.add('incorrect');
         }
+        button.disabled = true;
       });
-
       if (isCorrect) {
         score++;
-        // Trigger confetti for correct answer
         confetti({
           particleCount: 100,
           spread: 70,
-          origin: { y: 0.6 }, // Start confetti slightly lower
-          colors: ['#bb86fc', '#03dac6', '#f0f0f0'] // Use theme colors
+          colors: ['#bb86fc', '#ffd700']
         });
       }
-
-      updateHeader(); // Update score display
-
-      // Wait a moment before showing the next question or ending the game
+      updateHeader();
       setTimeout(() => {
         currentQuestionIndex++;
         showQuestion();
-      }, 2000); // 2-second delay
+      }, 2000);
     }
 
     function endGame() {
-      // Clear timer, hide question/options/timer
-      clearInterval(timerInterval);
-      questionBox.style.display = 'none';
-      optionsWrapper.style.display = 'none';
-      timerEl.style.display = 'none';
-
-      // Show feedback area
+      questionBox.textContent = "Game Over!";
+      optionsWrapper.innerHTML = "";
+      timerEl.textContent = "";
       feedbackEl.classList.remove('hidden');
-      feedbackEl.innerHTML = `
-        <h2>Game Over!</h2>
-        <h3>Your final score is ${score} out of ${totalQuestions}</h3>
-        <button onclick='startGame()' class='option-button' ontouchend='this.blur()'>Play Again</button>
-        <button id='toggleAnkiBtn' class='option-button' ontouchend='this.blur()' style='margin-top:10px;'>Show Anki Cards</button>
-        <!-- Use a textarea for displaying plain text Anki cards -->
-        <textarea id='ankiCardsContainer' readonly></textarea>
-        <button id='copyAnkiBtn' class='option-button' ontouchend='this.blur()' style='display:none; margin-top:10px;'>Copy Anki Cards</button>
-      `;
-
+      // Set up final results with Play Again, Show Anki Cards toggle, and Copy Anki Cards button.
+      feedbackEl.innerHTML = "<h2>Your final score is " + score + " out of " + totalQuestions + "</h2>" +
+        "<button onclick='startGame()' class='option-button' ontouchend='this.blur()'>Play Again</button>" +
+        "<button id='toggleAnkiBtn' class='option-button' ontouchend='this.blur()' style='margin-top:10px;'>Show Anki Cards</button>" +
+        "<div id='ankiCardsContainer' style='display:none; margin-top:10px; text-align:left; background-color:#1e1e1e; padding:10px; border:1px solid #bb86fc; border-radius:10px;'></div>" +
+        "<button id='copyAnkiBtn' class='option-button' ontouchend='this.blur()' style='display:none; margin-top:10px;'>Copy Anki Cards</button>";
       // Add event listeners for the new buttons.
-      const toggleBtn = document.getElementById('toggleAnkiBtn');
-      const copyBtn = document.getElementById('copyAnkiBtn');
-      const container = document.getElementById('ankiCardsContainer');
-
-      toggleBtn.addEventListener('click', function() {
+      document.getElementById('toggleAnkiBtn').addEventListener('click', function(){
+        let container = document.getElementById('ankiCardsContainer');
+        let copyBtn = document.getElementById('copyAnkiBtn');
         if (container.style.display === 'none') {
-           let plainTextContent = "";
-           questions.forEach((q, index) => {
-               // Format: Question\n\n{{c1::Answer}}
-               plainTextContent += q.question + "\\n\\n" + "{{c1::" + q.correctAnswer + "}}";
-               // Add two line breaks after each card except the last one
-               if (index < questions.length - 1) {
-                   plainTextContent += "\\n\\n"; // Two returns between cards
-               }
+           let content = "";
+           questions.forEach(q => {
+               content += q.question + "&lt;br&gt;&lt;br&gt;" + "{" + "{" + "c1::" + q.correctAnswer + "}" + "}" + "<br>";
            });
-           container.value = plainTextContent; // Set the textarea's value
+           container.innerHTML = content;
            container.style.display = 'block';
-           copyBtn.style.display = 'block'; // Use block or inline-block as needed
+           copyBtn.style.display = 'block';
            this.textContent = "Hide Anki Cards";
         } else {
            container.style.display = 'none';
@@ -1601,40 +1528,27 @@ INTERACTIVE_HTML = """
            this.textContent = "Show Anki Cards";
         }
       });
-
-      copyBtn.addEventListener('click', function() {
-         // Use the textarea's value directly for copying plain text
+      document.getElementById('copyAnkiBtn').addEventListener('click', function(){
+         let container = document.getElementById('ankiCardsContainer');
          let tempInput = document.createElement('textarea');
-         tempInput.value = container.value; // Get value from the textarea
+         tempInput.value = container.innerText;
          document.body.appendChild(tempInput);
          tempInput.select();
-         tempInput.setSelectionRange(0, 99999); // For mobile devices
-         try {
-            document.execCommand('copy');
-            this.textContent = "Copied!";
-         } catch (err) {
-            console.error('Failed to copy text: ', err);
-            this.textContent = "Copy Failed";
-         }
+         document.execCommand('copy');
          document.body.removeChild(tempInput);
-
+         this.textContent = "Copied!";
          setTimeout(() => {
              this.textContent = "Copy Anki Cards";
          }, 2000);
       });
     }
 
-    // Don't start game immediately, wait for window.onload -> Lottie finish
-    // startGame();
+    startGame();
   </script>
 </body>
 </html>
 """
-# 🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮 INTERACTIVE_HTML TEMPLATE 🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮
-# 🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮 INTERACTIVE_HTML TEMPLATE 🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮
-# 🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮 INTERACTIVE_HTML TEMPLATE 🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮
-# 🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮 INTERACTIVE_HTML TEMPLATE 🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮
-# 🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮 INTERACTIVE_HTML TEMPLATE 🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮🎮
+
 # ----------------------------
 # Flask Routes
 # ----------------------------
