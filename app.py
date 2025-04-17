@@ -1511,6 +1511,7 @@ INTERACTIVE_HTML = """
         "<button id='toggleAnkiBtn' class='option-button' ontouchend='this.blur()' style='margin-top:10px;'>Show Anki Cards</button>" +
         "<div id='ankiCardsContainer' style='display:none; margin-top:10px; text-align:left; background-color:#1e1e1e; padding:10px; border:1px solid #bb86fc; border-radius:10px;'></div>" +
         "<button id='copyAnkiBtn' class='option-button' ontouchend='this.blur()' style='display:none; margin-top:10px;'>Copy Anki Cards</button>";
+        "<button id='downloadApkgBtn' class='option-button' ontouchend='this.blur()' style='margin-top:10px;'>Download APKG</button>";  // 🗑️ No removal needed here
       // Add event listeners for the new buttons.
       document.getElementById('toggleAnkiBtn').addEventListener('click', function(){
         let container = document.getElementById('ankiCardsContainer');
@@ -1542,6 +1543,36 @@ INTERACTIVE_HTML = """
          setTimeout(() => {
              this.textContent = "Copy Anki Cards";
          }, 2000);
+      });
+            // 🆕🛠️🚀 New Download APKG button listener
+      document.getElementById("downloadApkgBtn").addEventListener("click", function() {
+        // ✨ Assemble cloze‑formatted strings from questions
+        const ankiCards = questions.map(q =>
+          `${q.question}<br><br>{{c1::${q.correctAnswer}}}`
+        );
+        fetch("/download_apkg", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ saved_cards: ankiCards })
+        })
+        .then(res => {
+          if (!res.ok) throw new Error("Download failed");
+          return res.blob();
+        })
+        .then(blob => {
+          const url = URL.createObjectURL(blob);
+          const a   = document.createElement("a");
+          a.href    = url;
+          a.download = "game_cards.apkg";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        })
+        .catch(err => {
+          console.error(err);
+          alert("Could not download APKG.");
+        });
       });
     }
 
