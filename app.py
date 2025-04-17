@@ -227,21 +227,26 @@ Transcript:
         )
 
         # 🍟 Grab and clean the raw assistant output
-        result_text = response.choices[0].message.content.strip()
+# 🍟 Grab the raw assistant output
+raw = response.choices[0].message.content
 
-        # 🍟 Strip common markdown fences if present
-        if result_text.startswith("```"):
-            lines = result_text.splitlines()
-            # drop the opening ``` line
-            if lines and lines[0].startswith("```"):
-                lines = lines[1:]
-            # drop the closing ``` line if present
-            if lines and lines[-1].strip().startswith("```"):
-                lines = lines[:-1]
-            result_text = "\n".join(lines)
+# 🔧 START robust JSON cleanup 🔧
+import re
+# 1) Remove any markdown fences anywhere
+clean = re.sub(r"```(?:json)?\n?|```", "", raw).strip()
+# 2) Remove trailing commas before } or ]
+clean = re.sub(r",\s*([}\]])", r"\1", clean)
+# 3) Extract the first JSON array
+m = re.search(r"$begin:math:display$.*$end:math:display$", clean, flags=re.DOTALL)
+if m:
+    clean = m.group(0)
+# 4) Final trimmed text
+result_text = clean.strip()
+logger.debug("Cleaned JSON payload for interactive questions:\n%s", result_text)
+# 🔧 END robust JSON cleanup 🔧
 
-        logger.debug("Cleaned API response for interactive questions: %s", result_text)
 
+        
         # Attempt to parse as JSON
         try:
             questions = json.loads(result_text)
