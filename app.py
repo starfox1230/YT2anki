@@ -1510,7 +1510,7 @@ INTERACTIVE_HTML = """
         "<button onclick='startGame()' class='option-button' ontouchend='this.blur()'>Play Again</button>" +
         "<button id='toggleAnkiBtn' class='option-button' ontouchend='this.blur()' style='margin-top:10px;'>Show Anki Cards</button>" +
         "<div id='ankiCardsContainer' style='display:none; margin-top:10px; text-align:left; background-color:#1e1e1e; padding:10px; border:1px solid #bb86fc; border-radius:10px;'></div>" +
-        "<button id='copyAnkiBtn' class='option-button' ontouchend='this.blur()' style='display:none; margin-top:10px;'>Copy Anki Cards</button>";
+        "<button id='copyAnkiBtn' class='option-button' ontouchend='this.blur()' style='display:none; margin-top:10px;'>Copy Anki Cards</button>" +
         "<button id='downloadApkgBtn' class='option-button' ontouchend='this.blur()' style='margin-top:10px;'>Download APKG</button>";  // 🗑️ No removal needed here
       // Add event listeners for the new buttons.
       document.getElementById('toggleAnkiBtn').addEventListener('click', function(){
