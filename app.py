@@ -1517,10 +1517,12 @@ INTERACTIVE_HTML = """
         let container = document.getElementById('ankiCardsContainer');
         let copyBtn = document.getElementById('copyAnkiBtn');
         if (container.style.display === 'none') {
+           {% raw %}
            let content = "";
            questions.forEach(q => {
                content += q.question + "<br><br>" + "{" + "{" + "c1::" + q.correctAnswer + "}" + "}" + "<br><br><br>";
            });
+           {% endraw %}
            container.innerHTML = content;
            container.style.display = 'block';
            copyBtn.style.display = 'block';
