@@ -1492,6 +1492,7 @@ INTERACTIVE_HTML = """
         "<button id='copyAnkiBtn' class='option-button' ontouchend='this.blur()' style='display:none; margin-top:10px;'>Copy Anki Cards</button>";
       // Add event listeners for the new buttons.
       // replace your existing toggleAnkiBtn listener with this:
+      {% raw %}
       document.getElementById('toggleAnkiBtn').addEventListener('click', function(){
         const container = document.getElementById('ankiCardsContainer');
         const copyBtn   = document.getElementById('copyAnkiBtn');
@@ -1528,6 +1529,7 @@ INTERACTIVE_HTML = """
         this.textContent = "Copied!";
         setTimeout(() => { this.textContent = "Copy Anki Cards"; }, 2000);
       });
+      {% endraw %}
     }
 
     startGame();
