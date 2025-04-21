@@ -355,9 +355,17 @@ INDEX_HTML = """
     <div id="loadingText" style="color: #D7DEE9; margin-top: 20px; font-size: 18px;">Generating. Please wait...</div>
   </div>
   <h1>Transcript to Anki Cards or Interactive Game</h1>
-  <p>
-    Don't have a transcript? Use the <a href="https://tactiq.io/tools/youtube-transcript" target="_blank">Tactiq.io transcript tool</a> to generate one.
-  </p>
+    <p>
+      Don't have a transcript? Use the
+      <a href="https://tactiq.io/tools/youtube-transcript" target="_blank">
+        Tactiq.io transcript tool
+      </a>
+      or
+      <a href="https://www.youtube-transcript.io/" target="_blank">
+        Youtube Transcript Generator
+      </a>
+      to generate one.
+    </p>
   {% with messages = get_flashed_messages() %}
     {% if messages %}
       {% for message in messages %}
