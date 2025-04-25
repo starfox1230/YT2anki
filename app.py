@@ -616,20 +616,21 @@ ANKI_HTML = """
   <div id="loadingOverlay">
     <div id="lottieContainer" style="width: 300px; height: 300px;"></div>
   </div>
-  <div id="reviewContainer" style="display: none;">
-    <div id="progress">Card <span id="current">0</span> of <span id="total">0</span></div>
-    <!-- MOVED: Cloze controls now sit above the textbox -->
-    <div id="clozeEditControls" style="display: none; justify-content: space-around; width: 100%; max-width: 700px; margin: 10px auto;">
-      <button id="removeAllClozeButton" class="editButton cancelEdit"
-              onmousedown="event.preventDefault()" ontouchend="this.blur()">
-        Remove All Cloze
-      </button>
-      <button id="addClozeButton" class="editButton saveEdit"
-              onmousedown="event.preventDefault()" ontouchend="this.blur()">
-        Add Cloze
-      </button>
-    </div>
+
     <div id="kard">
+      <div id="reviewContainer" style="display: none;">
+        <div id="progress">Card <span id="current">0</span> of <span id="total">0</span></div>
+        <!-- MOVED: Cloze controls now sit above the textbox -->
+        <div id="clozeEditControls" style="display: none; justify-content: space-around; width: 100%; max-width: 700px; margin: 10px auto;">
+          <button id="removeAllClozeButton" class="editButton cancelEdit"
+                  onmousedown="event.preventDefault()" ontouchend="this.blur()">
+            Remove All Cloze
+          </button>
+          <button id="addClozeButton" class="editButton saveEdit"
+                  onmousedown="event.preventDefault()" ontouchend="this.blur()">
+            Add Cloze
+          </button>
+        </div>
       <div class="card" id="cardContent"></div>
     </div>
     <div id="actionControls">
