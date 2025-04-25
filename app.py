@@ -502,7 +502,13 @@ ANKI_HTML = """
       margin-bottom: 20px;
     }
     .card { font-size: 20px; color: #D7DEE9; line-height: 1.6em; }
-    #editArea { width: 100%; height: 150px; font-size: 20px; padding: 10px; }
+    /* after – taller box, slightly smaller text */
+    #editArea {
+      width: 100%;
+      height: 250px;    /* ↑ make it taller */
+      font-size: 18px;  /* ↓ text a little smaller */
+      padding: 10px;
+    }
     .cloze, .cloze b, .cloze u, .cloze i { font-weight: bold; color: MediumSeaGreen !important; cursor: pointer; }
     #actionControls { display: none; justify-content: space-between; width: 100%; max-width: 700px; margin: 10px auto; }
     .actionButton { padding: 10px 20px; font-size: 16px; border: none; color: #fff; border-radius: 5px; cursor: pointer; flex: 1; margin: 0 5px; }
@@ -612,6 +618,17 @@ ANKI_HTML = """
   </div>
   <div id="reviewContainer" style="display: none;">
     <div id="progress">Card <span id="current">0</span> of <span id="total">0</span></div>
+    <!-- MOVED: Cloze controls now sit above the textbox -->
+    <div id="clozeEditControls" style="display: none; justify-content: space-around; width: 100%; max-width: 700px; margin: 10px auto;">
+      <button id="removeAllClozeButton" class="editButton cancelEdit"
+              onmousedown="event.preventDefault()" ontouchend="this.blur()">
+        Remove All Cloze
+      </button>
+      <button id="addClozeButton" class="editButton saveEdit"
+              onmousedown="event.preventDefault()" ontouchend="this.blur()">
+        Add Cloze
+      </button>
+    </div>
     <div id="kard">
       <div class="card" id="cardContent"></div>
     </div>
@@ -623,12 +640,6 @@ ANKI_HTML = """
       <button id="cancelEditButton" class="editButton cancelEdit" onmousedown="event.preventDefault()" ontouchend="this.blur()">Cancel Edit</button>
       <button id="saveEditButton" class="editButton saveEdit" onmousedown="event.preventDefault()" ontouchend="this.blur()">Save Edit</button>
     </div>
-    <!-- START: Add this new div and its buttons right AFTER the closing </div id="editControls"> -->
-    <div id="clozeEditControls" style="display: none; justify-content: space-around; width: 100%; max-width: 700px; margin: 10px auto;">
-      <button id="removeAllClozeButton" class="editButton" style="background-color: #dc3545;" onmousedown="event.preventDefault()" ontouchend="this.blur()">Remove All Cloze</button>
-      <button id="addClozeButton" class="editButton" style="background-color: #007bff;" onmousedown="event.preventDefault()" ontouchend="this.blur()">Add Cloze</button>
-    </div>
-    <!-- END: Add this new div and its buttons -->
     <div id="bottomUndo">
       <button id="undoButton" class="bottomButton undo" onmousedown="event.preventDefault()" ontouchend="this.blur()">Previous Card</button>
     </div>
