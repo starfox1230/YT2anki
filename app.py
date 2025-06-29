@@ -450,6 +450,10 @@ INDEX_HTML = """
       });
     });
   </script>
+  <!-- Keep-alive ping -->
+  <script>
+    setInterval(() => fetch("/ping").catch(()=>{}), 2 * 60 * 1000);
+  </script>
 </body>
 </html>
 """
@@ -1212,6 +1216,10 @@ addClozeButton.addEventListener("click", function(e) {
         });
     });
   </script>
+  <!-- Keep-alive ping -->
+  <script>
+    setInterval(() => fetch("/ping").catch(()=>{}), 2 * 60 * 1000);
+  </script>
 </body>
 </html>
 """
@@ -1590,6 +1598,10 @@ INTERACTIVE_HTML = """
 
     startGame();
   </script>
+  <!-- Keep-alive ping -->
+  <script>
+    setInterval(() => fetch("/ping").catch(()=>{}), 2 * 60 * 1000);
+  </script>
 </body>
 </html>
 """
@@ -1601,7 +1613,10 @@ INTERACTIVE_HTML = """
 # ----------------------------
 # Flask Routes
 # ----------------------------
-
+@app.route("/ping", methods=["GET"])
+def ping():
+    # simple keep-alive endpoint
+    return "", 200
 @app.route("/", methods=["GET"])
 def index():
     return render_template_string(INDEX_HTML)
