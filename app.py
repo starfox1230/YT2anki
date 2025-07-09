@@ -375,7 +375,7 @@ INDEX_HTML = """
   {% endwith %}
   <form id="transcriptForm">
     <!-- Advanced Options Toggle -->
-    <div id="advancedToggle" onclick="toggleAdvanced()">Advanced Options &#9660;</div>
+    <div id="advancedToggle" onclick="toggleAdvanced()">Advanced Options ▼</div>
     <div id="advancedOptions" style="display: none;">
       <label for="modelSelect">Model:</label>
       <select name="model" id="modelSelect">
@@ -404,10 +404,10 @@ INDEX_HTML = """
       var toggle = document.getElementById("advancedToggle");
       if(adv.style.display === "none" || adv.style.display === ""){
           adv.style.display = "block";
-          toggle.innerHTML = "Advanced Options &#9650;";
+          toggle.innerHTML = "Advanced Options ▲";
       } else {
           adv.style.display = "none";
-          toggle.innerHTML = "Advanced Options &#9660;";
+          toggle.innerHTML = "Advanced Options ▼";
       }
     }
     document.getElementById("transcriptForm").addEventListener("submit", function(event) {
@@ -1282,6 +1282,9 @@ INTERACTIVE_HTML = """
     .timer {
       font-size: 24px;
       margin-bottom: 20px;
+      /* <!-- ADDED CODE START (1/4) --> */
+      cursor: pointer; 
+      /* <!-- ADDED CODE END (1/4) --> */
     }
     .question-box {
       background-color: #1e1e1e;
@@ -1409,6 +1412,9 @@ INTERACTIVE_HTML = """
     let currentQuestionIndex = 0;
     let score = 0;
     let timerInterval;
+    /* <!-- ADDED CODE START (2/4) --> */
+    let isTimingEnabled = true; // Timer is on by default
+    /* <!-- ADDED CODE END (2/4) --> */
     const totalQuestions = questions.length;
     const questionProgressEl = document.getElementById('questionProgress');
     const rawScoreEl = document.getElementById('rawScore');
@@ -1416,6 +1422,23 @@ INTERACTIVE_HTML = """
     const questionBox = document.getElementById('questionBox');
     const optionsWrapper = document.getElementById('optionsWrapper');
     const feedbackEl = document.getElementById('feedback');
+
+    /* <!-- ADDED CODE START (3/4) --> */
+    function toggleTimer() {
+        isTimingEnabled = !isTimingEnabled;
+        clearInterval(timerInterval); // Stop any active timer.
+
+        if (isTimingEnabled) {
+            // Re-enabling the timer. It will start fresh on the next question.
+            timerEl.textContent = 'Timer On';
+            timerEl.style.textDecoration = 'none';
+        } else {
+            // Disabling the timer.
+            timerEl.textContent = 'Timer Off';
+            timerEl.style.textDecoration = 'line-through';
+        }
+    }
+    /* <!-- ADDED CODE END (3/4) --> */
 
     function startGame() {
       score = 0;
@@ -1430,6 +1453,15 @@ INTERACTIVE_HTML = """
     }
 
     function startTimer(duration, callback) {
+      // If timing is off, update the display and do nothing else.
+      if (!isTimingEnabled) {
+        timerEl.textContent = "Timer Off";
+        timerEl.style.textDecoration = "line-through";
+        return; // Exit the function
+      }
+
+      // If timing is on, reset styles and start the timer.
+      timerEl.style.textDecoration = "none";
       let timeRemaining = duration;
       timerEl.textContent = "Time: " + timeRemaining;
       timerInterval = setInterval(() => {
@@ -1595,6 +1627,10 @@ INTERACTIVE_HTML = """
         });
       });
     }
+
+    /* <!-- ADDED CODE START (4/4) --> */
+    timerEl.addEventListener('click', toggleTimer);
+    /* <!-- ADDED CODE END (4/4) --> */
 
     startGame();
   </script>
