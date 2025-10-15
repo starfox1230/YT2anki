@@ -112,12 +112,14 @@ Follow these formatting instructions exactly:
    • Use line breaks (<br><br>) to properly space question and answer.
          Example:
          What is the capital of Australia?<br><br>{{c1::Canberra}}
-9. Summary of Key Rules
+9.  If Anki cards are provided by the user in Cloze deletion format, go ahead and use them verbatim in the format given rather than making changes.
+10. Summary of Key Rules
    • Keep answers concise (single words or short phrases).
    • Use different C-numbers for unrelated deletions.
    • Ensure only one correct answer per deletion.
    • Focus on college-level or expert-level knowledge.
    • Use HTML formatting for better display.
+   • If Anki cards are provided by the user in Cloze deletion format, go ahead and use them verbatim in the format given rather than making changes.
 In addition, you must make sure to follow the following instructions:
 {user_instr}
 Ensure you output ONLY a valid JSON array of strings, with no additional commentary or markdown.
