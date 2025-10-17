@@ -1704,12 +1704,38 @@ def generate():
 def download_apkg():
     data = request.get_json() or {}
 
-    # Accept either {"saved_cards":[...]} or {"notes":[{"html":...}]}
-    saved_cards = data.get("saved_cards")
-    if not saved_cards and isinstance(data.get("notes"), list):
-        saved_cards = [n.get("html", "") for n in data["notes"] if n.get("html")]
+    # Normalize input into a list of {html, tags}
+    items = []
+    if isinstance(data.get("notes"), list):
+        for n in data["notes"]:
+            if not isinstance(n, dict):
+                continue
+            html = n.get("html")
+            if not html:
+                continue
+            raw_tags = n.get("tags") or []
+            # Clean tags: dedupe, drop empties, replace spaces with underscores
+            cleaned = []
+            seen = set()
+            for t in raw_tags:
+                if not t:
+                    continue
+                ct = str(t).strip()
+                if not ct:
+                    continue
+                ct = ct.replace(" ", "_")
+                if ct not in seen:
+                    seen.add(ct)
+                    cleaned.append(ct)
+            items.append({"html": html, "tags": cleaned})
+    else:
+        # Fallback: simple array of strings (no tags)
+        saved_cards = data.get("saved_cards") or []
+        for s in saved_cards:
+            if s:
+                items.append({"html": s, "tags": []})
 
-    if not saved_cards:
+    if not items:
         return "No saved cards provided", 400
 
     deck_name = data.get("deck_name", "Saved Cards Deck")
@@ -1717,13 +1743,15 @@ def download_apkg():
     deck = genanki.Deck(2059400110, deck_name)
     model = genanki.Model(
         1607392319,
-        'Cloze Model',
-        fields=[{'name': 'Text'}],
-        templates=[{'name': 'Cloze','qfmt': '{{cloze:Text}}','afmt': '{{cloze:Text}}'}],
-        model_type=genanki.Model.CLOZE
+        "Cloze Model",
+        fields=[{"name": "Text"}],
+        templates=[{"name": "Cloze", "qfmt": "{{cloze:Text}}", "afmt": "{{cloze:Text}}"}],
+        model_type=genanki.Model.CLOZE,
     )
-    for card in saved_cards:
-        deck.add_note(genanki.Note(model=model, fields=[card]))
+
+    for it in items:
+        note = genanki.Note(model=model, fields=[it["html"]], tags=it["tags"])
+        deck.add_note(note)
 
     package = genanki.Package(deck)
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".apkg")
@@ -1733,12 +1761,19 @@ def download_apkg():
     from flask import after_this_request
     @after_this_request
     def cleanup(response):
-        try: os.remove(temp_file.name)
-        except Exception as e: logger.error("Temp cleanup failed: %s", e)
+        try:
+            os.remove(temp_file.name)
+        except Exception as e:
+            logger.error("Temp cleanup failed: %s", e)
         return response
 
-    return send_file(temp_file.name, mimetype='application/octet-stream',
-                     as_attachment=True, download_name='saved_cards.apkg')
+    return send_file(
+        temp_file.name,
+        mimetype="application/octet-stream",
+        as_attachment=True,
+        download_name="saved_cards.apkg",
+    )
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=10000)
