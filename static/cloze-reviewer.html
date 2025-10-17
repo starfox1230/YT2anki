@@ -129,6 +129,7 @@
     <div class="row">
       <button class="btn" id="copyAllBtn" title="Copy all visible" style="display:none;">Copy Visible</button>
       <button class="btn" id="apkgBtn" title="Download .apkg" style="display:none;">Download APKG</button>
+      <button class="btn" id="toggleTagsBtn" title="Show/Hide tags">Show Tags</button>
       <button class="btn warn" id="nukeBtn" title="Clear local data">Reset</button>
     </div>
   </div>
@@ -195,36 +196,35 @@
   const el = sel => document.querySelector(sel);
   const els = sel => Array.from(document.querySelectorAll(sel));
   const storeKey = "cloze-reviewer-v1";
+  const tagsKey = "cloze-reviewer-tags-visible";
   let notes = [];
   let view = "new";
   let searchTerm = "";
   let lastRendered = [];
   let soloIndex = 0;
   const uiState = {};
+  let tagsVisible = (() => {
+    try { const v = localStorage.getItem(tagsKey); return v === null ? false : v === "1"; }
+    catch { return false; }
+  })();
 
   // ---- Kill double-tap zoom (iOS Safari & friends) but keep rapid taps working
   (function preventDoubleTapZoom(){
     const isEditable = el =>
       !!(el && el.closest('input, textarea, [contenteditable="true"]'));
-
-    // Newer Safari fires 'dblclick' on double-tap. Cancel zoom (but not in editors).
     document.addEventListener('dblclick', (e) => {
       if (isEditable(e.target)) return;
       e.preventDefault();
     }, { passive: false, capture: true });
-
-    // Fallback for engines that still zoom on double-tap.
-    // If the second tap lands within ~300 ms, block the zoom and synthesize the click
-    // so a quick "Next, Next" still advances twice.
     let lastTouchEnd = 0;
     document.addEventListener('touchend', (e) => {
-      if (e.touches && e.touches.length) return;        // ignore multi-touch
-      if (isEditable(e.target)) return;                  // allow text selection/editing
+      if (e.touches && e.touches.length) return;
+      if (isEditable(e.target)) return;
       const now = Date.now();
       if (now - lastTouchEnd <= 300) {
-        e.preventDefault();                              // stop the zoom
+        e.preventDefault();
         const target = e.target.closest('button, .btn, .segbtn, a, [role="button"]');
-        if (target) target.click();                      // preserve the 2nd "click"
+        if (target) target.click();
       }
       lastTouchEnd = now;
     }, { passive: false, capture: true });
@@ -311,10 +311,9 @@
             <button class="miniBtn" data-action="clozeNext">▶</button>
           </div>
         </div>
-        ${n.tags.length ? `<div class="meta"><div class="tags">${n.tags.map(t=>`<span class="pill">#${escapeHtml(t)}</span>`).join("")}</div></div>` : ""}
+        ${tagsVisible && n.tags.length ? `<div class="meta"><div class="tags">${n.tags.map(t=>`<span class="pill">#${escapeHtml(t)}</span>`).join("")}</div></div>` : ""}
         <div class="notehtml"></div>
         <div class="row">
-          <button class="btn small" data-action="toggle">Reveal</button>
           <button class="btn small" data-action="copy">📋 Copy</button>
           <button class="btn small" data-action="edit">✏️ Edit</button>
           <button class="btn small good" data-action="save">⭐ Save</button>
@@ -333,6 +332,7 @@
     el("#appendArea").classList.toggle("hidden", notes.length === 0);
     cardsEl.innerHTML = cur.map(noteToCardHtml).join("");
     cur.forEach(n => wireCard(n.id));
+    updateToggleTagsBtn();
   }
   function wireCard(id){
     const root = el(`#card-${CSS.escape(id)}`);
@@ -352,12 +352,11 @@
         indicator.textContent = `${(st.idx+1)}/${nums.length}`;
         nav.classList.remove('hidden');
       }
-      get("toggle").textContent = uiState[id].hidden ? "Reveal" : "Hide";
     }
     if (!uiState[id]) uiState[id] = { nums:getClozeNumbers(note.html), idx:0, hidden:true };
     update();
 
-    get("toggle").addEventListener("click", () => { uiState[id].hidden = !uiState[id].hidden; update(); });
+    // click anywhere on the card body to reveal/hide
     root.addEventListener("click", e=>{
       if (e.target.closest(".row") || e.target.closest(".btn") || e.target.closest(".clozeTop")) return;
       uiState[id].hidden = !uiState[id].hidden; update();
@@ -369,8 +368,22 @@
 
     get("copy").addEventListener("click", (e) => { e.stopPropagation(); navigator.clipboard.writeText(note.html).then(()=> toast("Copied")); });
     get("edit").addEventListener("click", (e) => { e.stopPropagation(); openEditor(note.id, update); });
-    get("save").addEventListener("click", (e) => { e.stopPropagation(); note.status = "saved"; note.fav = true; save(); renderList(); });
-    get("discard").addEventListener("click", (e) => { e.stopPropagation(); note.status = "discarded"; note.fav = false; save(); if (view === "new") root.classList.add("hidden"); else renderList(); });
+
+    // Toggle save ↔ new
+    get("save").addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (note.status === "saved") { note.status = "new"; note.fav = false; }
+      else { note.status = "saved"; note.fav = true; }
+      save(); renderList();
+    });
+
+    // Toggle discard ↔ new
+    get("discard").addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (note.status === "discarded") { note.status = "new"; note.fav = false; }
+      else { note.status = "discarded"; note.fav = false; }
+      save(); if (view === "new") root.classList.add("hidden"); else renderList();
+    });
   }
 
   function toast(msg){
@@ -382,7 +395,7 @@
     setTimeout(()=> b.remove(), 1300);
   }
 
-  // Editor (unchanged from your last accepted version)
+  // Editor (unchanged)
   function openEditor(id, onSaved){
     const note = notes.find(n=>n.id===id);
     const prev = note.html;
@@ -500,7 +513,7 @@
     backdrop.addEventListener("click",(e)=>{ if (e.target===backdrop) close(); },{capture:true});
   }
 
-  // Solo view (same as last working version)
+  // Solo view
   const soloBack = el("#soloBack");
   const soloCard = el("#soloCard");
   let soloState = { idx:0, hidden:true, nums:[] };
@@ -518,7 +531,7 @@
           <button class="miniBtn" id="soloClozeNext">▶</button>
         </div>
       </div>
-      ${n.tags.length ? `<div class="meta"><div class="tags">${n.tags.map(t=>`<span class="pill">#${t}</span>`).join("")}</div></div>` : ""}
+      ${tagsVisible && n.tags.length ? `<div class="meta"><div class="tags">${n.tags.map(t=>`<span class="pill">#${t}</span>`).join("")}</div></div>` : ""}
       <div class="notehtml" id="soloHtml">${body}</div>
     `;
     soloCard.querySelector("#soloHtml").onclick = ()=>{ soloState.hidden = !soloState.hidden; drawSolo(); };
@@ -546,6 +559,18 @@
     a.href = URL.createObjectURL(blob); a.download = filename; a.click();
     URL.revokeObjectURL(a.href);
   }
+
+  // Toggle tags UI
+  function updateToggleTagsBtn(){
+    const b = el("#toggleTagsBtn");
+    if (!b) return;
+    b.textContent = tagsVisible ? "Hide Tags" : "Show Tags";
+  }
+  el("#toggleTagsBtn").addEventListener("click", ()=>{
+    tagsVisible = !tagsVisible;
+    try { localStorage.setItem(tagsKey, tagsVisible ? "1" : "0"); } catch {}
+    renderList();
+  });
 
   // Wire UI
   if (notes.length){ el("#ingest").classList.add("hidden"); el("#listArea").classList.remove("hidden"); el("#appendArea").classList.remove("hidden"); el("#copyAllBtn").style.display=""; el("#apkgBtn").style.display=""; }
@@ -588,7 +613,7 @@
     navigator.clipboard.writeText(arr.map(n=>n.html).join("\n")).then(()=>toast("Copied visible"));
   });
 
-  // NEW: APKG download via backend
+  // APKG download via backend
   el("#apkgBtn").addEventListener("click", async ()=>{
     const arr = visibleNotes(); if (!arr.length) return alert("Nothing visible to export.");
     try{
@@ -619,8 +644,22 @@
   el("#soloPrev").addEventListener("click", ()=> { if (soloIndex>0){ soloIndex--; drawSolo(); } });
   el("#soloNext").addEventListener("click", ()=> { const m=filtered().length-1; if (soloIndex<m){ soloIndex++; drawSolo(); } });
   el("#soloCopy").addEventListener("click", ()=> { const cur = filtered()[soloIndex]; navigator.clipboard.writeText(cur.html).then(()=>toast("Copied")); });
-  el("#soloSave").addEventListener("click", ()=>{ const cur=filtered()[soloIndex]; cur.status="saved"; cur.fav=true; save(); renderList(); drawSolo(); });
-  el("#soloDiscard").addEventListener("click", ()=>{ const cur=filtered()[soloIndex]; cur.status="discarded"; cur.fav=false; save(); renderList(); drawSolo(); });
+
+  // Solo Save/Discard toggle behavior mirrors list
+  el("#soloSave").addEventListener("click", ()=>{ 
+    const cur=filtered()[soloIndex]; 
+    if (!cur) return;
+    if (cur.status === "saved") { cur.status = "new"; cur.fav = false; }
+    else { cur.status = "saved"; cur.fav = true; }
+    save(); renderList(); drawSolo();
+  });
+  el("#soloDiscard").addEventListener("click", ()=>{
+    const cur=filtered()[soloIndex]; 
+    if (!cur) return;
+    if (cur.status === "discarded") { cur.status = "new"; cur.fav = false; }
+    else { cur.status = "discarded"; cur.fav = false; }
+    save(); renderList(); drawSolo();
+  });
 
   window.addEventListener("keydown", (e)=>{
     if (el("#soloBack").style.display==="flex"){
