@@ -20,8 +20,8 @@ app.secret_key = "your-secret-key"  # Replace with a secure secret
 #adding for anki helper app
 @app.route("/reviewer")
 def reviewer():
-    # serves /static/cloze_reviewer.html
-    return send_from_directory("static", "cloze_reviewer.html")
+    # serves /static/cloze-reviewer.html
+    return send_from_directory("static", "cloze-reviewer.html")
 #end adding for anki helper app
 
 # Set up logging
@@ -1702,51 +1702,43 @@ def generate():
 
 @app.route("/download_apkg", methods=["POST"])
 def download_apkg():
-    data = request.get_json()
-    if not data or "saved_cards" not in data:
-        return "No saved cards provided", 400
-    saved_cards = data["saved_cards"]
+    data = request.get_json() or {}
+
+    # Accept either {"saved_cards":[...]} or {"notes":[{"html":...}]}
+    saved_cards = data.get("saved_cards")
+    if not saved_cards and isinstance(data.get("notes"), list):
+        saved_cards = [n.get("html", "") for n in data["notes"] if n.get("html")]
+
     if not saved_cards:
         return "No saved cards provided", 400
 
-    deck = genanki.Deck(
-        2059400110,
-        'Saved Cards Deck'
-    )
+    deck_name = data.get("deck_name", "Saved Cards Deck")
+
+    deck = genanki.Deck(2059400110, deck_name)
     model = genanki.Model(
         1607392319,
         'Cloze Model',
         fields=[{'name': 'Text'}],
-        templates=[
-            {
-                'name': 'Cloze',
-                'qfmt': '{{cloze:Text}}',
-                'afmt': '{{cloze:Text}}',
-            },
-        ],
+        templates=[{'name': 'Cloze','qfmt': '{{cloze:Text}}','afmt': '{{cloze:Text}}'}],
         model_type=genanki.Model.CLOZE
     )
     for card in saved_cards:
-        note = genanki.Note(
-            model=model,
-            fields=[card]
-        )
-        deck.add_note(note)
+        deck.add_note(genanki.Note(model=model, fields=[card]))
+
     package = genanki.Package(deck)
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".apkg")
     temp_file.close()
     package.write_to_file(temp_file.name)
-    
+
     from flask import after_this_request
     @after_this_request
-    def remove_file(response):
-        try:
-            os.remove(temp_file.name)
-        except Exception as e:
-            logger.error("Error removing temporary file: %s", e)
+    def cleanup(response):
+        try: os.remove(temp_file.name)
+        except Exception as e: logger.error("Temp cleanup failed: %s", e)
         return response
 
-    return send_file(temp_file.name, mimetype='application/octet-stream', as_attachment=True, download_name='saved_cards.apkg')
+    return send_file(temp_file.name, mimetype='application/octet-stream',
+                     as_attachment=True, download_name='saved_cards.apkg')
 
 if __name__ == "__main__":
     app.run(debug=True, port=10000)
