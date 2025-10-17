@@ -311,7 +311,7 @@
             <button class="miniBtn" data-action="clozeNext">▶</button>
           </div>
         </div>
-        ${tagsVisible && n.tags.length ? `<div class="meta"><div class="tags">${n.tags.map(t=>`<span class="pill">#${escapeHtml(t)}</span>`).join("")}</div></div>` : ""}
+        ${tagsVisible && n.tags.length ? `<div class="meta"><div class="tags">${n.tags.map(t=>`<span class="pill">${escapeHtml(t)}</span>`).join("")}</div></div>` : ""}
         <div class="notehtml"></div>
         <div class="row">
           <button class="btn small" data-action="copy">📋 Copy</button>
@@ -531,7 +531,7 @@
           <button class="miniBtn" id="soloClozeNext">▶</button>
         </div>
       </div>
-      ${tagsVisible && n.tags.length ? `<div class="meta"><div class="tags">${n.tags.map(t=>`<span class="pill">#${t}</span>`).join("")}</div></div>` : ""}
+      ${tagsVisible && n.tags.length ? `<div class="meta"><div class="tags">${n.tags.map(t=>`<span class="pill">${t}</span>`).join("")}</div></div>` : ""}
       <div class="notehtml" id="soloHtml">${body}</div>
     `;
     soloCard.querySelector("#soloHtml").onclick = ()=>{ soloState.hidden = !soloState.hidden; drawSolo(); };
