@@ -18,6 +18,13 @@
   a{color:var(--accent);text-decoration:none}
   a:hover{text-decoration:underline}
 
+  /* Prevent double-tap zoom on interactive controls */
+  html, body { touch-action: manipulation; }
+  button, .btn, .segbtn, a, [role="button"] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
   .wrap{max-width:880px;margin:0 auto;padding:16px}
   header{
     position:sticky;top:0;z-index:5;background:linear-gradient(180deg,var(--bg),rgba(15,17,21,.8));
@@ -194,6 +201,34 @@
   let lastRendered = [];
   let soloIndex = 0;
   const uiState = {};
+
+  // ---- Kill double-tap zoom (iOS Safari & friends) but keep rapid taps working
+  (function preventDoubleTapZoom(){
+    const isEditable = el =>
+      !!(el && el.closest('input, textarea, [contenteditable="true"]'));
+
+    // Newer Safari fires 'dblclick' on double-tap. Cancel zoom (but not in editors).
+    document.addEventListener('dblclick', (e) => {
+      if (isEditable(e.target)) return;
+      e.preventDefault();
+    }, { passive: false, capture: true });
+
+    // Fallback for engines that still zoom on double-tap.
+    // If the second tap lands within ~300 ms, block the zoom and synthesize the click
+    // so a quick "Next, Next" still advances twice.
+    let lastTouchEnd = 0;
+    document.addEventListener('touchend', (e) => {
+      if (e.touches && e.touches.length) return;        // ignore multi-touch
+      if (isEditable(e.target)) return;                  // allow text selection/editing
+      const now = Date.now();
+      if (now - lastTouchEnd <= 300) {
+        e.preventDefault();                              // stop the zoom
+        const target = e.target.closest('button, .btn, .segbtn, a, [role="button"]');
+        if (target) target.click();                      // preserve the 2nd "click"
+      }
+      lastTouchEnd = now;
+    }, { passive: false, capture: true });
+  })();
 
   // Scroll lock helpers
   let wheelPreventHandler = null, touchPreventHandler = null;
