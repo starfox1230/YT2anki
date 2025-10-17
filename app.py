@@ -6,6 +6,15 @@ import tempfile
 import genanki
 from flask import Flask, request, redirect, url_for, flash, render_template_string, send_file
 
+#adding for new anki helper app
+from flask import send_from_directory
+
+@app.route("/reviewer")
+def reviewer():
+    # serves /static/cloze_reviewer.html
+    return send_from_directory("static", "cloze_reviewer.html")
+#end adding for anki helper app
+
 # Updated OpenAI API import and initialization.
 from openai import OpenAI  # Ensure you have the correct version installed
 
