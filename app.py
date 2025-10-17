@@ -8,18 +8,21 @@ from flask import Flask, request, redirect, url_for, flash, render_template_stri
 
 #adding for new anki helper app
 from flask import send_from_directory
+#end
 
-@app.route("/reviewer")
-def reviewer():
-    # serves /static/cloze_reviewer.html
-    return send_from_directory("static", "cloze_reviewer.html")
-#end adding for anki helper app
 
 # Updated OpenAI API import and initialization.
 from openai import OpenAI  # Ensure you have the correct version installed
 
 app = Flask(__name__)
 app.secret_key = "your-secret-key"  # Replace with a secure secret
+
+#adding for anki helper app
+@app.route("/reviewer")
+def reviewer():
+    # serves /static/cloze_reviewer.html
+    return send_from_directory("static", "cloze_reviewer.html")
+#end adding for anki helper app
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
