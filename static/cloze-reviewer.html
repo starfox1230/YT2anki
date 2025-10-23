@@ -199,7 +199,7 @@
   let lastRendered = [];
   let soloIndex = 0;
   const uiState = {};
-  let lastInteractedCardId = null; // Track the last clicked card for keyboard shortcuts
+  let lastInteractedCardId = null;
   let tagsVisible = (() => {
     try { const v = localStorage.getItem(tagsKey); return v === null ? false : v === "1"; }
     catch { return false; }
@@ -207,8 +207,7 @@
 
   // ---- Kill double-tap zoom (iOS Safari & friends) but keep rapid taps working
   (function preventDoubleTapZoom(){
-    const isEditable = el =>
-      !!(el && el.closest('input, textarea, [contenteditable="true"]'));
+    const isEditable = el => !!(el && el.closest('input, textarea, [contenteditable="true"]'));
     document.addEventListener('dblclick', (e) => {
       if (isEditable(e.target)) return;
       e.preventDefault();
@@ -467,9 +466,7 @@
     let historyIndex = 0;
 
     const recordChange = (newValue) => {
-      if (historyIndex < history.length - 1) {
-        history.splice(historyIndex + 1);
-      }
+      if (historyIndex < history.length - 1) history.splice(historyIndex + 1);
       history.push(newValue);
       historyIndex = history.length - 1;
     };
@@ -583,8 +580,12 @@
     };
 
     ta.addEventListener("keydown", (e)=>{
-      const key = e.key;
-      if (e.altKey && key >= '1' && key <= '9') {
+      const key = e.key.toLowerCase();
+      if (e.altKey && key === 'c') {
+        e.preventDefault();
+        removeAll();
+      }
+      else if (e.altKey && key >= '1' && key <= '9') {
         e.preventDefault();
         const k = parseInt(key, 10);
         if (getNums(ta.value).includes(k)) removeCnum(k);
@@ -596,9 +597,9 @@
         }
       }
       else if (e.ctrlKey || e.metaKey) {
-        if (e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        if (key === 'z' && !e.shiftKey) {
           e.preventDefault(); performUndo();
-        } else if (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey)) {
+        } else if (key === 'y' || (key === 'z' && e.shiftKey)) {
           e.preventDefault(); performRedo();
         }
       }
@@ -607,6 +608,7 @@
     rebuildPlusMinusButtons();
   }
   // Solo view
+
   const soloBack = el("#soloBack");
   const soloCard = el("#soloCard");
   let soloState = { idx:0, hidden:true, nums:[] };
