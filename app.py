@@ -31,6 +31,239 @@ logger = logging.getLogger(__name__)
 # Initialize the OpenAI client
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
+SACLOZE_MODEL_ID_DEFAULT = 1607392319
+SACLOZE_MODEL_NAME = "saCloze+"
+SACLOZE_FIELDS = [
+    {"name": "Text"},
+    {"name": "Extra"},
+]
+SACLOZE_FRONT_TEMPLATE = """<div id=\"kard\">
+
+<!-- Bar timer (Front) -->
+<div class=\"tbar\" data-seconds=\"12\" role=\"timer\" aria-label=\"Front timer\">
+  <div class=\"ttrack\"><div class=\"tfill\"></div></div>
+  <span class=\"tleft\">00:12</span>
+</div>
+<!-- END Bar timer (Front) -->
+
+
+<div class=\"tags\">{{Tags}}</div>
+{{edit:cloze:Text}}
+</div>
+
+
+
+<!-- Tiny bar timer for Anki (desktop, AnkiMobile, AnkiDroid)-->
+
+<script>
+/* Re-entrant bar timer for Anki (desktop, AnkiMobile, AnkiDroid)
+   - Attaches on every card load (no global guard)
+   - Starts once per element via data flag
+   - Works even when Anki swaps DOM without reloading the page
+*/
+(function(){
+  function colorFor(p){
+    var hStart = 170, hEnd = 0, h = hEnd + (hStart - hEnd) * p;
+    return "hsl(" + h + ",95%,55%)";
+  }
+  function pad2(n){ return (n<10? "0":"") + n }
+
+  function startTimerOn(el){
+    if (!el || el.hasAttribute("data-bar-started")) return;
+    el.setAttribute("data-bar-started","1");
+
+    var secs = parseFloat(el.getAttribute("data-seconds")||"12");
+    if (!(secs>0)) secs = 1;
+    var fill  = el.querySelector(".tfill");
+    var txt   = el.querySelector(".tleft");
+    if (!fill || !txt) return;
+
+    var durMs = secs*1000, start = performance.now();
+
+    function tick(t){
+      var left = Math.max(0, durMs - (t - start));
+      var frac = left / durMs;
+      fill.style.width = (frac*100).toFixed(3) + "%";
+      fill.style.background = colorFor(frac);
+
+      var s = Math.ceil(left/1000), mm = Math.floor(s/60), ss = s%60;
+      txt.textContent = mm ? (mm + ":" + pad2(ss)) : (s + "s");
+
+      if (left>0) requestAnimationFrame(tick);
+      else el.classList.add("done");
+    }
+    requestAnimationFrame(tick);
+  }
+
+  function scanAndStart(){
+    var bars = document.querySelectorAll(".tbar");
+    for (var i=0;i<bars.length;i++) startTimerOn(bars[i]);
+  }
+
+  // Run now (script is after .tbar HTML)
+  scanAndStart();
+
+  // Also run whenever Anki swaps/rebuilds the DOM
+  var mo = new MutationObserver(function(){ scanAndStart(); });
+  if (document.body){
+    mo.observe(document.body, { childList: true, subtree: true });
+  } else {
+    document.addEventListener("DOMContentLoaded", function(){
+      mo.observe(document.body, { childList: true, subtree: true });
+      scanAndStart();
+    });
+  }
+})();
+</script>
+
+<!-- END Tiny bar timer for Anki (desktop, AnkiMobile, AnkiDroid)-->
+
+
+
+<br>
+
+
+{{edit:tts en_US voices=Apple_Evan_(Enhanced) speed=1.1:cloze:Text}}
+
+
+<!--Take out cloze type brackets to stop tts, put them in to restart tts, two after first dashes, two before last dashes-->
+"""
+SACLOZE_BACK_TEMPLATE = """<div id=\"kard\">
+
+<!-- Bar timer (Back) -->
+<div class=\"tbar\" data-seconds=\"8\" role=\"timer\" aria-label=\"Back timer\">
+  <div class=\"ttrack\"><div class=\"tfill\"></div></div>
+  <span class=\"tleft\">00:08</span>
+</div>
+<!-- END Bar timer (Back) -->
+
+<div class=\"tags\" id='tags'>{{Tags}}</div>
+{{edit:cloze:Text}}
+<div>&nbsp;</div>
+<div id='extra'>{{edit:Extra}}</div>
+
+</div>
+
+
+<br>
+
+
+
+{{edit:tts en_US voices=Apple_Evan_(Enhanced) speed=1.1:cloze-only:Text}}
+"""
+SACLOZE_CSS = """html { overflow: scroll; overflow-x: hidden; }
+
+#kard {
+padding: 0px 0px;
+background-color:;
+max-width: 700px;
+margin: 0 auto;
+word-wrap: break-word;
+background-color: ;
+}
+
+.card {
+font-family: helvetica;
+font-size: 20px;
+text-align: center;
+color: #D7DEE9; /* FONT COLOR */
+line-height: 1.6em;
+background-color: #2F2F31; /* BACKGROUND COLOR -- "#333B45" is original */
+}
+
+.cloze, .cloze b, .cloze u, .cloze i { font-weight: bold; color: MediumSeaGreen !important;}
+
+
+
+/* --- Bar timer --- */
+.tbar{
+  position: sticky; top: 0; z-index: 1;
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 8px; margin: 0 0 12px 0;
+  background: rgba(16,24,40,.25); border: 1px solid rgba(34,50,77,.65);
+  border-radius: 12px; backdrop-filter: blur(6px);
+}
+.ttrack{
+  flex: 1 1 auto; height: 8px; border-radius: 999px;
+  background: #102035; border: 1px solid #22324d; overflow: hidden;
+}
+.tfill{
+  height: 100%; width: 100%; background: #27d3ff; /* JS updates color */
+  transform-origin: left center;
+}
+.tleft{
+  font-size: 12px; color: #A6ABB9; line-height: 1;
+  white-space: nowrap; font-variant-numeric: tabular-nums;
+  min-width: 52px; text-align: right; /* keeps it on one line */
+}
+.tbar.done .tleft{ color:#CC5B5B }
+
+/* Optional: stop your fixed .tags from intercepting touches/scroll */
+.tags{ pointer-events: none; }
+/* --- END Bar timer --- */
+
+
+
+#extra, #extra i { font-size: 15px; color:#D7DEE9; font-style: italic; }
+
+#list { color: #A6ABB9; font-size: 10px; width: 100%; text-align: center; }
+
+.tags { color: #A6ABB9; opacity: 0; font-size: 10px; background-color: ; width: 100%; height: ; text-align: center; text-transform: uppercase; position: fixed; padding: 0px; top:0;  right: 0;}
+/* add what's within quotes if you want to see tags upon hovering: ".tags:hover { opacity: 1; position: fixed;}" */
+
+img { display: block; max-width: 100%; max-height: none; margin-left: auto; margin: 10px auto 10px auto;}
+img:active { width: 100%; }
+tr {font-size: 12px; }
+
+/* CHANGE COLOR ACCENTS HERE */
+b { color: #C695C6 !important; }
+u { text-decoration: none; color: #5EB3B3;}
+i  { color: IndianRed; }
+a { color: LightBlue !important; text-decoration: none; font-size: 14px; font-style: normal;  }
+
+::-webkit-scrollbar {
+    /*display: none;   remove scrollbar space */
+    background: #fff;   /* optional: just make scrollbar invisible */
+    width: 0px; }
+::-webkit-scrollbar-thumb { background: #bbb; }
+
+
+/* .mobile for all mobile devices */
+.mobile .card { color: #D7DEE9; font-size: ; font-weight: ; background-color: #2F2F31; }
+.iphone .card img {max-width: 100%; max-height: none;}
+.mobile .card img:active { width: inherit; max-height: none;}
+/* add what's within quotes if you want to see tags upon hovering: ".mobile .tags:hover { opacity: 1; position: relative;}" */
+"""
+SACLOZE_TEMPLATES = [
+    {
+        "name": "Card 1",
+        "qfmt": SACLOZE_FRONT_TEMPLATE,
+        "afmt": SACLOZE_BACK_TEMPLATE,
+    }
+]
+
+
+def resolve_sacloze_model_id(payload):
+    candidate = None
+    if isinstance(payload, dict):
+        candidate = payload.get("model_id")
+    if not candidate:
+        candidate = os.environ.get("SACLOZE_MODEL_ID")
+    if not candidate:
+        return SACLOZE_MODEL_ID_DEFAULT
+    try:
+        model_id = int(candidate)
+        if model_id <= 0:
+            raise ValueError
+        return model_id
+    except (TypeError, ValueError):
+        logger.warning(
+            "Invalid saCloze+ model_id %r; falling back to default %d",
+            candidate,
+            SACLOZE_MODEL_ID_DEFAULT,
+        )
+        return SACLOZE_MODEL_ID_DEFAULT
+
 # ----------------------------
 # Helper Functions
 # ----------------------------
@@ -1714,7 +1947,8 @@ def download_apkg():
             if not html:
                 continue
             raw_tags = n.get("tags") or []
-            # Clean tags: dedupe, drop empties, replace spaces with underscores
+            extra = n.get("extra")
+            # Clean tags: dedupe and drop empties while preserving original text
             cleaned = []
             seen = set()
             for t in raw_tags:
@@ -1723,17 +1957,20 @@ def download_apkg():
                 ct = str(t).strip()
                 if not ct:
                     continue
-                ct = ct.replace(" ", "_")
                 if ct not in seen:
                     seen.add(ct)
                     cleaned.append(ct)
-            items.append({"html": html, "tags": cleaned})
+            items.append({
+                "html": html,
+                "extra": "" if extra is None else str(extra),
+                "tags": cleaned,
+            })
     else:
         # Fallback: simple array of strings (no tags)
         saved_cards = data.get("saved_cards") or []
         for s in saved_cards:
             if s:
-                items.append({"html": s, "tags": []})
+                items.append({"html": s, "extra": "", "tags": []})
 
     if not items:
         return "No saved cards provided", 400
@@ -1741,16 +1978,21 @@ def download_apkg():
     deck_name = data.get("deck_name", "Saved Cards Deck")
 
     deck = genanki.Deck(2059400110, deck_name)
+    model_id = resolve_sacloze_model_id(data)
     model = genanki.Model(
-        1607392319,
-        "Cloze Model",
-        fields=[{"name": "Text"}],
-        templates=[{"name": "Cloze", "qfmt": "{{cloze:Text}}", "afmt": "{{cloze:Text}}"}],
+        model_id,
+        SACLOZE_MODEL_NAME,
+        fields=SACLOZE_FIELDS,
+        templates=SACLOZE_TEMPLATES,
         model_type=genanki.Model.CLOZE,
+        css=SACLOZE_CSS,
     )
-
     for it in items:
-        note = genanki.Note(model=model, fields=[it["html"]], tags=it["tags"])
+        note = genanki.Note(
+            model=model,
+            fields=[it["html"], it.get("extra", "")],
+            tags=it["tags"],
+        )
         deck.add_note(note)
 
     package = genanki.Package(deck)
