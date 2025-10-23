@@ -430,12 +430,11 @@
           <div class="hr"></div>
           <textarea class="input" id="editArea" style="width:100%;min-height:260px;font-size:24px;line-height:1.25">${escapeHtml(prev)}</textarea>
           <!-- Controls -->
-          <!-- Row 1: Add (+C#) buttons right -->
           <div class="row" style="margin-top:10px;flex-wrap:wrap;align-items:center">
+            <button class="btn blue" data-undo title="Undo (Ctrl+Z)">&#x21A9;</button>
             <div class="f1"></div>
             <div class="row" id="plusRow" style="gap:6px"></div>
           </div>
-          <!-- Row 2: Remove (-C#) buttons right -->
           <div class="row" style="margin-top:8px;justify-content:flex-end">
             <button class="btn red" data-removeAll>Remove All Clozes</button>
             <div class="row" id="minusRow" style="gap:6px"></div>
@@ -459,6 +458,22 @@
       historyIndex = history.length - 1;
     };
 
+    function performUndo() {
+      if (historyIndex > 0) {
+        historyIndex--;
+        ta.value = history[historyIndex];
+        rebuildPlusMinusButtons();
+      }
+    }
+
+    function performRedo() {
+      if (historyIndex < history.length - 1) {
+        historyIndex++;
+        ta.value = history[historyIndex];
+        rebuildPlusMinusButtons();
+      }
+    }
+
     const editorKeydownHandler = (e) => {
       if (e.key === "Escape") close();
     };
@@ -470,6 +485,7 @@
       document.removeEventListener('keydown', editorKeydownHandler);
     };
     area.querySelector("[data-x]").onclick = close;
+    area.querySelector("[data-undo]").onclick = performUndo;
 
     function getNums(text){ return getClozeNumbers(text); }
     function rebuildPlusMinusButtons(){
@@ -554,7 +570,6 @@
     ta.addEventListener("keydown", (e)=>{
       const key = e.key;
 
-      // Alt + Number to remove a cloze
       if (e.altKey && key >= '1' && key <= '9') {
         e.preventDefault();
         const k = parseInt(key, 10);
@@ -563,7 +578,6 @@
           removeCnum(k);
         }
       }
-      // Number key (without modifiers) to add a cloze
       else if (!e.altKey && !e.ctrlKey && !e.metaKey && key >= '1' && key <= '9') {
         if (ta.selectionStart !== ta.selectionEnd) {
           e.preventDefault();
@@ -571,20 +585,13 @@
           addClozeAs(k);
         }
       }
-      // Ctrl/Cmd + Z for Undo, Ctrl/Cmd + Y/Shift+Z for Redo
       else if (e.ctrlKey || e.metaKey) {
         if (e.key.toLowerCase() === 'z' && !e.shiftKey) {
           e.preventDefault();
-          if (historyIndex > 0) {
-            historyIndex--;
-            ta.value = history[historyIndex];
-          }
+          performUndo();
         } else if (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey)) {
           e.preventDefault();
-          if (historyIndex < history.length - 1) {
-            historyIndex++;
-            ta.value = history[historyIndex];
-          }
+          performRedo();
         }
       }
     });
