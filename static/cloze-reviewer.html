@@ -118,6 +118,7 @@
       <button class="segbtn" data-view="saved">Saved</button>
       <button class="segbtn" data-view="discarded">Discarded</button>
     </div>
+    <button class="btn" id="toggleTagsBtn" title="Show/Hide tags">Show Tags</button>
     <button class="btn" id="soloBtn" title="One-at-a-time viewer (optional)">Solo View</button>
     <div class="searchRow">
       <input class="input" id="search" placeholder="Search">
@@ -125,7 +126,7 @@
     <div class="row">
       <button class="btn" id="copyAllBtn" title="Copy all visible" style="display:none;">Copy Visible</button>
       <button class="btn" id="apkgBtn" title="Download .apkg" style="display:none;">Download APKG</button>
-      <button class="btn" id="toggleTagsBtn" title="Show/Hide tags">Show Tags</button>
+      <button class="btn" id="copyDiffBtn" title="Copy edited cards diff" style="display:none;">Copy DIFF</button>
       <button class="btn warn" id="nukeBtn" title="Clear local data">Reset</button>
     </div>
   </div>
@@ -248,6 +249,12 @@
     const raw = localStorage.getItem(storeKey);
     if (raw) { const parsed = JSON.parse(raw); if (Array.isArray(parsed)) notes = parsed; }
   } catch {}
+  if (!Array.isArray(notes)) notes = [];
+  notes.forEach(n => {
+    if (n && typeof n === "object" && typeof n.originalHtml !== "string") {
+      n.originalHtml = n.html;
+    }
+  });
 
   function uid(){ return "n_" + Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
   function save(){ localStorage.setItem(storeKey, JSON.stringify(notes)); }
@@ -274,7 +281,8 @@
     const tryTags = v => Array.isArray(v?.tags) ? v.tags.map(t=>String(t)) : [];
     (input||[]).forEach((v,i)=>{
       const html = tryStr(v); if (!html) return;
-      out.push({ id:(v&&v.id)?String(v.id):uid(), html:String(html), tags:tryTags(v), status:"new", fav:false, createdAt:Date.now()+i });
+      const val = String(html);
+      out.push({ id:(v&&v.id)?String(v.id):uid(), html:val, originalHtml:val, tags:tryTags(v), status:"new", fav:false, createdAt:Date.now()+i });
     });
     return out;
   }
@@ -326,6 +334,7 @@
     el("#listArea").classList.toggle("hidden", cur.length === 0);
     el("#copyAllBtn").style.display = notes.length ? "" : "none";
     el("#apkgBtn").style.display = notes.length ? "" : "none";
+    el("#copyDiffBtn").style.display = notes.length ? "" : "none";
     el("#appendArea").classList.toggle("hidden", notes.length === 0);
     cardsEl.innerHTML = cur.map(noteToCardHtml).join("");
     cur.forEach(n => wireCard(n.id));
@@ -424,6 +433,7 @@
   function openEditor(id, onSaved){
     const note = notes.find(n=>n.id===id);
     const prev = note.html;
+    if (typeof note.originalHtml !== "string") note.originalHtml = prev;
     const area = document.createElement("div");
     area.innerHTML = `
       <div class="modalBackdrop">
@@ -656,6 +666,13 @@
     const ids = new Set(lastRendered);
     return notes.filter(n => ids.has(n.id));
   }
+  function editedNotes(){
+    return notes.filter(n => {
+      if (!n || typeof n.html !== "string") return false;
+      const baseline = typeof n.originalHtml === "string" ? n.originalHtml : n.html;
+      return n.html !== baseline;
+    });
+  }
   function downloadBlob(filename, blob){
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = filename; a.click();
@@ -675,7 +692,7 @@
   });
 
   // Wire UI
-  if (notes.length){ el("#ingest").classList.add("hidden"); el("#listArea").classList.remove("hidden"); el("#appendArea").classList.remove("hidden"); el("#copyAllBtn").style.display=""; el("#apkgBtn").style.display=""; }
+  if (notes.length){ el("#ingest").classList.add("hidden"); el("#listArea").classList.remove("hidden"); el("#appendArea").classList.remove("hidden"); el("#copyAllBtn").style.display=""; el("#apkgBtn").style.display=""; el("#copyDiffBtn").style.display=""; }
   renderList();
 
   els(".segbtn").forEach(b=>{
@@ -696,7 +713,7 @@
     el("#ingest").classList.add("hidden");
     el("#listArea").classList.remove("hidden");
     el("#appendArea").classList.remove("hidden");
-    el("#copyAllBtn").style.display=""; el("#apkgBtn").style.display="";
+    el("#copyAllBtn").style.display=""; el("#apkgBtn").style.display=""; el("#copyDiffBtn").style.display="";
     renderList(); toast("Loaded");
   });
 
@@ -734,13 +751,32 @@
     }
   });
 
+  el("#copyDiffBtn").addEventListener("click", ()=>{
+    const arr = editedNotes();
+    if (!arr.length) { alert("No edited cards to diff."); return; }
+    const diffText = arr.map((n, idx) => {
+      const baseline = typeof n.originalHtml === "string" ? n.originalHtml : "";
+      const header = `Card ${idx+1}: ${n.id || "(no id)"}`;
+      const tagLine = n.tags && n.tags.length ? `Tags: ${n.tags.join(", ")}` : "";
+      return [
+        header,
+        tagLine,
+        "--- before",
+        baseline,
+        "+++ after",
+        n.html
+      ].filter(Boolean).join("\n");
+    }).join("\n\n");
+    navigator.clipboard.writeText(diffText).then(()=>toast("Copied diff")).catch(()=>alert("Failed to copy diff to clipboard."));
+  });
+
   el("#nukeBtn").addEventListener("click", ()=>{
     if (!confirm("Clear local data and start over?")) return;
     localStorage.removeItem(storeKey);
     notes = []; renderList();
     el("#listArea").classList.add("hidden"); el("#appendArea").classList.add("hidden");
     el("#ingest").classList.remove("hidden");
-    el("#copyAllBtn").style.display="none"; el("#apkgBtn").style.display="none";
+    el("#copyAllBtn").style.display="none"; el("#apkgBtn").style.display="none"; el("#copyDiffBtn").style.display="none";
   });
 
   // Solo controls
