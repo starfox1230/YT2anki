@@ -358,6 +358,13 @@
       if (e.target.closest(".row") || e.target.closest(".btn") || e.target.closest(".clozeTop")) return;
       uiState[id].hidden = !uiState[id].hidden; update();
     });
+
+    htmlBox.addEventListener("dblclick", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openEditor(note.id, update);
+    });
+
     const prevBtn = root.querySelector('[data-action="clozePrev"]');
     const nextBtn = root.querySelector('[data-action="clozeNext"]');
     if (prevBtn) prevBtn.addEventListener("click", (e)=>{ e.stopPropagation(); const st=uiState[id], n=st.nums.length; if(!n)return; st.idx=(st.idx-1+n)%n; st.hidden=true; update(); });
@@ -619,7 +626,13 @@
       ${tagsVisible && n.tags.length ? `<div class="meta"><div class="tags">${n.tags.map(t=>`<span class="pill">${t}</span>`).join("")}</div></div>` : ""}
       <div class="notehtml" id="soloHtml">${body}</div>
     `;
-    soloCard.querySelector("#soloHtml").onclick = ()=>{ soloState.hidden = !soloState.hidden; drawSolo(); };
+    const soloHtml = soloCard.querySelector("#soloHtml");
+    soloHtml.onclick = ()=>{ soloState.hidden = !soloState.hidden; drawSolo(); };
+    soloHtml.addEventListener("dblclick", (e) => {
+      e.preventDefault();
+      el("#soloEdit").click();
+    });
+
     const prevBtn = soloCard.querySelector("#soloClozePrev");
     const nextBtn = soloCard.querySelector("#soloClozeNext");
     if (prevBtn) prevBtn.onclick = ()=>{ if (!nums.length) return; soloState.idx=(soloState.idx-1+nums.length)%nums.length; soloState.hidden=true; drawSolo(); };
@@ -732,6 +745,13 @@
   el("#soloPrev").addEventListener("click", ()=> { if (soloIndex>0){ soloIndex--; drawSolo(); } });
   el("#soloNext").addEventListener("click", ()=> { const m=filtered().length-1; if (soloIndex<m){ soloIndex++; drawSolo(); } });
   el("#soloCopy").addEventListener("click", ()=> { const cur = filtered()[soloIndex]; navigator.clipboard.writeText(cur.html).then(()=>toast("Copied")); });
+  el("#soloEdit").addEventListener("click", ()=>{
+    const cur = filtered()[soloIndex];
+    if (!cur) return;
+    openEditor(cur.id, ()=>{
+      closeSolo();
+    });
+  });
 
   el("#soloSave").addEventListener("click", ()=>{
      const cur=filtered()[soloIndex];
