@@ -33,6 +33,7 @@
     .btn{
       border:1px solid #2a3140;background:var(--surface);color:var(--text);
       padding:9px 12px;border-radius:10px;cursor:pointer;box-shadow:var(--shadow);
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
     }
     .btn:focus{outline:none;box-shadow:var(--ring)}
     .btn.primary{background:var(--accent);border-color:transparent;color:#0b0d12}
@@ -354,14 +355,13 @@
     update();
 
     root.addEventListener("click", e=>{
-      lastInteractedCardId = id; // Set this as the last interacted card
-      if (e.target.closest(".row") || e.target.closest(".btn") || e.target.closest(".clozeTop")) return;
+      lastInteractedCardId = id;
+      if (e.target.closest(".row,.btn,.clozeTop")) return;
       uiState[id].hidden = !uiState[id].hidden; update();
     });
 
     htmlBox.addEventListener("dblclick", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+      e.preventDefault(); e.stopPropagation();
       openEditor(note.id, update);
     });
 
@@ -438,7 +438,16 @@
           <textarea class="input" id="editArea" style="width:100%;min-height:260px;font-size:24px;line-height:1.25">${escapeHtml(prev)}</textarea>
           <!-- Controls -->
           <div class="row" style="margin-top:10px;flex-wrap:wrap;align-items:center">
-            <button class="btn blue" data-undo title="Undo (Ctrl+Z)">&#x21A9;</button>
+            <button class="btn blue" data-undo title="Undo (Ctrl+Z)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+              </svg>
+            </button>
+            <button class="btn blue" data-redo title="Redo (Ctrl+Y)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+              </svg>
+            </button>
             <div class="f1"></div>
             <div class="row" id="plusRow" style="gap:6px"></div>
           </div>
@@ -481,9 +490,7 @@
       }
     }
 
-    const editorKeydownHandler = (e) => {
-      if (e.key === "Escape") close();
-    };
+    const editorKeydownHandler = (e) => { if (e.key === "Escape") close(); };
     document.addEventListener('keydown', editorKeydownHandler);
 
     const close = ()=>{
@@ -492,7 +499,8 @@
       document.removeEventListener('keydown', editorKeydownHandler);
     };
     area.querySelector("[data-x]").onclick = close;
-    area.querySelector("[data-undo]").onclick = performUndo;
+    area.querySelector("[data-undo]").onclick = () => { performUndo(); ta.focus(); };
+    area.querySelector("[data-redo]").onclick = () => { performRedo(); ta.focus(); };
 
     function getNums(text){ return getClozeNumbers(text); }
     function rebuildPlusMinusButtons(){
@@ -504,7 +512,7 @@
       nums.forEach(k=>{
         const b = document.createElement("button");
         b.className = "btn red"; b.textContent = `-C${k}`;
-        b.title = `Remove all C${k} clozes (reindex higher ones)`;
+        b.title = `Remove all C${k} clozes`;
         b.onclick = ()=> removeCnum(k);
         minusRow.appendChild(b);
       });
@@ -533,15 +541,16 @@
       ta.value = txt.slice(0, start) + newCloze + trailingSpace + txt.slice(end);
       recordChange(ta.value);
       const pos = start + newCloze.length;
-      ta.focus();
       ta.setSelectionRange(pos, pos);
       rebuildPlusMinusButtons();
+      ta.focus();
     }
 
     function removeAll(){
       ta.value = ta.value.replace(/{{c\d+::(.*?)(?:::([^}]+))?}}/g, "$1");
       recordChange(ta.value);
       rebuildPlusMinusButtons();
+      ta.focus();
     }
 
     function removeCnum(k){
@@ -557,15 +566,14 @@
       ta.value = txt;
       recordChange(ta.value);
       rebuildPlusMinusButtons();
+      ta.focus();
     }
 
     area.querySelector("[data-removeAll]").onclick = removeAll;
 
     area.querySelector("[data-save]").onclick = ()=>{
       const v = ta.value;
-      note.html = v;
-      note.status = "saved";
-      note.fav = true;
+      note.html = v; note.status = "saved"; note.fav = true;
       save();
       uiState[id] = { nums:getClozeNumbers(v), idx:0, hidden:true };
       renderList();
@@ -576,29 +584,22 @@
 
     ta.addEventListener("keydown", (e)=>{
       const key = e.key;
-
       if (e.altKey && key >= '1' && key <= '9') {
         e.preventDefault();
         const k = parseInt(key, 10);
-        const currentClozes = getNums(ta.value);
-        if (currentClozes.includes(k)) {
-          removeCnum(k);
-        }
+        if (getNums(ta.value).includes(k)) removeCnum(k);
       }
       else if (!e.altKey && !e.ctrlKey && !e.metaKey && key >= '1' && key <= '9') {
         if (ta.selectionStart !== ta.selectionEnd) {
           e.preventDefault();
-          const k = parseInt(key, 10);
-          addClozeAs(k);
+          addClozeAs(parseInt(key, 10));
         }
       }
       else if (e.ctrlKey || e.metaKey) {
         if (e.key.toLowerCase() === 'z' && !e.shiftKey) {
-          e.preventDefault();
-          performUndo();
+          e.preventDefault(); performUndo();
         } else if (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey)) {
-          e.preventDefault();
-          performRedo();
+          e.preventDefault(); performRedo();
         }
       }
     });
@@ -610,7 +611,8 @@
   const soloCard = el("#soloCard");
   let soloState = { idx:0, hidden:true, nums:[] };
   function drawSolo(){
-    const cur = filtered(); const n = cur[soloIndex];
+    const cur = filtered(); if (!cur || !cur[soloIndex]) return;
+    const n = cur[soloIndex];
     const nums = soloState.nums = getClozeNumbers(n.html);
     const target = nums[soloState.idx] || null;
     const body = nums.length ? renderClozeTarget(n.html, target, soloState.hidden) : trimHtml(n.html);
@@ -645,7 +647,7 @@
     drawSolo();
     openModalBackdrop(soloBack);
   }
-  function closeSolo(){ closeModalBackdrop(soloBack); }
+  function closeSolo(){ closeModalBackdrop(soloBack); renderList(); }
 
   // Export helpers
   function visibleNotes(){
@@ -746,23 +748,18 @@
   el("#soloNext").addEventListener("click", ()=> { const m=filtered().length-1; if (soloIndex<m){ soloIndex++; drawSolo(); } });
   el("#soloCopy").addEventListener("click", ()=> { const cur = filtered()[soloIndex]; navigator.clipboard.writeText(cur.html).then(()=>toast("Copied")); });
   el("#soloEdit").addEventListener("click", ()=>{
-    const cur = filtered()[soloIndex];
-    if (!cur) return;
-    openEditor(cur.id, ()=>{
-      closeSolo();
-    });
+    const cur = filtered()[soloIndex]; if (!cur) return;
+    openEditor(cur.id, ()=>{ drawSolo(); });
   });
 
   el("#soloSave").addEventListener("click", ()=>{
-     const cur=filtered()[soloIndex];
-     if (!cur) return;
+     const cur=filtered()[soloIndex]; if (!cur) return;
     if (cur.status === "saved") { cur.status = "new"; cur.fav = false; }
     else { cur.status = "saved"; cur.fav = true; }
     save(); renderList(); drawSolo();
   });
   el("#soloDiscard").addEventListener("click", ()=>{
-    const cur=filtered()[soloIndex];
-    if (!cur) return;
+    const cur=filtered()[soloIndex]; if (!cur) return;
     if (cur.status === "discarded") { cur.status = "new"; cur.fav = false; }
     else { cur.status = "discarded"; cur.fav = false; }
     save(); renderList(); drawSolo();
@@ -783,17 +780,13 @@
 
   // Global card shortcuts (E, D, S, C)
   window.addEventListener("keydown", (e) => {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.closest('.modal')) {
-      return;
-    }
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.closest('.modal')) return;
     if (lastInteractedCardId) {
       const key = e.key.toLowerCase();
       const cardEl = el(`#card-${CSS.escape(lastInteractedCardId)}`);
       if (!cardEl) return;
-
       const actions = { e: 'edit', d: 'discard', s: 'save', c: 'copy' };
       const action = actions[key];
-
       if (action) {
         e.preventDefault();
         const button = cardEl.querySelector(`[data-action="${action}"]`);
