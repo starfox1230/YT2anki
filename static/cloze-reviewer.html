@@ -735,13 +735,18 @@
   });
 
   el("#apkgBtn").addEventListener("click", async ()=>{
-    const arr = visibleNotes(); if (!arr.length) return alert("Nothing visible to export.");
-    const ok = await confirmModal(`You are about to export from the "${viewLabel(view)}" view. Continue?`);
-    if (!ok) return;
+    const saved = notes.filter(n => n.status === "saved");
+    if (!saved.length) return alert("No saved cards to export.");
     try{
       const res = await fetch("/download_apkg", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ deck_name: "Saved Cards", notes: arr.map(n=>({html:n.html, tags:n.tags||[]})) })
+        body: JSON.stringify({
+          deck_name: "Saved Cards",
+          notes: saved.map(n=>({
+            html: n.html,
+            tags: Array.isArray(n.tags) ? n.tags : []
+          }))
+        })
       });
       if (!res.ok) throw new Error("Server error");
       const blob = await res.blob();
