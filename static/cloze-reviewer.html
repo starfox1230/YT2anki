@@ -261,13 +261,20 @@
   function trimHtml(s){ return (s||"").toString().trim(); }
   function escapeHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   function getClozeNumbers(html){ const set=new Set(); const re=/{{c(\d+)::/g; let m; while((m=re.exec(html))){ set.add(parseInt(m[1],10)); } return Array.from(set).sort((a,b)=>a-b); }
+  function normalizeBreaks(str){
+    const escaped = escapeHtml(str);
+    return escaped
+      .replace(/\r\n?/g, "\n")
+      .replace(/&lt;br\s*\/?&gt;/gi, "<br>")
+      .replace(/\n/g, "<br>");
+  }
   function renderClozeTarget(html, targetNum, hideTarget){
     if (!targetNum) return trimHtml(html);
-    const re = /{{c(\d+)::(.*?)(?:::([^}]+))?}}/g;
+    const re = /{{c(\d+)::([^]*?)(?:::([^]*?))?}}/g;
     return trimHtml(html).replace(re, (_, num, ans, hint) => {
       const n = parseInt(num,10);
-      const hintText = hint ? escapeHtml(hint) : "…";
-      const ansEsc = escapeHtml(ans);
+      const hintText = hint ? normalizeBreaks(hint) : "…";
+      const ansEsc = normalizeBreaks(ans);
       if (n === targetNum){
         return hideTarget ? `<span class="ghost" data-c="${n}">[${hintText}]</span>` : `<span class="cloze" data-c="${n}">${ansEsc}</span>`;
       } else {
@@ -554,7 +561,7 @@
     }
 
     function removeAll(){
-      ta.value = ta.value.replace(/{{c\d+::(.*?)(?:::([^}]+))?}}/g, "$1");
+      ta.value = ta.value.replace(/{{c\d+::([^]*?)(?:::([^]*?))?}}/g, "$1");
       recordChange(ta.value);
       rebuildPlusMinusButtons();
       ta.focus();
@@ -562,7 +569,7 @@
 
     function removeCnum(k){
       let txt = ta.value;
-      const reTarget = new RegExp(`{{c${k}::(.*?)(?:::([^}]+))?}}`,"g");
+      const reTarget = new RegExp(`{{c${k}::([^]*?)(?:::([^]*?))?}}`,"g");
       txt = txt.replace(reTarget, "$1");
       let n = k+1;
       while (new RegExp(`{{c${n}::`).test(txt)) {
@@ -605,6 +612,19 @@
           e.preventDefault();
           addClozeAs(parseInt(key, 10));
         }
+      }
+      else if (!e.altKey && !e.ctrlKey && !e.metaKey && key === 'enter') {
+        e.preventDefault();
+        const start = ta.selectionStart;
+        const end = ta.selectionEnd;
+        const before = ta.value.slice(0, start);
+        const after = ta.value.slice(end);
+        const insert = "<br>";
+        ta.value = before + insert + after;
+        const pos = start + insert.length;
+        ta.setSelectionRange(pos, pos);
+        recordChange(ta.value);
+        rebuildPlusMinusButtons();
       }
       else if (e.ctrlKey || e.metaKey) {
         if (key === 'z' && !e.shiftKey) {
