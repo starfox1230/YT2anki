@@ -481,11 +481,27 @@
     const ta = area.querySelector("#editArea");
     const history = [ta.value];
     let historyIndex = 0;
+    let lastInputType = null;
+    let lastInputTime = 0;
+    const MERGE_WINDOW = 1000;
 
-    const recordChange = (newValue) => {
-      if (historyIndex < history.length - 1) history.splice(historyIndex + 1);
-      history.push(newValue);
-      historyIndex = history.length - 1;
+    const resetMergeState = () => {
+      lastInputType = null;
+      lastInputTime = 0;
+    };
+
+    const recordChange = (newValue, { merge = false } = {}) => {
+      if (history[historyIndex] === newValue) return;
+      const atEnd = historyIndex === history.length - 1;
+      const merging = merge && atEnd;
+      if (merging) {
+        history[historyIndex] = newValue;
+      } else {
+        if (!atEnd) history.splice(historyIndex + 1);
+        history.push(newValue);
+        historyIndex = history.length - 1;
+      }
+      if (!merging) resetMergeState();
     };
 
     function performUndo() {
@@ -493,6 +509,7 @@
         historyIndex--;
         ta.value = history[historyIndex];
         rebuildPlusMinusButtons();
+        resetMergeState();
       }
     }
 
@@ -501,6 +518,7 @@
         historyIndex++;
         ta.value = history[historyIndex];
         rebuildPlusMinusButtons();
+        resetMergeState();
       }
     }
 
@@ -596,6 +614,28 @@
       toast("Saved");
     };
 
+    ta.addEventListener("input", (e) => {
+      if (e.isComposing) return;
+      const type = e.inputType || "";
+      const now = Date.now();
+      const groupKey = (() => {
+        if (type === "insertText") return "insertText";
+        if (type === "deleteContentBackward") return "deleteBack";
+        if (type === "deleteContentForward") return "deleteForward";
+        return type || "other";
+      })();
+      const groupable = groupKey === "insertText" || groupKey === "deleteBack" || groupKey === "deleteForward";
+      const shouldMerge = groupable && lastInputType === groupKey && (now - lastInputTime) <= MERGE_WINDOW;
+      recordChange(ta.value, { merge: shouldMerge });
+      if (groupable) {
+        lastInputType = groupKey;
+        lastInputTime = now;
+      } else {
+        resetMergeState();
+      }
+      rebuildPlusMinusButtons();
+    });
+
     ta.addEventListener("keydown", (e)=>{
       const key = e.key.toLowerCase();
       if (e.altKey && key === 'c') {
@@ -628,12 +668,20 @@
       }
       else if (e.ctrlKey || e.metaKey) {
         if (key === 'z' && !e.shiftKey) {
+          resetMergeState();
           e.preventDefault(); performUndo();
         } else if (key === 'y' || (key === 'z' && e.shiftKey)) {
+          resetMergeState();
           e.preventDefault(); performRedo();
         }
+      } else if (["arrowleft","arrowright","arrowup","arrowdown","home","end","pageup","pagedown"].includes(key)) {
+        resetMergeState();
       }
     });
+
+    ta.addEventListener("mousedown", resetMergeState);
+    ta.addEventListener("mouseup", resetMergeState);
+    ta.addEventListener("blur", resetMergeState);
 
     rebuildPlusMinusButtons();
   }
