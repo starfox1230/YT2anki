@@ -126,6 +126,7 @@
     <div class="row">
       <button class="btn" id="copyAllBtn" title="Copy all visible" style="display:none;">Copy Visible</button>
       <button class="btn" id="apkgBtn" title="Download .apkg" style="display:none;">Download APKG</button>
+      <button class="btn" id="jsonExportBtn" title="Download or copy combined JSON" style="display:none;">JSON Export</button>
       <button class="btn" id="copyDiffBtn" title="Copy edited cards diff" style="display:none;">Copy DIFF</button>
       <button class="btn warn" id="nukeBtn" title="Clear local data">Reset</button>
     </div>
@@ -339,9 +340,11 @@
     lastRendered = cur.map(n=>n.id);
     el("#countLabel").textContent = String(cur.length);
     el("#listArea").classList.toggle("hidden", cur.length === 0);
-    el("#copyAllBtn").style.display = notes.length ? "" : "none";
-    el("#apkgBtn").style.display = notes.length ? "" : "none";
-    el("#copyDiffBtn").style.display = notes.length ? "" : "none";
+    const hasNotes = notes.length > 0;
+    el("#copyAllBtn").style.display = hasNotes ? "" : "none";
+    el("#apkgBtn").style.display = hasNotes ? "" : "none";
+    el("#jsonExportBtn").style.display = hasNotes ? "" : "none";
+    el("#copyDiffBtn").style.display = hasNotes ? "" : "none";
     el("#appendArea").classList.toggle("hidden", notes.length === 0);
     cardsEl.innerHTML = cur.map(noteToCardHtml).join("");
     cur.forEach(n => wireCard(n.id));
@@ -434,6 +437,38 @@
       ok.addEventListener('click', ()=>done(true));
       cancel.addEventListener('click', ()=>done(false));
       wrap.addEventListener('click', (e)=>{ if (e.target===wrap) done(false); }, {capture:true});
+    });
+  }
+
+  function choiceModal({ title = "Select", message = "", options = [], cancelLabel = "Cancel" } = {}){
+    return new Promise(resolve => {
+      if (!Array.isArray(options) || !options.length) { resolve(null); return; }
+      const wrap = document.createElement("div");
+      wrap.className = "modalBackdrop";
+      const optionsHtml = options.map((opt, idx) => `
+        <button class="btn" data-choice="${idx}">${escapeHtml(opt?.label ?? "Option")}</button>
+      `).join("");
+      wrap.innerHTML = `
+        <div class="modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
+          <header class="row"><div class="f1">${escapeHtml(title)}</div></header>
+          <div class="hr"></div>
+          ${message ? `<p style="margin:8px 0 16px 0;">${escapeHtml(message)}</p>` : ""}
+          <div class="row" style="flex-wrap:wrap;">
+            ${optionsHtml}
+            <button class="btn" data-cancel>${escapeHtml(cancelLabel)}</button>
+          </div>
+        </div>`;
+      document.body.appendChild(wrap);
+      openModalBackdrop(wrap);
+      const done = (val)=>{ closeModalBackdrop(wrap); wrap.remove(); resolve(val); };
+      wrap.addEventListener('click', (e)=>{
+        if (e.target === wrap) { done(null); }
+      }, { capture: true });
+      wrap.querySelector('[data-cancel]').addEventListener('click', ()=> done(null));
+      options.forEach((opt, idx) => {
+        const btn = wrap.querySelector(`[data-choice="${idx}"]`);
+        if (btn) btn.addEventListener('click', ()=> done(opt?.value ?? opt));
+      });
     });
   }
 
@@ -741,6 +776,14 @@
       return n.html !== baseline;
     });
   }
+  function combinedJson(){
+    return notes.map(n => ({
+      html: n.html,
+      tags: Array.isArray(n.tags) ? n.tags : [],
+      id: n.id,
+      status: n.status
+    }));
+  }
   function downloadBlob(filename, blob){
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = filename; a.click();
@@ -759,8 +802,8 @@
     renderList();
   });
 
-  // Wire UI
-  if (notes.length){ el("#ingest").classList.add("hidden"); el("#listArea").classList.remove("hidden"); el("#appendArea").classList.remove("hidden"); el("#copyAllBtn").style.display=""; el("#apkgBtn").style.display=""; el("#copyDiffBtn").style.display=""; }
+    // Wire UI
+    if (notes.length){ el("#ingest").classList.add("hidden"); el("#listArea").classList.remove("hidden"); el("#appendArea").classList.remove("hidden"); el("#copyAllBtn").style.display=""; el("#apkgBtn").style.display=""; el("#jsonExportBtn").style.display=""; el("#copyDiffBtn").style.display=""; }
   renderList();
 
   els(".segbtn").forEach(b=>{
@@ -781,7 +824,7 @@
     el("#ingest").classList.add("hidden");
     el("#listArea").classList.remove("hidden");
     el("#appendArea").classList.remove("hidden");
-    el("#copyAllBtn").style.display=""; el("#apkgBtn").style.display=""; el("#copyDiffBtn").style.display="";
+    el("#copyAllBtn").style.display=""; el("#apkgBtn").style.display=""; el("#jsonExportBtn").style.display=""; el("#copyDiffBtn").style.display="";
     renderList(); toast("Loaded");
   });
 
@@ -824,6 +867,33 @@
     }
   });
 
+  el("#jsonExportBtn").addEventListener("click", async ()=>{
+    if (!notes.length) { alert("No cards to export."); return; }
+    const choice = await choiceModal({
+      title: "Export JSON",
+      message: "Download the combined cards JSON or copy it to your clipboard.",
+      options: [
+        { label: "⬇️ Download file", value: "download" },
+        { label: "📋 Copy JSON", value: "copy" }
+      ],
+      cancelLabel: "Cancel"
+    });
+    if (!choice) return;
+    const jsonText = JSON.stringify(combinedJson(), null, 2);
+    if (choice === "download") {
+      const blob = new Blob([jsonText], { type: "application/json" });
+      downloadBlob("cards.json", blob);
+      toast("JSON downloaded");
+    } else if (choice === "copy") {
+      try {
+        await navigator.clipboard.writeText(jsonText);
+        toast("JSON copied");
+      } catch {
+        alert("Failed to copy JSON to clipboard.");
+      }
+    }
+  });
+
   el("#copyDiffBtn").addEventListener("click", ()=>{
     const arr = editedNotes();
     if (!arr.length) { alert("No edited cards to diff."); return; }
@@ -849,7 +919,7 @@
     notes = []; renderList();
     el("#listArea").classList.add("hidden"); el("#appendArea").classList.add("hidden");
     el("#ingest").classList.remove("hidden");
-    el("#copyAllBtn").style.display="none"; el("#apkgBtn").style.display="none"; el("#copyDiffBtn").style.display="none";
+    el("#copyAllBtn").style.display="none"; el("#apkgBtn").style.display="none"; el("#jsonExportBtn").style.display="none"; el("#copyDiffBtn").style.display="none";
   });
 
   // Solo controls
