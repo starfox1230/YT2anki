@@ -14,11 +14,12 @@
     }
     *{box-sizing:border-box}
     body{margin:0;background:var(--bg);color:var(--text);font:16px/1.35 system-ui,Segoe UI,Roboto,Inter,Helvetica,Arial}
-    body.modalOpen{overflow:hidden}
+    /* This class is now handled via JS inline styles for better locking */
+    body.modalOpen{ } 
     a{color:var(--accent);text-decoration:none}
     a:hover{text-decoration:underline}
     /* Prevent double-tap zoom on interactive controls */
-    html, body { touch-action: manipulation; }
+    html, body { touch-action: manipulation; -webkit-overflow-scrolling: touch; }
     button, .btn, .segbtn, a, [role="button"] {
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
@@ -97,15 +98,32 @@
     .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#151925;border:1px solid #2b3243;color:#cbd3df;font-size:13px}
     .hidden{display:none !important}
     .gridFooter{display:flex;justify-content:space-between;align-items:center;margin-top:14px;color:var(--muted)}
+    
+    /* Modified modal styles for better mobile handling */
     .modalBackdrop{
       position:fixed;inset:0;background:rgba(0,0,0,.55);
       display:none;align-items:center;justify-content:center;z-index:20;
       backdrop-filter: blur(6px);
+      /* Important for mobile scrolling within modal: */
+      overflow-y: auto; 
+      -webkit-overflow-scrolling: touch;
     }
-    .modal{width:min(760px,94vw);max-height:90vh;overflow:auto;background:var(--panel);border:1px solid #2b3243;border-radius:16px;box-shadow:var(--shadow);padding:16px}
-    .modal header{border:0;background:transparent;position:sticky;top:0;padding-bottom:8px}
+    .modal{
+      width:min(760px,94vw);
+      /* Changed max-height logic to avoid keyboard overlap issues */
+      max-height: min(90vh, 800px);
+      display: flex; flex-direction: column;
+      background:var(--panel);border:1px solid #2b3243;border-radius:16px;box-shadow:var(--shadow);padding:16px;
+      /* Fix for cursor jumping */
+      transform: translateZ(0);
+    }
+    .modalContent {
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+    .modal header{border:0;background:transparent;flex-shrink:0;padding-bottom:8px}
     .f1{flex:1}
-    .hr{height:1px;background:#2b3243;margin:10px 0;border-radius:1px}
+    .hr{height:1px;background:#2b3243;margin:10px 0;border-radius:1px; flex-shrink: 0;}
   </style>
 </head>
 <body>
@@ -179,12 +197,14 @@
       <button class="btn bad" id="soloClose">Close</button>
     </header>
     <div class="hr"></div>
-    <div id="soloCard" class="card"></div>
-    <div class="row" style="margin-top:8px">
-      <button class="btn good small" id="soloSave">⭐ Save</button>
-      <button class="btn small" id="soloCopy">📋 Copy</button>
-      <button class="btn small" id="soloEdit">✏️ Edit</button>
-      <button class="btn bad small" id="soloDiscard">🗑️ Discard</button>
+    <div class="modalContent">
+        <div id="soloCard" class="card"></div>
+        <div class="row" style="margin-top:8px">
+        <button class="btn good small" id="soloSave">⭐ Save</button>
+        <button class="btn small" id="soloCopy">📋 Copy</button>
+        <button class="btn small" id="soloEdit">✏️ Edit</button>
+        <button class="btn bad small" id="soloDiscard">🗑️ Discard</button>
+        </div>
     </div>
   </div>
 </div>
@@ -228,22 +248,38 @@
     }, { passive: false, capture: true });
   })();
 
-  // Scroll lock helpers
-  let wheelPreventHandler = null, touchPreventHandler = null;
+  // --- FIX: Stronger Scroll Lock for Modals ---
+  let savedScrollY = 0;
+
   function openModalBackdrop(div){
-    document.body.classList.add("modalOpen");
-    wheelPreventHandler = (e)=>{ if (!div.contains(e.target)) e.preventDefault(); };
-    touchPreventHandler = (e)=>{ if (!div.contains(e.target)) e.preventDefault(); };
-    document.addEventListener("wheel", wheelPreventHandler, {passive:false, capture:true});
-    document.addEventListener("touchmove", touchPreventHandler, {passive:false, capture:true});
-    div.style.display = "flex"; div.setAttribute("aria-hidden","false");
+    // 1. Record where we are
+    savedScrollY = window.scrollY;
+    
+    // 2. Physically lock the body so it CANNOT scroll.
+    // This prevents the input cursor from misaligning with the view.
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${savedScrollY}px`;
+    document.body.style.width = '100%';
+    document.body.style.overflow = 'hidden';
+
+    // 3. Show modal
+    div.style.display = "flex"; 
+    div.setAttribute("aria-hidden","false");
   }
+
   function closeModalBackdrop(div){
-    div.style.display = "none"; div.setAttribute("aria-hidden","true");
-    if (wheelPreventHandler) document.removeEventListener("wheel", wheelPreventHandler, {capture:true});
-    if (touchPreventHandler) document.removeEventListener("touchmove", touchPreventHandler, {capture:true});
-    wheelPreventHandler = touchPreventHandler = null;
-    document.body.classList.remove("modalOpen");
+    // 1. Hide modal
+    div.style.display = "none"; 
+    div.setAttribute("aria-hidden","true");
+
+    // 2. Unlock body
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.width = '';
+    document.body.style.overflow = '';
+
+    // 3. Instant jump back to original position
+    window.scrollTo(0, savedScrollY);
   }
 
   try {
@@ -423,10 +459,12 @@
         <div class="modal" role="dialog" aria-modal="true" aria-label="Confirm">
           <header class="row"><div class="f1">Confirm</div></header>
           <div class="hr"></div>
-          <p style="margin:8px 0 16px 0;">${escapeHtml(message)}</p>
-          <div class="row">
-            <button class="btn" data-cancel>Cancel</button>
-            <button class="btn primary" data-ok>Continue</button>
+          <div class="modalContent">
+            <p style="margin:8px 0 16px 0;">${escapeHtml(message)}</p>
+            <div class="row">
+              <button class="btn" data-cancel>Cancel</button>
+              <button class="btn primary" data-ok>Continue</button>
+            </div>
           </div>
         </div>`;
       document.body.appendChild(wrap);
@@ -452,10 +490,12 @@
         <div class="modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
           <header class="row"><div class="f1">${escapeHtml(title)}</div></header>
           <div class="hr"></div>
-          ${message ? `<p style="margin:8px 0 16px 0;">${escapeHtml(message)}</p>` : ""}
-          <div class="row" style="flex-wrap:wrap;">
-            ${optionsHtml}
-            <button class="btn" data-cancel>${escapeHtml(cancelLabel)}</button>
+          <div class="modalContent">
+            ${message ? `<p style="margin:8px 0 16px 0;">${escapeHtml(message)}</p>` : ""}
+            <div class="row" style="flex-wrap:wrap;">
+              ${optionsHtml}
+              <button class="btn" data-cancel>${escapeHtml(cancelLabel)}</button>
+            </div>
           </div>
         </div>`;
       document.body.appendChild(wrap);
@@ -486,25 +526,27 @@
             <button class="btn green" data-save>⭐ Save</button>
           </header>
           <div class="hr"></div>
-          <textarea class="input" id="editArea" style="width:100%;min-height:260px;font-size:24px;line-height:1.25">${escapeHtml(prev)}</textarea>
-          <!-- Controls -->
-          <div class="row" style="margin-top:10px;flex-wrap:wrap;align-items:center">
-            <button class="btn blue" data-undo title="Undo (Ctrl+Z)">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
-              </svg>
-            </button>
-            <button class="btn blue" data-redo title="Redo (Ctrl+Y)">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-              </svg>
-            </button>
-            <div class="f1"></div>
-            <div class="row" id="plusRow" style="gap:6px"></div>
-          </div>
-          <div class="row" style="margin-top:8px;justify-content:flex-end">
-            <button class="btn red" data-removeAll>Remove All Clozes</button>
-            <div class="row" id="minusRow" style="gap:6px"></div>
+          <div class="modalContent">
+            <textarea class="input" id="editArea" style="width:100%;min-height:260px;font-size:24px;line-height:1.25">${escapeHtml(prev)}</textarea>
+            <!-- Controls -->
+            <div class="row" style="margin-top:10px;flex-wrap:wrap;align-items:center">
+              <button class="btn blue" data-undo title="Undo (Ctrl+Z)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                </svg>
+              </button>
+              <button class="btn blue" data-redo title="Redo (Ctrl+Y)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                </svg>
+              </button>
+              <div class="f1"></div>
+              <div class="row" id="plusRow" style="gap:6px"></div>
+            </div>
+            <div class="row" style="margin-top:8px;justify-content:flex-end">
+              <button class="btn red" data-removeAll>Remove All Clozes</button>
+              <div class="row" id="minusRow" style="gap:6px"></div>
+            </div>
           </div>
         </div>
       </div>
