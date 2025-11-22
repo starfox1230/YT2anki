@@ -89,6 +89,9 @@
     .notehtml .cloze, .notehtml .cloze b, .notehtml .cloze i, .notehtml .cloze u{
       color:#0b0d12;background:var(--accent);padding:1px 5px;border-radius:6px;font-weight:700
     }
+    .notehtml .cloze.sibling, .notehtml .cloze.sibling b, .notehtml .cloze.sibling i, .notehtml .cloze.sibling u{
+      background:transparent;color:var(--accent);padding:0;border-radius:0
+    }
     .notehtml .ghost{
       color:var(--accent-weak);border:1px dashed #3c3f55;padding:1px 5px;border-radius:6px;opacity:.9
     }
@@ -313,9 +316,11 @@
       const hintText = hint ? normalizeBreaks(hint) : "…";
       const ansEsc = normalizeBreaks(ans);
       if (n === targetNum){
-        return hideTarget ? `<span class="ghost" data-c="${n}">[${hintText}]</span>` : `<span class="cloze" data-c="${n}">${ansEsc}</span>`;
+        return hideTarget
+          ? `<span class="ghost" data-c="${n}">[${hintText}]</span>`
+          : `<span class="cloze active" data-c="${n}">${ansEsc}</span>`;
       } else {
-        return `<span class="cloze" data-c="${n}">${ansEsc}</span>`;
+        return `<span class="cloze sibling" data-c="${n}">${ansEsc}</span>`;
       }
     });
   }
