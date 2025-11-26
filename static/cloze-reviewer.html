@@ -564,6 +564,7 @@
     openModalBackdrop(backdrop);
 
     const ta = area.querySelector("#editArea");
+    let closingEditor = false;
     const history = [ta.value];
     let historyIndex = 0;
     let lastInputType = null;
@@ -611,6 +612,7 @@
     document.addEventListener('keydown', editorKeydownHandler);
 
     const close = ()=>{
+      closingEditor = true;
       closeModalBackdrop(backdrop);
       area.remove();
       document.removeEventListener('keydown', editorKeydownHandler);
@@ -698,6 +700,33 @@
       close();
       toast("Saved");
     };
+
+    // Keep the keyboard open while the editor is visible on touch devices.
+    // Refocus the textarea whenever the user taps outside non-button areas,
+    // but allow normal blur when we're closing or clicking explicit controls.
+    const keepFocus = (e) => {
+      if (closingEditor) return;
+      const isButton = e.target.closest('button, .btn, .segbtn');
+      if (!isButton && document.activeElement !== ta) {
+        e.preventDefault();
+        ta.focus({ preventScroll: true });
+      }
+    };
+
+    const handleBlur = (e) => {
+      if (closingEditor) return;
+      const toButton = e.relatedTarget && e.relatedTarget.closest('button, .btn, .segbtn');
+      if (toButton) return;
+      setTimeout(() => {
+        if (!closingEditor && document.activeElement !== ta) {
+          ta.focus({ preventScroll: true });
+        }
+      }, 0);
+    };
+
+    backdrop.addEventListener('pointerdown', keepFocus, { capture: true });
+    ta.addEventListener('blur', handleBlur);
+    setTimeout(() => ta.focus({ preventScroll: true }), 0);
 
     ta.addEventListener("input", (e) => {
       if (e.isComposing) return;
