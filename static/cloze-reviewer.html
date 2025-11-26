@@ -701,32 +701,54 @@
       toast("Saved");
     };
 
-    // Keep the keyboard open while the editor is visible on touch devices.
-    // Refocus the textarea whenever the user taps outside non-button areas,
-    // but allow normal blur when we're closing or clicking explicit controls.
-    const keepFocus = (e) => {
+    // --- START CHANGED SECTION ---
+
+    // Aggressive Focus Retention Logic
+    const trapFocus = (e) => {
       if (closingEditor) return;
-      const isButton = e.target.closest('button, .btn, .segbtn');
-      if (!isButton && document.activeElement !== ta) {
-        e.preventDefault();
+      const t = e.target;
+
+      // 1. If tapping the textarea, allow it (so cursor moves)
+      if (t === ta) return;
+
+      // 2. If tapping a button, allow it
+      if (t.closest('button, .btn, .segbtn')) return;
+
+      // 3. If tapping background/empty space, PREVENT default.
+      // This stops the browser from shifting focus away, keeping the keyboard up.
+      e.preventDefault();
+      
+      // Ensure focus remains (just in case)
+      if (document.activeElement !== ta) {
         ta.focus({ preventScroll: true });
       }
     };
 
-    const handleBlur = (e) => {
-      if (closingEditor) return;
-      const toButton = e.relatedTarget && e.relatedTarget.closest('button, .btn, .segbtn');
-      if (toButton) return;
-      setTimeout(() => {
-        if (!closingEditor && document.activeElement !== ta) {
-          ta.focus({ preventScroll: true });
-        }
-      }, 0);
-    };
+    // Use touchstart (for immediate mobile response) and mousedown (desktop/mouse)
+    // capture: true ensures we catch it before other handlers
+    // passive: false allows us to use preventDefault()
+    backdrop.addEventListener('touchstart', trapFocus, { passive: false, capture: true });
+    backdrop.addEventListener('mousedown', trapFocus, { capture: true });
 
-    backdrop.addEventListener('pointerdown', keepFocus, { capture: true });
-    ta.addEventListener('blur', handleBlur);
-    setTimeout(() => ta.focus({ preventScroll: true }), 0);
+    // Safety net: If blur happens anyway (e.g. system event), force it back
+    // unless the user clicked a valid interface button
+    ta.addEventListener('blur', (e) => {
+      if (closingEditor) return;
+      
+      // If focus moved to a button, allow it
+      const related = e.relatedTarget;
+      if (related && related.closest('button, .btn, .segbtn')) return;
+
+      // Otherwise, reclaim focus immediately
+      setTimeout(() => {
+        if (!closingEditor) ta.focus({ preventScroll: true });
+      }, 0);
+    });
+
+    // Initial focus with a slight delay to ensure the modal transition is done
+    setTimeout(() => ta.focus({ preventScroll: true }), 50);
+
+    // --- END CHANGED SECTION ---
 
     ta.addEventListener("input", (e) => {
       if (e.isComposing) return;
