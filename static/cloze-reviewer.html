@@ -98,10 +98,10 @@
     .row{display:flex;gap:8px;flex-wrap:wrap}
     .row .btn.small{padding:6px 9px;border-radius:8px;font-size:13px}
     .row.right{margin-left:auto}
+    .toolbarStats{margin-left:auto; display:flex; align-items:center; gap:8px; color:var(--muted); font-weight:600;}
+    .toolbarStats .pill{margin:0; font-weight:600;}
     .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#151925;border:1px solid #2b3243;color:#cbd3df;font-size:13px}
     .hidden{display:none !important}
-    .gridFooter{display:flex;justify-content:space-between;align-items:center;margin-top:14px;color:var(--muted)}
-    
     /* Modified modal styles for better mobile handling */
     .modalBackdrop{
       position:fixed;inset:0;background:rgba(0,0,0,.55);
@@ -150,7 +150,10 @@
       <button class="btn" id="jsonExportBtn" title="Download or copy combined JSON" style="display:none;">JSON Export</button>
       <button class="btn" id="copyDiffBtn" title="Copy edited cards diff" style="display:none;">Copy DIFF</button>
       <button class="btn warn" id="nukeBtn" title="Clear local data">Reset</button>
-      <button class="btn red" id="deleteDiscardedBtn" title="Delete all discarded cards" style="display:none;">Delete Discarded</button>
+      <button class="btn red" id="deleteDiscardedBtn" title="Delete all discarded cards" style="display:none;">Delete Discarded (<span id="discardCountLabel">0</span>)</button>
+      <div class="toolbarStats">
+        <span id="countLabel">0</span> cards
+      </div>
     </div>
   </div>
 </header>
@@ -174,10 +177,6 @@
   </section>
 
   <section id="listArea" class="hidden">
-    <div class="gridFooter">
-      <div><span id="countLabel">0</span> cards</div>
-      <div></div>
-    </div>
     <div id="cards" class="cardlist" aria-live="polite"></div>
   </section>
 
@@ -387,8 +386,9 @@
     el("#apkgBtn").style.display = hasNotes ? "" : "none";
     el("#jsonExportBtn").style.display = hasNotes ? "" : "none";
     el("#copyDiffBtn").style.display = hasNotes ? "" : "none";
-    const hasDiscarded = notes.some(n => n.status === "discarded");
-    el("#deleteDiscardedBtn").style.display = hasDiscarded ? "" : "none";
+    const discardedCount = notes.filter(n => n.status === "discarded").length;
+    el("#discardCountLabel").textContent = String(discardedCount);
+    el("#deleteDiscardedBtn").style.display = discardedCount ? "" : "none";
     el("#appendArea").classList.toggle("hidden", notes.length === 0);
     cardsEl.innerHTML = cur.map(noteToCardHtml).join("");
     cur.forEach(n => wireCard(n.id));
