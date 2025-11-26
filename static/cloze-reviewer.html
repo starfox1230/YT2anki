@@ -150,6 +150,7 @@
       <button class="btn" id="jsonExportBtn" title="Download or copy combined JSON" style="display:none;">JSON Export</button>
       <button class="btn" id="copyDiffBtn" title="Copy edited cards diff" style="display:none;">Copy DIFF</button>
       <button class="btn warn" id="nukeBtn" title="Clear local data">Reset</button>
+      <button class="btn red" id="deleteDiscardedBtn" title="Delete all discarded cards" style="display:none;">Delete Discarded</button>
     </div>
   </div>
 </header>
@@ -386,6 +387,8 @@
     el("#apkgBtn").style.display = hasNotes ? "" : "none";
     el("#jsonExportBtn").style.display = hasNotes ? "" : "none";
     el("#copyDiffBtn").style.display = hasNotes ? "" : "none";
+    const hasDiscarded = notes.some(n => n.status === "discarded");
+    el("#deleteDiscardedBtn").style.display = hasDiscarded ? "" : "none";
     el("#appendArea").classList.toggle("hidden", notes.length === 0);
     cardsEl.innerHTML = cur.map(noteToCardHtml).join("");
     cur.forEach(n => wireCard(n.id));
@@ -967,6 +970,19 @@
     el("#listArea").classList.add("hidden"); el("#appendArea").classList.add("hidden");
     el("#ingest").classList.remove("hidden");
     el("#copyAllBtn").style.display="none"; el("#apkgBtn").style.display="none"; el("#jsonExportBtn").style.display="none"; el("#copyDiffBtn").style.display="none";
+    el("#deleteDiscardedBtn").style.display="none";
+  });
+
+  el("#deleteDiscardedBtn").addEventListener("click", ()=>{
+    const discardedIds = notes.filter(n => n.status === "discarded").map(n => n.id);
+    if (!discardedIds.length) { toast("No discarded cards to delete."); return; }
+    if (!confirm("Delete all discarded cards? This cannot be undone.")) return;
+    const removeSet = new Set(discardedIds);
+    notes = notes.filter(n => !removeSet.has(n.id));
+    discardedIds.forEach(id => delete uiState[id]);
+    save();
+    renderList();
+    toast("Discarded cards deleted");
   });
 
   // Solo controls
