@@ -707,13 +707,9 @@
     const keepFocus = (e) => {
       if (closingEditor) return;
       const isButton = e.target.closest('button, .btn, .segbtn');
-      if (!isButton) {
-        // Prevent the default blur that mobile browsers trigger on any stray tap
-        // so the keyboard stays up even when the textarea is already focused.
+      if (!isButton && document.activeElement !== ta) {
         e.preventDefault();
-        if (document.activeElement !== ta) {
-          ta.focus({ preventScroll: true });
-        }
+        ta.focus({ preventScroll: true });
       }
     };
 
