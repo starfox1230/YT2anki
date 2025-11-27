@@ -102,22 +102,22 @@
     .toolbarStats .pill{margin:0; font-weight:600;}
     .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#151925;border:1px solid #2b3243;color:#cbd3df;font-size:13px}
     .hidden{display:none !important}
-    /* Modified modal styles for better mobile handling */
+    
     .modalBackdrop{
       position:fixed;inset:0;background:rgba(0,0,0,.55);
-      display:none;align-items:center;justify-content:center;z-index:20;
+      display:none;
+      /* Default: Center vertically (Desktop) */
+      align-items:center;
+      justify-content:center;z-index:20;
       backdrop-filter: blur(6px);
-      /* Important for mobile scrolling within modal: */
       overflow-y: auto; 
       -webkit-overflow-scrolling: touch;
     }
     .modal{
       width:min(760px,94vw);
-      /* Changed max-height logic to avoid keyboard overlap issues */
       max-height: min(90vh, 800px);
       display: flex; flex-direction: column;
       background:var(--panel);border:1px solid #2b3243;border-radius:16px;box-shadow:var(--shadow);padding:16px;
-      /* Fix for cursor jumping */
       transform: translateZ(0);
     }
     .modalContent {
@@ -127,6 +127,23 @@
     .modal header{border:0;background:transparent;flex-shrink:0;padding-bottom:8px}
     .f1{flex:1}
     .hr{height:1px;background:#2b3243;margin:10px 0;border-radius:1px; flex-shrink: 0;}
+
+    /* ---- MOBILE ONLY OVERRIDES ---- */
+    @media (max-width: 600px) {
+      /* Align modals to the TOP on phone screens */
+      .modalBackdrop {
+        align-items: flex-start;
+        padding-top: 15px; /* Add space from top of screen */
+      }
+      /* Reduce text area height so keyboard doesn't hide buttons */
+      #editArea {
+        min-height: 180px !important;
+      }
+      /* Allow modal to take up more width on phones */
+      .modal {
+        width: 96vw;
+      }
+    }
   </style>
 </head>
 <body>
@@ -559,19 +576,14 @@
         </div>
       </div>
     `;
-    
-    // 1. Append to body
     document.body.appendChild(area);
     const backdrop = area.firstElementChild;
     const ta = area.querySelector("#editArea");
-
-    // 2. Make it visible IMMEDIATELY (needed so we can focus it)
+    
+    // Immediate show & sync focus for mobile keyboard
     openModalBackdrop(backdrop);
-
-    // 3. Focus IMMEDIATELY (Synchronously) 
-    // This connects the focus action to the user's click event loop.
     ta.focus({ preventScroll: true });
-    // UX: Move cursor to the end
+    // Cursor to end
     ta.setSelectionRange(ta.value.length, ta.value.length);
 
     let closingEditor = false;
@@ -711,7 +723,7 @@
       toast("Saved");
     };
 
-    // Aggressive Focus Retention Logic
+    // Aggressive Focus Retention Logic (Keyboard Keep-Alive)
     const trapFocus = (e) => {
       if (closingEditor) return;
       const t = e.target;
@@ -722,7 +734,6 @@
         ta.focus({ preventScroll: true });
       }
     };
-
     backdrop.addEventListener('touchstart', trapFocus, { passive: false, capture: true });
     backdrop.addEventListener('mousedown', trapFocus, { capture: true });
 
@@ -806,10 +817,8 @@
 
     rebuildPlusMinusButtons();
     
-    // Safety backup (for older devices that might need a tick)
-    setTimeout(() => {
-         if (!closingEditor) ta.focus({ preventScroll: true });
-    }, 150);
+    // Safety backup focus
+    setTimeout(() => { if (!closingEditor) ta.focus({ preventScroll: true }); }, 150);
   }
   // Solo view
 
