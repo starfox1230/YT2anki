@@ -105,9 +105,16 @@
 
     .briefCard{white-space:pre-wrap;padding:10px;border-radius:10px;border:1px solid #2b3243;background:#121621;line-height:1.4;}
     .mutedLabel{color:var(--muted);font-size:13px;}
-    .briefOverlay{margin-top:12px;padding:14px;border:1px solid #2b3243;border-radius:12px;background:var(--surface);box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px;}
+    .briefOverlay{margin-top:12px;padding:14px;border:1px solid #2b3243;border-radius:12px;background:var(--surface);box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px;position:relative;overflow:hidden;}
     .briefOverlay .briefCard{min-height:80px;}
     .briefOverlay .row{justify-content:flex-start;gap:8px;flex-wrap:wrap;}
+    .briefOverlay .loadingState{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;min-height:180px;border:1px dashed #2f3646;border-radius:12px;background:linear-gradient(135deg,rgba(74,144,226,0.08),rgba(155,135,253,0.08));}
+    .briefOverlay .loadingDots{display:flex;gap:8px;}
+    .briefOverlay .loadingDot{width:12px;height:12px;border-radius:50%;background:#4a90e2;animation: pulse 1.1s infinite ease-in-out;}
+    .briefOverlay .loadingDot:nth-child(2){animation-delay:0.12s;}
+    .briefOverlay .loadingDot:nth-child(3){animation-delay:0.24s;}
+    .briefOverlay .loadingMessage{color:var(--text);font-weight:700;}
+    @keyframes pulse{0%{transform:scale(.7);opacity:.5;}50%{transform:scale(1);opacity:1;}100%{transform:scale(.7);opacity:.5;}}
     
     .modalBackdrop{
       position:fixed;inset:0;background:rgba(0,0,0,.55);
@@ -610,19 +617,29 @@
             </div>
 
             <div class="briefOverlay hidden" data-brief-overlay>
-              <div>
-                <div class="mutedLabel" data-brief-primary-label>Concise version</div>
-                <div class="briefCard" data-brief-primary></div>
+              <div class="loadingState hidden" data-brief-loading>
+                <div class="loadingDots" aria-hidden="true">
+                  <span class="loadingDot"></span>
+                  <span class="loadingDot"></span>
+                  <span class="loadingDot"></span>
+                </div>
+                <div class="loadingMessage" data-brief-loading-label>Working...</div>
               </div>
-              <div data-brief-tertiary-wrap class="hidden">
-                <div class="mutedLabel" data-brief-tertiary-label>Even more concise</div>
-                <div class="briefCard" data-brief-tertiary></div>
+              <div data-brief-content>
+                <div data-brief-tertiary-wrap class="hidden">
+                  <div class="mutedLabel" data-brief-tertiary-label>More concise</div>
+                  <div class="briefCard" data-brief-tertiary></div>
+                </div>
+                <div>
+                  <div class="mutedLabel" data-brief-primary-label>Concise</div>
+                  <div class="briefCard" data-brief-primary></div>
+                </div>
+                <div>
+                  <div class="mutedLabel" data-brief-secondary-label>Original</div>
+                  <div class="briefCard" data-brief-secondary></div>
+                </div>
+                <div class="row" data-brief-actions></div>
               </div>
-              <div>
-                <div class="mutedLabel" data-brief-secondary-label>Original</div>
-                <div class="briefCard" data-brief-secondary></div>
-              </div>
-              <div class="row" data-brief-actions></div>
             </div>
           </div>
         </div>
@@ -641,6 +658,9 @@
     const briefTertiaryWrap = area.querySelector("[data-brief-tertiary-wrap]");
     const briefTertiaryLabel = area.querySelector("[data-brief-tertiary-label]");
     const briefTertiary = area.querySelector("[data-brief-tertiary]");
+    const briefContent = area.querySelector("[data-brief-content]");
+    const briefLoading = area.querySelector("[data-brief-loading]");
+    const briefLoadingLabel = area.querySelector("[data-brief-loading-label]");
     const briefActions = area.querySelector("[data-brief-actions]");
     const viewOriginalBtn = area.querySelector("[data-view-original]");
     
@@ -698,27 +718,53 @@
     };
 
     const hideBriefOverlay = () => {
+      if (briefLoading) briefLoading.classList.add("hidden");
+      if (briefContent) briefContent.classList.remove("hidden");
       if (briefOverlay) briefOverlay.classList.add("hidden");
       if (editorShell) editorShell.classList.remove("hidden");
       setHeaderButtonsVisible(true);
     };
 
+    const showLoadingOverlay = (label = "Working...") => {
+      if (!briefOverlay || !briefLoading || !briefContent) return;
+      if (briefLoadingLabel) briefLoadingLabel.textContent = label;
+      briefOverlay.classList.remove("hidden");
+      briefLoading.classList.remove("hidden");
+      briefContent.classList.add("hidden");
+      if (editorShell) editorShell.classList.add("hidden");
+      setHeaderButtonsVisible(false);
+    };
+
+    const hideLoadingOverlay = () => {
+      if (briefLoading) briefLoading.classList.add("hidden");
+      const onlyLoaderVisible = briefOverlay && !briefOverlay.classList.contains("hidden") && briefContent && briefContent.classList.contains("hidden");
+      if (onlyLoaderVisible) {
+        hideBriefOverlay();
+      } else if (briefOverlay && briefOverlay.classList.contains("hidden")) {
+        if (editorShell) editorShell.classList.remove("hidden");
+        setHeaderButtonsVisible(true);
+      }
+    };
+
     const showBriefOverlay = ({ sections = [], actions = [] }) => {
       if (!briefOverlay || !briefActions || !editorShell) return;
 
-      const [primary, secondary, tertiary] = sections;
+      if (briefLoading) briefLoading.classList.add("hidden");
+      if (briefContent) briefContent.classList.remove("hidden");
 
-      if (briefPrimaryLabel) briefPrimaryLabel.textContent = primary?.label || "";
-      if (briefPrimary) briefPrimary.textContent = primary?.text || "";
-      if (briefSecondaryLabel) briefSecondaryLabel.textContent = secondary?.label || "";
-      if (briefSecondary) briefSecondary.textContent = secondary?.text || "";
+      const [tertiarySection, primarySection, secondarySection] = sections;
+
+      if (briefPrimaryLabel) briefPrimaryLabel.textContent = primarySection?.label || "";
+      if (briefPrimary) briefPrimary.textContent = primarySection?.text || "";
+      if (briefSecondaryLabel) briefSecondaryLabel.textContent = secondarySection?.label || "";
+      if (briefSecondary) briefSecondary.textContent = secondarySection?.text || "";
 
       if (briefTertiaryWrap) {
-        const hasTertiary = !!(tertiary && tertiary.text);
+        const hasTertiary = !!(tertiarySection && tertiarySection.text);
         briefTertiaryWrap.classList.toggle("hidden", !hasTertiary);
         if (hasTertiary) {
-          if (briefTertiaryLabel) briefTertiaryLabel.textContent = tertiary.label || "";
-          if (briefTertiary) briefTertiary.textContent = tertiary.text || "";
+          if (briefTertiaryLabel) briefTertiaryLabel.textContent = tertiarySection.label || "";
+          if (briefTertiary) briefTertiary.textContent = tertiarySection.text || "";
         }
       }
 
@@ -755,7 +801,11 @@
         aiBtn.disabled = loading;
         aiBtn.textContent = loading ? `⏳ ${label}` : "✨ UseAI";
       }
-      if (loading) hideBriefOverlay();
+      if (loading) {
+        showLoadingOverlay(label);
+      } else {
+        hideLoadingOverlay();
+      }
     };
 
     const applyEditorValue = (value) => {
@@ -769,18 +819,18 @@
     const reviewBriefSuggestion = () => {
       const sections = [];
       if (lastEvenMoreSuggestion) {
-        sections.push({ label: "Even more concise", text: formatCardForOverlay(lastEvenMoreSuggestion) });
-        sections.push({ label: "Concise version", text: formatCardForOverlay(lastBriefSuggestion) });
+        sections.push({ label: "More concise", text: formatCardForOverlay(lastEvenMoreSuggestion) });
       } else {
-        sections.push({ label: "Concise version", text: formatCardForOverlay(lastBriefSuggestion) });
+        sections.push(null);
       }
+      sections.push({ label: "Concise", text: formatCardForOverlay(lastBriefSuggestion) });
       sections.push({ label: "Original", text: formatCardForOverlay(lastBriefOriginal) });
 
       const actions = [];
       if (!lastEvenMoreSuggestion) {
         actions.push({
-          label: "🤖 More Concise",
-          className: "btn warn",
+          label: "✨ More Concise",
+          className: "btn blue",
           onClick: () => {
             hideBriefOverlay();
             requestEvenMoreConcise();
@@ -790,7 +840,7 @@
 
       if (lastEvenMoreSuggestion) {
         actions.push({
-          label: "Use Even More Concise",
+          label: "Use More Concise",
           className: "btn good",
           onClick: () => {
             applyEditorValue(lastEvenMoreSuggestion);
@@ -799,7 +849,7 @@
           },
         });
         actions.push({
-          label: "Use Concise Version",
+          label: "Use Concise",
           className: "btn",
           onClick: () => {
             applyEditorValue(lastBriefSuggestion);
@@ -809,7 +859,7 @@
         });
       } else {
         actions.push({
-          label: "Use Concise Version",
+          label: "Use Concise",
           className: "btn good",
           onClick: () => {
             applyEditorValue(lastBriefSuggestion);
@@ -842,6 +892,7 @@
 
       showBriefOverlay({
         sections: [
+          null,
           { label: `Generated cards (${lastSplitCards.length})`, text: formatted },
           { label: "Original", text: formatCardForOverlay(lastSplitOriginal) },
         ],
@@ -869,6 +920,7 @@
       const baseline = lastBriefOriginal || preAIVersion;
       showBriefOverlay({
         sections: [
+          null,
           { label: "Current version", text: ta.value },
           { label: "Pre-AI version", text: baseline },
         ],
