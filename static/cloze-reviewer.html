@@ -553,7 +553,7 @@
         <div class="modal" role="dialog" aria-modal="true">
           <header class="row" style="gap:10px;">
             <div class="f1">Edit Card</div>
-            <button class="btn" data-brief style="margin-right:14px;">✨ Make Brief</button>
+            <button class="btn" data-ai style="margin-right:14px;">✨ UseAI</button>
             <button class="btn" data-x>Close</button>
             <button class="btn green" data-save>⭐ Save</button>
           </header>
@@ -611,7 +611,7 @@
     document.body.appendChild(area);
     const backdrop = area.firstElementChild;
     const ta = area.querySelector("#editArea");
-    const briefBtn = area.querySelector("[data-brief]");
+    const aiBtn = area.querySelector("[data-ai]");
     const editorShell = area.querySelector("[data-editor-shell]");
     const briefOverlay = area.querySelector("[data-brief-overlay]");
     const briefPrimaryLabel = area.querySelector("[data-brief-primary-label]");
@@ -655,9 +655,11 @@
     };
 
     const preAIVersion = note.originalHtml || prev;
-    let briefInFlight = false;
+    let aiInFlight = false;
     let lastBriefOriginal = preAIVersion;
     let lastBriefSuggestion = "";
+    let lastSplitOriginal = preAIVersion;
+    let lastSplitCards = [];
 
     const hideBriefOverlay = () => {
       if (briefOverlay) briefOverlay.classList.add("hidden");
@@ -692,11 +694,15 @@
       if (viewOriginalBtn) viewOriginalBtn.classList.remove("hidden");
     };
 
-    const setBriefLoading = (loading) => {
-      briefInFlight = loading;
-      if (briefBtn) {
-        briefBtn.disabled = loading;
-        briefBtn.textContent = loading ? "⏳ Making Brief..." : "✨ Make Brief";
+    const hideOriginalToggle = () => {
+      if (viewOriginalBtn) viewOriginalBtn.classList.add("hidden");
+    };
+
+    const setAiLoading = (loading, label = "Working...") => {
+      aiInFlight = loading;
+      if (aiBtn) {
+        aiBtn.disabled = loading;
+        aiBtn.textContent = loading ? `⏳ ${label}` : "✨ UseAI";
       }
       if (loading) hideBriefOverlay();
     };
@@ -729,6 +735,32 @@
       });
     };
 
+    const formatCardForOverlay = (card) => {
+      return (card || "").replace(/<br\s*\/?\>/gi, "\n");
+    };
+
+    const reviewSplitSuggestion = () => {
+      const formatted = Array.isArray(lastSplitCards)
+        ? lastSplitCards.map((c, i) => `${i + 1}) ${formatCardForOverlay(c)}`).join("\n\n")
+        : "";
+
+      showBriefOverlay({
+        primaryLabel: `Generated cards (${lastSplitCards.length})`,
+        primaryText: formatted,
+        secondaryLabel: "Original",
+        secondaryText: formatCardForOverlay(lastSplitOriginal),
+        acceptLabel: "Use Multiple Cards",
+        rejectLabel: "Keep Current",
+        onAccept: () => {
+          replaceNoteWithCards(lastSplitCards);
+          hideBriefOverlay();
+        },
+        onReject: () => {
+          hideBriefOverlay();
+        },
+      });
+    };
+
     const reviewPreAIVersion = () => {
       const baseline = lastBriefOriginal || preAIVersion;
       showBriefOverlay({
@@ -741,11 +773,38 @@
         onAccept: () => {
           applyEditorValue(baseline);
           hideBriefOverlay();
+          hideOriginalToggle();
         },
         onReject: () => {
           hideBriefOverlay();
         },
       });
+    };
+
+    const replaceNoteWithCards = (cards) => {
+      if (!Array.isArray(cards) || !cards.length) return;
+      const idx = notes.findIndex((n) => n.id === note.id);
+      if (idx === -1) return;
+
+      const baseCreated = note.createdAt || Date.now();
+      const tagCopy = Array.isArray(note.tags) ? [...note.tags] : [];
+      const newNotes = cards.map((html, i) => ({
+        id: uid(),
+        html,
+        originalHtml: html,
+        tags: tagCopy,
+        status: "new",
+        fav: false,
+        createdAt: baseCreated + i * 0.001,
+      }));
+
+      notes.splice(idx, 1, ...newNotes);
+      delete uiState[note.id];
+      save();
+      renderList();
+      hideOriginalToggle();
+      close();
+      toast(`Added ${newNotes.length} card${newNotes.length > 1 ? "s" : ""}`);
     };
 
     function performUndo() {
@@ -895,13 +954,43 @@
       }
     }
 
+    async function requestSplitCard(cardCount){
+      if (!aiBtn || aiInFlight) return;
+      const count = parseInt(cardCount, 10);
+      if (!count || count < 2 || count > 4) return;
+
+      const current = ta.value.trim();
+      if (!current) { alert("Card is empty."); return; }
+
+      lastSplitOriginal = current;
+      setAiLoading(true, "Using AI...");
+      try {
+        const res = await fetch("/split_card", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: current, count })
+        });
+        if (!res.ok) throw new Error(`Server responded with ${res.status}`);
+        const data = await res.json();
+        const cards = Array.isArray(data?.cards) ? data.cards.filter(Boolean) : [];
+        if (!cards.length) throw new Error("Empty response");
+        lastSplitCards = cards;
+        reviewSplitSuggestion();
+      } catch (err) {
+        console.error("Split card request failed", err);
+        alert("Could not generate multiple cards. Please try again.");
+      } finally {
+        setAiLoading(false);
+      }
+    }
+
     async function requestBrieferCard(){
-      if (!briefBtn || briefInFlight) return;
+      if (!aiBtn || aiInFlight) return;
       const current = ta.value.trim();
       if (!current) { alert("Card is empty."); return; }
 
       lastBriefOriginal = current;
-      setBriefLoading(true);
+      setAiLoading(true, "Making Brief...");
       try {
         const res = await fetch("/make_brief", {
           method: "POST",
@@ -918,7 +1007,38 @@
         console.error("Brief card request failed", err);
         alert("Could not generate a concise version. Please try again.");
       } finally {
-        setBriefLoading(false);
+        setAiLoading(false);
+      }
+    }
+
+    async function openAiMenu(){
+      if (aiInFlight) return;
+      const action = await choiceModal({
+        title: "Use AI",
+        message: "Choose what you want to do with this card.",
+        options: [
+          { label: "✨ Make Brief", value: "brief" },
+          { label: "🧩 Make into Multiple Cards", value: "split" },
+        ],
+        cancelLabel: "Cancel",
+      });
+      if (!action) return;
+      if (action === "brief") {
+        requestBrieferCard();
+        return;
+      }
+      if (action === "split") {
+        const howMany = await choiceModal({
+          title: "Split into how many cards?",
+          message: "Choose between 2 and 4 cards.",
+          options: [
+            { label: "2 cards", value: 2 },
+            { label: "3 cards", value: 3 },
+            { label: "4 cards", value: 4 },
+          ],
+          cancelLabel: "Cancel",
+        });
+        if (howMany) await requestSplitCard(howMany);
       }
     }
 
@@ -938,7 +1058,7 @@
       updateHintButton();
     };
 
-    if (briefBtn) briefBtn.onclick = () => requestBrieferCard();
+    if (aiBtn) aiBtn.onclick = () => openAiMenu();
     if (viewOriginalBtn) viewOriginalBtn.onclick = () => reviewPreAIVersion();
 
     area.querySelector("[data-save]").onclick = ()=>{

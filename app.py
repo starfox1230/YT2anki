@@ -448,6 +448,57 @@ Original card text:
     suggestion = (response.choices[0].message.content or "").strip()
     return suggestion
 
+
+def split_card_into_multiple(card_text, num_cards=2, model="gpt-4o-mini"):
+    """Use OpenAI to split a single cloze card into multiple simple cards."""
+    if not card_text or not card_text.strip():
+        raise ValueError("Card text is empty.")
+
+    if num_cards < 2 or num_cards > 4:
+        raise ValueError("Number of cards must be between 2 and 4.")
+
+    prompt = f"""
+You are simplifying a cloze-deletion Anki card by splitting it into {num_cards} separate, easy-to-study cards.
+
+Rules:
+- Return exactly {num_cards} cards.
+- Use concise language: one simple fact per card.
+- Keep valid cloze HTML. Each card should start its own cloze numbering at c1 (use c2, c3 only if a single card truly needs more than one cloze).
+- Do not add hints, notes, or commentary beyond the card text.
+- Output ONLY a JSON array of {num_cards} strings. No markdown, code fences, or extra text.
+
+Original card text:
+"""{card_text.strip()}"""
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.4,
+            max_tokens=1200,
+            timeout=60,
+        )
+    except Exception as exc:
+        logger.error("OpenAI API error while splitting card: %s", exc)
+        raise
+
+    raw = (response.choices[0].message.content or "").strip()
+    try:
+        cards = json.loads(raw)
+        if not isinstance(cards, list):
+            raise ValueError("Response was not a list")
+        cards = [fix_cloze_formatting(c) for c in cards if isinstance(c, str) and c.strip()]
+        if len(cards) != num_cards:
+            raise ValueError("Unexpected number of cards returned")
+        return cards
+    except Exception as exc:
+        logger.error("Failed to parse split-card response: %s", exc)
+        raise ValueError("Invalid response while generating multiple cards")
+
 def get_all_anki_cards(transcript, user_preferences="", max_chunk_size=4000, model="gpt-4o"):
     """
     Preprocesses the transcript, splits it into chunks, and processes each chunk.
@@ -1991,6 +2042,33 @@ def make_brief():
     except Exception as exc:
         logger.error("Failed to generate brief card: %s", exc)
         return {"error": "Failed to generate a brief version."}, 500
+
+
+@app.route("/split_card", methods=["POST"])
+def split_card():
+    data = request.get_json() or {}
+    text = (data.get("text") or "").strip()
+    count = data.get("count")
+    model = (data.get("model") or "gpt-4o-mini").strip() or "gpt-4o-mini"
+
+    try:
+        count_int = int(count)
+    except (TypeError, ValueError):
+        count_int = 0
+
+    if not text:
+        return {"error": "Card text is required."}, 400
+    if count_int < 2 or count_int > 4:
+        return {"error": "Card count must be between 2 and 4."}, 400
+
+    try:
+        cards = split_card_into_multiple(text, num_cards=count_int, model=model)
+        return {"cards": cards}
+    except ValueError as err:
+        return {"error": str(err)}, 400
+    except Exception as exc:
+        logger.error("Failed to split card: %s", exc)
+        return {"error": "Failed to generate multiple cards."}, 500
 
 @app.route("/download_apkg", methods=["POST"])
 def download_apkg():
