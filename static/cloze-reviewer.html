@@ -107,7 +107,7 @@
     .mutedLabel{color:var(--muted);font-size:13px;}
     .briefOverlay{margin-top:12px;padding:14px;border:1px solid #2b3243;border-radius:12px;background:var(--surface);box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px;}
     .briefOverlay .briefCard{min-height:80px;}
-    .briefOverlay .row{justify-content:flex-end;gap:8px;flex-wrap:wrap;}
+    .briefOverlay .row{justify-content:flex-start;gap:8px;flex-wrap:wrap;}
     
     .modalBackdrop{
       position:fixed;inset:0;background:rgba(0,0,0,.55);
@@ -614,15 +614,15 @@
                 <div class="mutedLabel" data-brief-primary-label>Concise version</div>
                 <div class="briefCard" data-brief-primary></div>
               </div>
+              <div data-brief-tertiary-wrap class="hidden">
+                <div class="mutedLabel" data-brief-tertiary-label>Even more concise</div>
+                <div class="briefCard" data-brief-tertiary></div>
+              </div>
               <div>
                 <div class="mutedLabel" data-brief-secondary-label>Original</div>
                 <div class="briefCard" data-brief-secondary></div>
               </div>
-              <div class="row">
-                <div class="f1"></div>
-                <button class="btn" data-brief-accept>Use Concise Version</button>
-                <button class="btn" data-brief-reject>Keep Original</button>
-              </div>
+              <div class="row" data-brief-actions></div>
             </div>
           </div>
         </div>
@@ -638,8 +638,10 @@
     const briefSecondaryLabel = area.querySelector("[data-brief-secondary-label]");
     const briefPrimary = area.querySelector("[data-brief-primary]");
     const briefSecondary = area.querySelector("[data-brief-secondary]");
-    const briefAccept = area.querySelector("[data-brief-accept]");
-    const briefReject = area.querySelector("[data-brief-reject]");
+    const briefTertiaryWrap = area.querySelector("[data-brief-tertiary-wrap]");
+    const briefTertiaryLabel = area.querySelector("[data-brief-tertiary-label]");
+    const briefTertiary = area.querySelector("[data-brief-tertiary]");
+    const briefActions = area.querySelector("[data-brief-actions]");
     const viewOriginalBtn = area.querySelector("[data-view-original]");
     
     // Immediate show & sync focus for mobile keyboard
@@ -678,6 +680,7 @@
     let aiInFlight = false;
     let lastBriefOriginal = preAIVersion;
     let lastBriefSuggestion = "";
+    let lastEvenMoreSuggestion = "";
     let lastSplitOriginal = preAIVersion;
     let lastSplitCards = [];
 
@@ -700,29 +703,42 @@
       setHeaderButtonsVisible(true);
     };
 
-    const showBriefOverlay = ({
-      primaryLabel,
-      primaryText,
-      secondaryLabel,
-      secondaryText,
-      acceptLabel,
-      rejectLabel,
-      onAccept,
-      onReject,
-    }) => {
-      if (!briefOverlay || !briefAccept || !briefReject || !editorShell) return;
-      if (briefPrimaryLabel) briefPrimaryLabel.textContent = primaryLabel;
-      if (briefSecondaryLabel) briefSecondaryLabel.textContent = secondaryLabel;
-      if (briefPrimary) briefPrimary.textContent = primaryText;
-      if (briefSecondary) briefSecondary.textContent = secondaryText;
-      briefAccept.textContent = acceptLabel;
-      briefReject.textContent = rejectLabel;
+    const showBriefOverlay = ({ sections = [], actions = [] }) => {
+      if (!briefOverlay || !briefActions || !editorShell) return;
+
+      const [primary, secondary, tertiary] = sections;
+
+      if (briefPrimaryLabel) briefPrimaryLabel.textContent = primary?.label || "";
+      if (briefPrimary) briefPrimary.textContent = primary?.text || "";
+      if (briefSecondaryLabel) briefSecondaryLabel.textContent = secondary?.label || "";
+      if (briefSecondary) briefSecondary.textContent = secondary?.text || "";
+
+      if (briefTertiaryWrap) {
+        const hasTertiary = !!(tertiary && tertiary.text);
+        briefTertiaryWrap.classList.toggle("hidden", !hasTertiary);
+        if (hasTertiary) {
+          if (briefTertiaryLabel) briefTertiaryLabel.textContent = tertiary.label || "";
+          if (briefTertiary) briefTertiary.textContent = tertiary.text || "";
+        }
+      }
+
+      if (briefActions) {
+        briefActions.innerHTML = "";
+        actions.forEach((action) => {
+          const btn = document.createElement("button");
+          btn.className = action.className || "btn";
+          btn.textContent = action.label || "Action";
+          btn.disabled = !!action.disabled;
+          if (typeof action.onClick === "function") {
+            btn.addEventListener("click", action.onClick);
+          }
+          briefActions.appendChild(btn);
+        });
+      }
+
       briefOverlay.classList.remove("hidden");
       editorShell.classList.add("hidden");
       setHeaderButtonsVisible(false);
-
-      briefAccept.onclick = () => { if (typeof onAccept === "function") onAccept(); };
-      briefReject.onclick = () => { if (typeof onReject === "function") onReject(); };
     };
 
     const showOriginalToggle = () => {
@@ -751,23 +767,68 @@
     };
 
     const reviewBriefSuggestion = () => {
-      showBriefOverlay({
-        primaryLabel: "Concise version",
-        primaryText: lastBriefSuggestion,
-        secondaryLabel: "Original",
-        secondaryText: lastBriefOriginal,
-        acceptLabel: "Use Concise Version",
-        rejectLabel: "Keep Original",
-        onAccept: () => {
-          applyEditorValue(lastBriefSuggestion);
-          hideBriefOverlay();
-          showOriginalToggle();
-        },
-        onReject: () => {
+      const sections = [];
+      if (lastEvenMoreSuggestion) {
+        sections.push({ label: "Even more concise", text: formatCardForOverlay(lastEvenMoreSuggestion) });
+        sections.push({ label: "Concise version", text: formatCardForOverlay(lastBriefSuggestion) });
+      } else {
+        sections.push({ label: "Concise version", text: formatCardForOverlay(lastBriefSuggestion) });
+      }
+      sections.push({ label: "Original", text: formatCardForOverlay(lastBriefOriginal) });
+
+      const actions = [];
+      if (!lastEvenMoreSuggestion) {
+        actions.push({
+          label: "🤖 More Concise",
+          className: "btn warn",
+          onClick: () => {
+            hideBriefOverlay();
+            requestEvenMoreConcise();
+          },
+        });
+      }
+
+      if (lastEvenMoreSuggestion) {
+        actions.push({
+          label: "Use Even More Concise",
+          className: "btn good",
+          onClick: () => {
+            applyEditorValue(lastEvenMoreSuggestion);
+            hideBriefOverlay();
+            showOriginalToggle();
+          },
+        });
+        actions.push({
+          label: "Use Concise Version",
+          className: "btn",
+          onClick: () => {
+            applyEditorValue(lastBriefSuggestion);
+            hideBriefOverlay();
+            showOriginalToggle();
+          },
+        });
+      } else {
+        actions.push({
+          label: "Use Concise Version",
+          className: "btn good",
+          onClick: () => {
+            applyEditorValue(lastBriefSuggestion);
+            hideBriefOverlay();
+            showOriginalToggle();
+          },
+        });
+      }
+
+      actions.push({
+        label: "Keep Original",
+        className: "btn",
+        onClick: () => {
           hideBriefOverlay();
           showOriginalToggle();
         },
       });
+
+      showBriefOverlay({ sections, actions });
     };
 
     const formatCardForOverlay = (card) => {
@@ -780,39 +841,55 @@
         : "";
 
       showBriefOverlay({
-        primaryLabel: `Generated cards (${lastSplitCards.length})`,
-        primaryText: formatted,
-        secondaryLabel: "Original",
-        secondaryText: formatCardForOverlay(lastSplitOriginal),
-        acceptLabel: "Use Multiple Cards",
-        rejectLabel: "Keep Original",
-        onAccept: () => {
-          replaceNoteWithCards(lastSplitCards);
-          hideBriefOverlay();
-        },
-        onReject: () => {
-          hideBriefOverlay();
-        },
+        sections: [
+          { label: `Generated cards (${lastSplitCards.length})`, text: formatted },
+          { label: "Original", text: formatCardForOverlay(lastSplitOriginal) },
+        ],
+        actions: [
+          {
+            label: "Use Multiple Cards",
+            className: "btn good",
+            onClick: () => {
+              replaceNoteWithCards(lastSplitCards);
+              hideBriefOverlay();
+            },
+          },
+          {
+            label: "Keep Original",
+            className: "btn",
+            onClick: () => {
+              hideBriefOverlay();
+            },
+          },
+        ],
       });
     };
 
     const reviewPreAIVersion = () => {
       const baseline = lastBriefOriginal || preAIVersion;
       showBriefOverlay({
-        primaryLabel: "Current version",
-        primaryText: ta.value,
-        secondaryLabel: "Pre-AI version",
-        secondaryText: baseline,
-        acceptLabel: "Revert to Original",
-        rejectLabel: "Keep Original",
-        onAccept: () => {
-          applyEditorValue(baseline);
-          hideBriefOverlay();
-          hideOriginalToggle();
-        },
-        onReject: () => {
-          hideBriefOverlay();
-        },
+        sections: [
+          { label: "Current version", text: ta.value },
+          { label: "Pre-AI version", text: baseline },
+        ],
+        actions: [
+          {
+            label: "Revert to Original",
+            className: "btn good",
+            onClick: () => {
+              applyEditorValue(baseline);
+              hideBriefOverlay();
+              hideOriginalToggle();
+            },
+          },
+          {
+            label: "Keep Original",
+            className: "btn",
+            onClick: () => {
+              hideBriefOverlay();
+            },
+          },
+        ],
       });
     };
 
@@ -1026,6 +1103,7 @@
       if (!current) { alert("Card is empty."); return; }
 
       lastBriefOriginal = current;
+      lastEvenMoreSuggestion = "";
       setAiLoading(true, "Making Brief...");
       try {
         const res = await fetch("/make_brief", {
@@ -1042,6 +1120,34 @@
       } catch (err) {
         console.error("Brief card request failed", err);
         alert("Could not generate a concise version. Please try again.");
+      } finally {
+        setAiLoading(false);
+      }
+    }
+
+    async function requestEvenMoreConcise(){
+      if (!aiBtn || aiInFlight) return;
+      const original = (lastBriefOriginal || "").trim();
+      const concise = (lastBriefSuggestion || "").trim();
+
+      if (!original || !concise) { alert("Need both the original and concise versions first."); return; }
+
+      setAiLoading(true, "More Concise...");
+      try {
+        const res = await fetch("/make_more_concise", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ original, concise }),
+        });
+        if (!res.ok) throw new Error(`Server responded with ${res.status}`);
+        const data = await res.json();
+        const suggestion = (data?.suggestion || "").trim();
+        if (!suggestion) throw new Error("Empty suggestion");
+        lastEvenMoreSuggestion = suggestion;
+        reviewBriefSuggestion();
+      } catch (err) {
+        console.error("Even-more-concise request failed", err);
+        alert("Could not generate an even more concise version. Please try again.");
       } finally {
         setAiLoading(false);
       }

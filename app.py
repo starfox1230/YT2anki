@@ -449,6 +449,50 @@ Original card text:
     return suggestion
 
 
+def make_card_even_more_concise(original_text, concise_text, model="gpt-4o-mini"):
+    """Use OpenAI to make an already concise cloze card even shorter."""
+
+    if not original_text or not original_text.strip():
+        raise ValueError("Original card text is empty.")
+    if not concise_text or not concise_text.strip():
+        raise ValueError("Concise card text is empty.")
+
+    prompt = f"""
+You are refining an existing cloze-deletion Anki card that has already been rewritten once but is still too wordy.
+Goal: deliver an even shorter rewrite while preserving every key fact, the cloze numbering, and HTML formatting so it works with our system.
+
+Rules:
+- Preserve all important details from the concise version; if any fact conflicts, defer to the original card.
+- Keep the same cloze numbers and valid HTML (including <br> tags).
+- Do not add hints, notes, or commentary—only the card text itself.
+- Output ONLY the revised card text. No markdown, quotes, or JSON.
+
+Original card:
+"""{original_text.strip()}"""
+
+First concise attempt:
+"""{concise_text.strip()}"""
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.4,
+            max_tokens=800,
+            timeout=60,
+        )
+    except Exception as exc:
+        logger.error("OpenAI API error while making card more concise: %s", exc)
+        raise
+
+    suggestion = (response.choices[0].message.content or "").strip()
+    return suggestion
+
+
 def split_card_into_multiple(card_text, num_cards=2, model="gpt-4o-mini"):
     """Use OpenAI to split a single cloze card into multiple simple cards."""
     if not card_text or not card_text.strip():
@@ -2043,6 +2087,30 @@ def make_brief():
     except Exception as exc:
         logger.error("Failed to generate brief card: %s", exc)
         return {"error": "Failed to generate a brief version."}, 500
+
+
+@app.route("/make_more_concise", methods=["POST"])
+def make_more_concise():
+    data = request.get_json() or {}
+    original = (data.get("original") or "").strip()
+    concise = (data.get("concise") or "").strip()
+    model = (data.get("model") or "gpt-4o-mini").strip() or "gpt-4o-mini"
+
+    if not original:
+        return {"error": "Original card text is required."}, 400
+    if not concise:
+        return {"error": "Concise card text is required."}, 400
+
+    try:
+        suggestion = make_card_even_more_concise(original, concise, model=model)
+        if not suggestion:
+            raise ValueError("Empty response from model")
+        return {"suggestion": suggestion}
+    except ValueError as err:
+        return {"error": str(err)}, 400
+    except Exception as exc:
+        logger.error("Failed to generate even-more-concise card: %s", exc)
+        return {"error": "Failed to generate an even more concise version."}, 500
 
 
 @app.route("/split_card", methods=["POST"])
