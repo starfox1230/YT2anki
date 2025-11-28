@@ -463,6 +463,7 @@ You are simplifying a cloze-deletion Anki card by splitting it into {num_cards} 
 Rules:
 - Return exactly {num_cards} cards.
 - Use concise language: one simple fact per card.
+- Each card must be fully self-contained and unambiguous on its own. Do not assume other cards provide context; include enough subject detail so the answer is clear even when the blank is hidden.
 - Keep valid cloze HTML. Each card should start its own cloze numbering at c1 (use c2, c3 only if a single card truly needs more than one cloze).
 - Do not add hints, notes, or commentary beyond the card text.
 - Output ONLY a JSON array of {num_cards} strings. No markdown, code fences, or extra text.
