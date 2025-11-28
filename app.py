@@ -459,12 +459,12 @@ def make_card_even_more_concise(original_text, concise_text, model="gpt-4o-mini"
 
     prompt = f"""
 You are refining an existing cloze-deletion Anki card that has already been rewritten once but is still too wordy.
-Goal: deliver an even shorter rewrite while preserving every key fact, the cloze numbering, and HTML formatting so it works with our system.
+Goal: deliver a shorter, simpler rewrite while preserving the essential facts, the cloze numbering, and HTML formatting so it works with our system.
 
 Rules:
 - The new version must be strictly shorter (fewer characters) than the "First concise attempt"—never add filler words.
-- Trim redundancy or implied context (e.g., descriptive phrases that don't change the decision or fact) while keeping the card correct.
-- Preserve all important details from the concise version; if any fact conflicts, defer to the original card.
+- You may drop non-essential or adjunct details if they don't change the core fact the learner must recall.
+- Prefer simpler phrasing over dense wording. If two facts compete, keep the critical one and omit optional context.
 - Keep the same cloze numbers and valid HTML (including <br> tags).
 - Do not add hints, notes, or commentary—only the card text itself.
 - Output ONLY the revised card text. No markdown, quotes, or JSON.

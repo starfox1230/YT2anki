@@ -284,36 +284,48 @@
 
   // --- FIX: Stronger Scroll Lock for Modals ---
   let savedScrollY = 0;
+  let modalLockDepth = 0;
 
   function openModalBackdrop(div){
-    // 1. Record where we are
-    savedScrollY = window.scrollY;
-    
-    // 2. Physically lock the body so it CANNOT scroll.
-    // This prevents the input cursor from misaligning with the view.
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${savedScrollY}px`;
-    document.body.style.width = '100%';
-    document.body.style.overflow = 'hidden';
+    const alreadyLocked = modalLockDepth > 0;
+    modalLockDepth++;
+
+    // Only capture/lock on the first modal. Nested modals must not stomp the scroll anchor.
+    if (!alreadyLocked) {
+      // 1. Record where we are
+      savedScrollY = window.scrollY;
+
+      // 2. Physically lock the body so it CANNOT scroll.
+      // This prevents the input cursor from misaligning with the view.
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${savedScrollY}px`;
+      document.body.style.width = '100%';
+      document.body.style.overflow = 'hidden';
+    }
 
     // 3. Show modal
-    div.style.display = "flex"; 
+    div.style.display = "flex";
     div.setAttribute("aria-hidden","false");
   }
 
   function closeModalBackdrop(div){
     // 1. Hide modal
-    div.style.display = "none"; 
+    div.style.display = "none";
     div.setAttribute("aria-hidden","true");
 
-    // 2. Unlock body
-    document.body.style.position = '';
-    document.body.style.top = '';
-    document.body.style.width = '';
-    document.body.style.overflow = '';
+    modalLockDepth = Math.max(0, modalLockDepth - 1);
+    const shouldUnlock = modalLockDepth === 0;
 
-    // 3. Instant jump back to original position
-    window.scrollTo(0, savedScrollY);
+    if (shouldUnlock) {
+      // 2. Unlock body
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+
+      // 3. Instant jump back to original position
+      window.scrollTo(0, savedScrollY);
+    }
   }
 
   try {
