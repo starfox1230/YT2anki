@@ -468,7 +468,7 @@ Rules:
 - Output ONLY a JSON array of {num_cards} strings. No markdown, code fences, or extra text.
 
 Original card text:
-"""{card_text.strip()}"""
+\"\"\"{card_text.strip()}\"\"\"
 """
 
     try:
