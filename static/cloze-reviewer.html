@@ -248,6 +248,7 @@
   let soloIndex = 0;
   const uiState = {};
   let lastInteractedCardId = null;
+  let scrollTargetId = null;
   let tagsVisible = (() => {
     try { const v = localStorage.getItem(tagsKey); return v === null ? false : v === "1"; }
     catch { return false; }
@@ -374,6 +375,20 @@
   const viewLabel = v => ({all:"All", new:"New", saved:"Saved", discarded:"Discarded"})[v] || v;
 
   const cardsEl = el("#cards");
+
+  function scrollCardIntoView(id){
+    if (!id) return;
+    requestAnimationFrame(() => {
+      const cardEl = el(`#card-${CSS.escape(id)}`);
+      if (!cardEl) return;
+      const header = document.querySelector("header");
+      const offset = (header?.offsetHeight || 0) + 8;
+      const top = cardEl.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
+      lastInteractedCardId = id;
+    });
+  }
+
   function noteToCardHtml(n){
     const nums = getClozeNumbers(n.html);
     if (!uiState[n.id]) uiState[n.id] = { nums, idx:0, hidden:true };
@@ -416,6 +431,11 @@
     cardsEl.innerHTML = cur.map(noteToCardHtml).join("");
     cur.forEach(n => wireCard(n.id));
     updateToggleTagsBtn();
+    if (scrollTargetId) {
+      const targetId = scrollTargetId;
+      scrollTargetId = null;
+      scrollCardIntoView(targetId);
+    }
   }
   function wireCard(id){
     const root = el(`#card-${CSS.escape(id)}`);
@@ -798,6 +818,7 @@
         createdAt: baseCreated + i * 0.001,
       }));
 
+      scrollTargetId = newNotes[0]?.id || null;
       notes.splice(idx, 1, ...newNotes);
       delete uiState[note.id];
       save();
