@@ -462,6 +462,8 @@ You are refining an existing cloze-deletion Anki card that has already been rewr
 Goal: deliver an even shorter rewrite while preserving every key fact, the cloze numbering, and HTML formatting so it works with our system.
 
 Rules:
+- The new version must be strictly shorter (fewer characters) than the "First concise attempt"—never add filler words.
+- Trim redundancy or implied context (e.g., descriptive phrases that don't change the decision or fact) while keeping the card correct.
 - Preserve all important details from the concise version; if any fact conflicts, defer to the original card.
 - Keep the same cloze numbers and valid HTML (including <br> tags).
 - Do not add hints, notes, or commentary—only the card text itself.
