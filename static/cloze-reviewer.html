@@ -568,9 +568,15 @@
               <div class="f1"></div>
               <div class="row" id="plusRow" style="gap:6px"></div>
             </div>
-            <div class="row" style="margin-top:8px;justify-content:flex-end">
-              <button class="btn red" data-removeAll>Remove All Clozes</button>
-              <div class="row" id="minusRow" style="gap:6px"></div>
+            <div class="row" style="margin-top:8px;justify-content:space-between;align-items:center">
+              <div class="row" style="gap:8px;align-items:center">
+                <button class="btn" data-paste title="Paste from clipboard">Paste</button>
+                <button class="btn hidden" data-addHint title="Add ::hint to current cloze">::hint</button>
+              </div>
+              <div class="row" style="gap:10px;align-items:center">
+                <button class="btn red" data-removeAll>Remove All Clozes</button>
+                <div class="row" id="minusRow" style="gap:6px"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -617,6 +623,7 @@
         historyIndex--;
         ta.value = history[historyIndex];
         rebuildPlusMinusButtons();
+        updateHintButton();
         resetMergeState();
       }
     }
@@ -626,6 +633,7 @@
         historyIndex++;
         ta.value = history[historyIndex];
         rebuildPlusMinusButtons();
+        updateHintButton();
         resetMergeState();
       }
     }
@@ -684,6 +692,7 @@
       const pos = start + newCloze.length;
       ta.setSelectionRange(pos, pos);
       rebuildPlusMinusButtons();
+      updateHintButton();
       ta.focus();
     }
 
@@ -691,6 +700,7 @@
       ta.value = ta.value.replace(/{{c\d+::([^]*?)(?:::([^]*?))?}}/g, "$1");
       recordChange(ta.value);
       rebuildPlusMinusButtons();
+      updateHintButton();
       ta.focus();
     }
 
@@ -707,10 +717,69 @@
       ta.value = txt;
       recordChange(ta.value);
       rebuildPlusMinusButtons();
+      updateHintButton();
       ta.focus();
     }
 
+    function findActiveCloze(){
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      if (typeof start !== "number" || start !== end) return null;
+      const re = /{{c(\d+)::([^]*?)(?:::([^]*?))?}}/g;
+      let m;
+      while ((m = re.exec(ta.value))) {
+        const matchStart = m.index;
+        const matchEnd = matchStart + m[0].length;
+        if (start > matchStart && start < matchEnd) {
+          return { start: matchStart, end: matchEnd, hasHint: !!m[3] };
+        }
+      }
+      return null;
+    }
+
+    function updateHintButton(){
+      const hintBtn = area.querySelector("[data-addHint]");
+      const active = findActiveCloze();
+      const visible = !!active && !active.hasHint;
+      hintBtn.classList.toggle("hidden", !visible);
+    }
+
+    async function pasteFromClipboard(){
+      try {
+        if (!navigator?.clipboard?.readText) throw new Error("Clipboard API unavailable");
+        const text = await navigator.clipboard.readText();
+        if (typeof text !== "string" || text.length === 0) return;
+        const start = ta.selectionStart ?? ta.value.length;
+        const end = ta.selectionEnd ?? start;
+        const next = ta.value.slice(0, start) + text + ta.value.slice(end);
+        ta.value = next;
+        const pos = start + text.length;
+        ta.setSelectionRange(pos, pos);
+        recordChange(next);
+        rebuildPlusMinusButtons();
+        updateHintButton();
+        ta.focus({ preventScroll: true });
+      } catch (err) {
+        console.warn("Paste failed", err);
+        alert("Clipboard access is blocked. Please paste manually.");
+      }
+    }
+
     area.querySelector("[data-removeAll]").onclick = removeAll;
+    area.querySelector("[data-paste]").onclick = pasteFromClipboard;
+    area.querySelector("[data-addHint]").onclick = ()=>{
+      const active = findActiveCloze();
+      if (!active || active.hasHint) return;
+      const insertion = active.end - 2;
+      const next = ta.value.slice(0, insertion) + "::" + ta.value.slice(insertion);
+      ta.value = next;
+      const caret = insertion + 2;
+      ta.setSelectionRange(caret, caret);
+      recordChange(next);
+      rebuildPlusMinusButtons();
+      ta.focus({ preventScroll: true });
+      updateHintButton();
+    };
 
     area.querySelector("[data-save]").onclick = ()=>{
       const v = ta.value;
@@ -766,6 +835,7 @@
         resetMergeState();
       }
       rebuildPlusMinusButtons();
+      updateHintButton();
     });
 
     ta.addEventListener("keydown", (e)=>{
@@ -814,6 +884,9 @@
     ta.addEventListener("mousedown", resetMergeState);
     ta.addEventListener("mouseup", resetMergeState);
     ta.addEventListener("blur", resetMergeState);
+
+    ["keyup","mouseup","select"].forEach(evt => ta.addEventListener(evt, updateHintButton));
+    updateHintButton();
 
     rebuildPlusMinusButtons();
     
