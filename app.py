@@ -506,6 +506,42 @@ def get_all_interactive_questions(transcript, user_preferences="", max_chunk_siz
     logger.debug("Total interactive questions generated: %d", len(all_questions))
     return all_questions
 
+
+def make_brief_card_text(card_text, model="gpt-4o-mini"):
+    """
+    Uses the OpenAI API to shorten an existing cloze-deletion Anki card while
+    preserving key information and cloze formatting.
+    """
+    prompt = f"""
+You are revising an existing Anki cloze-deletion card the user feels is too wordy.
+The card may contain HTML such as <br> for line breaks.
+Rewrite the card so it is concise and keeps the essential facts intact.
+
+Rules to follow strictly:
+- Preserve all existing cloze markers and numbering: {{c1::...}}, {{c2::...}}, etc.
+- Keep HTML structure (like <br>) if present.
+- Do not add explanations, commentary, or any text outside the card itself.
+- Output ONLY the revised card text, with no quotes, lists, or markdown fences.
+
+Original card:
+"""{card_text}"""
+
+Return just the revised card text.
+"""
+
+    response = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": "You carefully rewrite Anki cloze cards to be concise while keeping key facts."},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0.4,
+        max_tokens=800,
+        timeout=60,
+    )
+    result_text = response.choices[0].message.content.strip()
+    return result_text
+
 # ----------------------------
 # Embedded HTML Templates
 # ----------------------------
@@ -1903,6 +1939,27 @@ def ping():
 @app.route("/", methods=["GET"])
 def index():
     return render_template_string(INDEX_HTML)
+
+
+@app.route("/make_brief", methods=["POST"])
+def make_brief_endpoint():
+    data = request.get_json() or {}
+    card_text = (data.get("text") or "").strip()
+    model = data.get("model", "gpt-4o-mini")
+
+    if not card_text:
+        return {"error": "No card text provided."}, 400
+
+    try:
+        revised = make_brief_card_text(card_text, model=model)
+        revised = revised.strip()
+        if not revised:
+            return {"error": "OpenAI returned an empty suggestion."}, 500
+        return {"revised_text": revised}
+    except Exception as e:
+        logger.error("OpenAI API error while making brief card: %s", e)
+        return {"error": "Failed to generate a brief version."}, 500
+
 
 @app.route("/generate", methods=["POST"])
 def generate():
