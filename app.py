@@ -410,6 +410,44 @@ Transcript:
         flash("OpenAI API error for a chunk: " + str(e))
         return []
 
+
+def make_card_briefer(card_text, model="gpt-4o-mini"):
+    """Use OpenAI to produce a more concise version of a cloze Anki card."""
+    if not card_text or not card_text.strip():
+        raise ValueError("Card text is empty.")
+
+    prompt = f"""
+You are refining an existing Anki cloze-deletion card that the user feels is too wordy.
+Task: Rewrite the card to be as brief and clear as possible while preserving every key fact and keeping the same cloze numbering.
+Context: This is a Cloze deletion Anki card where clozes look like {{c1::answer}} and the final output must remain valid cloze HTML.
+Behavior requirements:
+- Keep all important information but use fewer words.
+- Keep the same cloze numbers so the card still works in Anki.
+- Do not add hints, commentary, or formatting outside the card itself.
+- Output ONLY the revised card text with no quotes, no markdown, and no JSON.
+
+Original card text:
+\"\"\"{card_text.strip()}\"\"\"
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.5,
+            max_tokens=800,
+            timeout=60,
+        )
+    except Exception as exc:
+        logger.error("OpenAI API error while making card brief: %s", exc)
+        raise
+
+    suggestion = (response.choices[0].message.content or "").strip()
+    return suggestion
+
 def get_all_anki_cards(transcript, user_preferences="", max_chunk_size=4000, model="gpt-4o"):
     """
     Preprocesses the transcript, splits it into chunks, and processes each chunk.
@@ -1932,6 +1970,27 @@ def generate():
             return "Failed to generate any Anki cards.", 500
         cards_json = json.dumps(cards)
         return render_template_string(ANKI_HTML, cards_json=cards_json)
+
+
+@app.route("/make_brief", methods=["POST"])
+def make_brief():
+    data = request.get_json() or {}
+    text = (data.get("text") or "").strip()
+    model = (data.get("model") or "gpt-4o-mini").strip() or "gpt-4o-mini"
+
+    if not text:
+        return {"error": "Card text is required."}, 400
+
+    try:
+        suggestion = make_card_briefer(text, model=model)
+        if not suggestion:
+            raise ValueError("Empty response from model")
+        return {"suggestion": suggestion}
+    except ValueError as err:
+        return {"error": str(err)}, 400
+    except Exception as exc:
+        logger.error("Failed to generate brief card: %s", exc)
+        return {"error": "Failed to generate a brief version."}, 500
 
 @app.route("/download_apkg", methods=["POST"])
 def download_apkg():
