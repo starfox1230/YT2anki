@@ -621,7 +621,7 @@
               <div class="row">
                 <div class="f1"></div>
                 <button class="btn" data-brief-accept>Use Concise Version</button>
-                <button class="btn" data-brief-reject>Keep Current</button>
+                <button class="btn" data-brief-reject>Keep Original</button>
               </div>
             </div>
           </div>
@@ -681,9 +681,23 @@
     let lastSplitOriginal = preAIVersion;
     let lastSplitCards = [];
 
+    const headerButtons = [
+      aiBtn,
+      area.querySelector("[data-x]"),
+      area.querySelector("[data-save]"),
+    ];
+
+    const setHeaderButtonsVisible = (isVisible) => {
+      headerButtons.forEach((btn) => {
+        if (!btn) return;
+        btn.classList.toggle("hidden", !isVisible);
+      });
+    };
+
     const hideBriefOverlay = () => {
       if (briefOverlay) briefOverlay.classList.add("hidden");
       if (editorShell) editorShell.classList.remove("hidden");
+      setHeaderButtonsVisible(true);
     };
 
     const showBriefOverlay = ({
@@ -705,6 +719,7 @@
       briefReject.textContent = rejectLabel;
       briefOverlay.classList.remove("hidden");
       editorShell.classList.add("hidden");
+      setHeaderButtonsVisible(false);
 
       briefAccept.onclick = () => { if (typeof onAccept === "function") onAccept(); };
       briefReject.onclick = () => { if (typeof onReject === "function") onReject(); };
@@ -742,7 +757,7 @@
         secondaryLabel: "Original",
         secondaryText: lastBriefOriginal,
         acceptLabel: "Use Concise Version",
-        rejectLabel: "Keep Current",
+        rejectLabel: "Keep Original",
         onAccept: () => {
           applyEditorValue(lastBriefSuggestion);
           hideBriefOverlay();
@@ -770,7 +785,7 @@
         secondaryLabel: "Original",
         secondaryText: formatCardForOverlay(lastSplitOriginal),
         acceptLabel: "Use Multiple Cards",
-        rejectLabel: "Keep Current",
+        rejectLabel: "Keep Original",
         onAccept: () => {
           replaceNoteWithCards(lastSplitCards);
           hideBriefOverlay();
@@ -789,7 +804,7 @@
         secondaryLabel: "Pre-AI version",
         secondaryText: baseline,
         acceptLabel: "Revert to Original",
-        rejectLabel: "Keep Current",
+        rejectLabel: "Keep Original",
         onAccept: () => {
           applyEditorValue(baseline);
           hideBriefOverlay();
