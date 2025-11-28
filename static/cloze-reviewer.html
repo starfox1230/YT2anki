@@ -103,10 +103,11 @@
     .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#151925;border:1px solid #2b3243;color:#cbd3df;font-size:13px}
     .hidden{display:none !important}
 
-    .briefPanel{margin-top:12px;padding:10px;border:1px solid #2b3243;border-radius:12px;background:var(--surface);box-shadow:var(--shadow);}
-    .briefGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:10px;align-items:start;}
     .briefCard{white-space:pre-wrap;padding:10px;border-radius:10px;border:1px solid #2b3243;background:#121621;line-height:1.4;}
     .mutedLabel{color:var(--muted);font-size:13px;}
+    .briefOverlay{margin-top:12px;padding:14px;border:1px solid #2b3243;border-radius:12px;background:var(--surface);box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px;}
+    .briefOverlay .briefCard{min-height:80px;}
+    .briefOverlay .row{justify-content:flex-end;gap:8px;flex-wrap:wrap;}
     
     .modalBackdrop{
       position:fixed;inset:0;background:rgba(0,0,0,.55);
@@ -558,49 +559,49 @@
           </header>
           <div class="hr"></div>
           <div class="modalContent">
-            <textarea class="input" id="editArea" style="width:100%;min-height:260px;font-size:24px;line-height:1.25">${escapeHtml(prev)}</textarea>
-            <!-- Controls -->
-            <div class="row" style="margin-top:10px;flex-wrap:wrap;align-items:center">
-              <button class="btn blue" data-undo title="Undo (Ctrl+Z)">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
-                </svg>
-              </button>
-              <button class="btn blue" data-redo title="Redo (Ctrl+Y)">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-                </svg>
-              </button>
-              <div class="f1"></div>
-              <div class="row" id="plusRow" style="gap:6px"></div>
-            </div>
-            <div class="row" style="margin-top:8px;justify-content:space-between;align-items:center">
-              <div class="row" style="gap:8px;align-items:center">
-                <button class="btn" data-paste title="Paste from clipboard">Paste</button>
-                <button class="btn hidden" data-addHint title="Add ::hint to current cloze">::hint</button>
+            <div data-editor-shell>
+              <textarea class="input" id="editArea" style="width:100%;min-height:260px;font-size:24px;line-height:1.25">${escapeHtml(prev)}</textarea>
+              <!-- Controls -->
+              <div class="row" style="margin-top:10px;flex-wrap:wrap;align-items:center">
+                <button class="btn blue" data-undo title="Undo (Ctrl+Z)">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                  </svg>
+                </button>
+                <button class="btn blue" data-redo title="Redo (Ctrl+Y)">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                  </svg>
+                </button>
+                <button class="btn blue hidden" data-view-original title="View the pre-AI version">View Pre-AI</button>
+                <div class="f1"></div>
+                <div class="row" id="plusRow" style="gap:6px"></div>
               </div>
-              <div class="row" style="gap:10px;align-items:center">
-                <button class="btn red" data-removeAll>Remove All Clozes</button>
-                <div class="row" id="minusRow" style="gap:6px"></div>
+              <div class="row" style="margin-top:8px;justify-content:space-between;align-items:center">
+                <div class="row" style="gap:8px;align-items:center">
+                  <button class="btn" data-paste title="Paste from clipboard">Paste</button>
+                  <button class="btn hidden" data-addHint title="Add ::hint to current cloze">::hint</button>
+                </div>
+                <div class="row" style="gap:10px;align-items:center">
+                  <button class="btn red" data-removeAll>Remove All Clozes</button>
+                  <div class="row" id="minusRow" style="gap:6px"></div>
+                </div>
               </div>
             </div>
 
-            <div class="briefPanel" data-brief-panel>
-              <div class="row" style="align-items:center;gap:10px;flex-wrap:wrap;">
-                <div class="mutedLabel" data-brief-status>Use ✨ Make Brief to ask AI for a shorter version.</div>
-                <div class="f1"></div>
-                <button class="btn hidden" data-brief-accept>Accept</button>
-                <button class="btn hidden" data-brief-reject>Reject</button>
+            <div class="briefOverlay hidden" data-brief-overlay>
+              <div>
+                <div class="mutedLabel" data-brief-primary-label>Concise version</div>
+                <div class="briefCard" data-brief-primary></div>
               </div>
-              <div class="briefGrid hidden" data-brief-result>
-                <div>
-                  <div class="mutedLabel">Original</div>
-                  <div class="briefCard" data-brief-original></div>
-                </div>
-                <div>
-                  <div class="mutedLabel">Suggested</div>
-                  <div class="briefCard" data-brief-suggestion></div>
-                </div>
+              <div>
+                <div class="mutedLabel" data-brief-secondary-label>Original</div>
+                <div class="briefCard" data-brief-secondary></div>
+              </div>
+              <div class="row">
+                <div class="f1"></div>
+                <button class="btn" data-brief-accept>Use Concise Version</button>
+                <button class="btn" data-brief-reject>Keep Current</button>
               </div>
             </div>
           </div>
@@ -611,13 +612,15 @@
     const backdrop = area.firstElementChild;
     const ta = area.querySelector("#editArea");
     const briefBtn = area.querySelector("[data-brief]");
-    const briefPanel = area.querySelector("[data-brief-panel]");
-    const briefStatus = area.querySelector("[data-brief-status]");
-    const briefResult = area.querySelector("[data-brief-result]");
-    const briefOriginal = area.querySelector("[data-brief-original]");
-    const briefSuggestion = area.querySelector("[data-brief-suggestion]");
+    const editorShell = area.querySelector("[data-editor-shell]");
+    const briefOverlay = area.querySelector("[data-brief-overlay]");
+    const briefPrimaryLabel = area.querySelector("[data-brief-primary-label]");
+    const briefSecondaryLabel = area.querySelector("[data-brief-secondary-label]");
+    const briefPrimary = area.querySelector("[data-brief-primary]");
+    const briefSecondary = area.querySelector("[data-brief-secondary]");
     const briefAccept = area.querySelector("[data-brief-accept]");
     const briefReject = area.querySelector("[data-brief-reject]");
+    const viewOriginalBtn = area.querySelector("[data-view-original]");
     
     // Immediate show & sync focus for mobile keyboard
     openModalBackdrop(backdrop);
@@ -651,17 +654,43 @@
       if (!merging) resetMergeState();
     };
 
+    const preAIVersion = note.originalHtml || prev;
     let briefInFlight = false;
+    let lastBriefOriginal = preAIVersion;
+    let lastBriefSuggestion = "";
 
-    const resetBriefUI = () => {
-      if (briefResult) briefResult.classList.add("hidden");
-      if (briefAccept) briefAccept.classList.add("hidden");
-      if (briefReject) briefReject.classList.add("hidden");
-      if (briefOriginal) briefOriginal.textContent = "";
-      if (briefSuggestion) briefSuggestion.textContent = "";
+    const hideBriefOverlay = () => {
+      if (briefOverlay) briefOverlay.classList.add("hidden");
+      if (editorShell) editorShell.classList.remove("hidden");
     };
 
-    const setBriefStatus = (text) => { if (briefStatus) briefStatus.textContent = text; };
+    const showBriefOverlay = ({
+      primaryLabel,
+      primaryText,
+      secondaryLabel,
+      secondaryText,
+      acceptLabel,
+      rejectLabel,
+      onAccept,
+      onReject,
+    }) => {
+      if (!briefOverlay || !briefAccept || !briefReject || !editorShell) return;
+      if (briefPrimaryLabel) briefPrimaryLabel.textContent = primaryLabel;
+      if (briefSecondaryLabel) briefSecondaryLabel.textContent = secondaryLabel;
+      if (briefPrimary) briefPrimary.textContent = primaryText;
+      if (briefSecondary) briefSecondary.textContent = secondaryText;
+      briefAccept.textContent = acceptLabel;
+      briefReject.textContent = rejectLabel;
+      briefOverlay.classList.remove("hidden");
+      editorShell.classList.add("hidden");
+
+      briefAccept.onclick = () => { if (typeof onAccept === "function") onAccept(); };
+      briefReject.onclick = () => { if (typeof onReject === "function") onReject(); };
+    };
+
+    const showOriginalToggle = () => {
+      if (viewOriginalBtn) viewOriginalBtn.classList.remove("hidden");
+    };
 
     const setBriefLoading = (loading) => {
       briefInFlight = loading;
@@ -669,24 +698,55 @@
         briefBtn.disabled = loading;
         briefBtn.textContent = loading ? "⏳ Making Brief..." : "✨ Make Brief";
       }
-      if (loading) {
-        resetBriefUI();
-        setBriefStatus("Asking OpenAI to make this card more concise...");
-      }
+      if (loading) hideBriefOverlay();
     };
 
-    const showBriefResult = (original, suggestion) => {
-      if (!briefPanel) return;
-      if (briefOriginal) briefOriginal.textContent = original;
-      if (briefSuggestion) briefSuggestion.textContent = suggestion;
-      if (briefResult) briefResult.classList.remove("hidden");
-      if (briefAccept) briefAccept.classList.remove("hidden");
-      if (briefReject) briefReject.classList.remove("hidden");
-      setBriefStatus("Review the concise version. Accept to apply or reject to keep the current text.");
+    const applyEditorValue = (value) => {
+      ta.value = value;
+      recordChange(ta.value);
+      rebuildPlusMinusButtons();
+      updateHintButton();
+      ta.focus({ preventScroll: true });
     };
 
-    resetBriefUI();
-    setBriefStatus("Use ✨ Make Brief to ask AI for a shorter version.");
+    const reviewBriefSuggestion = () => {
+      showBriefOverlay({
+        primaryLabel: "Concise version",
+        primaryText: lastBriefSuggestion,
+        secondaryLabel: "Original",
+        secondaryText: lastBriefOriginal,
+        acceptLabel: "Use Concise Version",
+        rejectLabel: "Keep Current",
+        onAccept: () => {
+          applyEditorValue(lastBriefSuggestion);
+          hideBriefOverlay();
+          showOriginalToggle();
+        },
+        onReject: () => {
+          hideBriefOverlay();
+          showOriginalToggle();
+        },
+      });
+    };
+
+    const reviewPreAIVersion = () => {
+      const baseline = lastBriefOriginal || preAIVersion;
+      showBriefOverlay({
+        primaryLabel: "Current version",
+        primaryText: ta.value,
+        secondaryLabel: "Pre-AI version",
+        secondaryText: baseline,
+        acceptLabel: "Revert to Original",
+        rejectLabel: "Keep Current",
+        onAccept: () => {
+          applyEditorValue(baseline);
+          hideBriefOverlay();
+        },
+        onReject: () => {
+          hideBriefOverlay();
+        },
+      });
+    };
 
     function performUndo() {
       if (historyIndex > 0) {
@@ -840,6 +900,7 @@
       const current = ta.value.trim();
       if (!current) { alert("Card is empty."); return; }
 
+      lastBriefOriginal = current;
       setBriefLoading(true);
       try {
         const res = await fetch("/make_brief", {
@@ -851,10 +912,10 @@
         const data = await res.json();
         const suggestion = (data?.suggestion || "").trim();
         if (!suggestion) throw new Error("Empty suggestion");
-        showBriefResult(current, suggestion);
+        lastBriefSuggestion = suggestion;
+        reviewBriefSuggestion();
       } catch (err) {
         console.error("Brief card request failed", err);
-        setBriefStatus("Failed to generate a concise version. Please try again.");
         alert("Could not generate a concise version. Please try again.");
       } finally {
         setBriefLoading(false);
@@ -878,20 +939,7 @@
     };
 
     if (briefBtn) briefBtn.onclick = () => requestBrieferCard();
-    if (briefAccept) briefAccept.onclick = () => {
-      const suggestion = (briefSuggestion && briefSuggestion.textContent) ? briefSuggestion.textContent : "";
-      if (!suggestion) return;
-      ta.value = suggestion;
-      recordChange(ta.value);
-      rebuildPlusMinusButtons();
-      updateHintButton();
-      ta.focus({ preventScroll: true });
-      setBriefStatus("Applied the concise version to the editor. You can still edit before saving.");
-    };
-    if (briefReject) briefReject.onclick = () => {
-      resetBriefUI();
-      setBriefStatus("Suggestion dismissed. You can try again.");
-    };
+    if (viewOriginalBtn) viewOriginalBtn.onclick = () => reviewPreAIVersion();
 
     area.querySelector("[data-save]").onclick = ()=>{
       const v = ta.value;
