@@ -427,7 +427,7 @@ Behavior requirements:
 - Output ONLY the revised card text with no quotes, no markdown, and no JSON.
 
 Original card text:
-\"\"\"{card_text.strip()}\"\"\"
+{card_text.strip()}
 """
 
     try:
@@ -468,10 +468,10 @@ Rules:
 - Output ONLY the revised card text. No markdown, quotes, or JSON.
 
 Original card:
-"""{original_text.strip()}"""
+{original_text.strip()}
 
 First concise attempt:
-"""{concise_text.strip()}"""
+{concise_text.strip()}
 """
 
     try:
