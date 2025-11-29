@@ -411,7 +411,7 @@ Transcript:
         return []
 
 
-def make_card_briefer(card_text, model="gpt-4o-mini"):
+def make_card_briefer(card_text, model="gpt-4.1"):
     """Use OpenAI to produce a more concise version of a cloze Anki card."""
     if not card_text or not card_text.strip():
         raise ValueError("Card text is empty.")
@@ -449,7 +449,7 @@ Original card text:
     return suggestion
 
 
-def make_card_even_more_concise(original_text, concise_text, model="gpt-4o-mini"):
+def make_card_even_more_concise(original_text, concise_text, model="gpt-4.1"):
     """Use OpenAI to make an already concise cloze card even shorter."""
 
     if not original_text or not original_text.strip():
@@ -495,7 +495,7 @@ First concise attempt:
     return suggestion
 
 
-def split_card_into_multiple(card_text, num_cards=2, model="gpt-4o-mini"):
+def split_card_into_multiple(card_text, num_cards=2, model="gpt-4.1"):
     """Use OpenAI to split a single cloze card into multiple simple cards."""
     if not card_text or not card_text.strip():
         raise ValueError("Card text is empty.")
@@ -2074,7 +2074,7 @@ def generate():
 def make_brief():
     data = request.get_json() or {}
     text = (data.get("text") or "").strip()
-    model = (data.get("model") or "gpt-4o-mini").strip() or "gpt-4o-mini"
+    model = (data.get("model") or "gpt-4.1").strip() or "gpt-4.1"
 
     if not text:
         return {"error": "Card text is required."}, 400
@@ -2096,7 +2096,7 @@ def make_more_concise():
     data = request.get_json() or {}
     original = (data.get("original") or "").strip()
     concise = (data.get("concise") or "").strip()
-    model = (data.get("model") or "gpt-4o-mini").strip() or "gpt-4o-mini"
+    model = (data.get("model") or "gpt-4.1").strip() or "gpt-4.1"
 
     if not original:
         return {"error": "Original card text is required."}, 400
@@ -2120,7 +2120,7 @@ def split_card():
     data = request.get_json() or {}
     text = (data.get("text") or "").strip()
     count = data.get("count")
-    model = (data.get("model") or "gpt-4o-mini").strip() or "gpt-4o-mini"
+    model = (data.get("model") or "gpt-4.1").strip() or "gpt-4.1"
 
     try:
         count_int = int(count)
