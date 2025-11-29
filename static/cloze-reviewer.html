@@ -1044,8 +1044,26 @@
 
     function addClozeAs(k){
       const start = ta.selectionStart, end = ta.selectionEnd;
-      if (start === end){ alert("Select text to cloze."); return; }
       const txt = ta.value;
+
+      if (start === end) {
+        const active = findActiveCloze();
+        if (active) {
+          if (active.num === k) { ta.focus(); return; }
+          const updated = `{{c${k}::${active.body}${active.hint ? `::${active.hint}` : ""}}}`;
+          ta.value = txt.slice(0, active.start) + updated + txt.slice(active.end);
+          const pos = Math.min(active.start + updated.length, ta.value.length);
+          ta.setSelectionRange(pos, pos);
+          recordChange(ta.value);
+          rebuildPlusMinusButtons();
+          updateHintButton();
+          ta.focus();
+          return;
+        }
+        alert("Select text to cloze.");
+        return;
+      }
+
       let sel = txt.slice(start, end);
       let trailingSpace = '';
       if (sel.endsWith(' ') && sel.trim().length > 0) {
@@ -1097,7 +1115,14 @@
         const matchStart = m.index;
         const matchEnd = matchStart + m[0].length;
         if (start > matchStart && start < matchEnd) {
-          return { start: matchStart, end: matchEnd, hasHint: !!m[3] };
+          return {
+            start: matchStart,
+            end: matchEnd,
+            hasHint: !!m[3],
+            num: parseInt(m[1], 10),
+            body: m[2],
+            hint: m[3] || "",
+          };
         }
       }
       return null;
