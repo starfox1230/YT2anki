@@ -170,15 +170,16 @@
       <button class="segbtn" data-view="discarded">Discarded</button>
     </div>
     <button class="btn" id="soloBtn" title="One-at-a-time viewer (optional)">Solo View</button>
-    <div class="searchRow">
+    <div class="searchRow hidden" data-advanced="true">
       <input class="input" id="search" placeholder="Search">
-      <button class="btn" id="toggleTagsBtn" title="Show/Hide tags">Show Tags</button>
+      <button class="btn" id="toggleTagsBtn" data-advanced="true" title="Show/Hide tags">Show Tags</button>
     </div>
     <div class="row">
-      <button class="btn" id="copyAllBtn" title="Copy all visible" style="display:none;">Copy Visible</button>
-      <button class="btn" id="apkgBtn" title="Download .apkg" style="display:none;">Download APKG</button>
-      <button class="btn" id="jsonExportBtn" title="Download or copy combined JSON" style="display:none;">JSON Export</button>
-      <button class="btn" id="copyDiffBtn" title="Copy edited cards diff" style="display:none;">Copy DIFF</button>
+      <button class="btn" id="seeMoreBtn" type="button">See More</button>
+      <button class="btn" id="copyAllBtn" data-advanced="true" title="Copy all visible" style="display:none;">Copy Visible</button>
+      <button class="btn" id="apkgBtn" title="Download .apkg" style="display:none;">Download Deck</button>
+      <button class="btn" id="jsonExportBtn" data-advanced="true" title="Download or copy combined JSON" style="display:none;">JSON Export</button>
+      <button class="btn" id="copyDiffBtn" data-advanced="true" title="Copy edited cards diff" style="display:none;">Copy DIFF</button>
       <button class="btn warn" id="nukeBtn" title="Clear local data">Reset</button>
       <button class="btn red" id="deleteDiscardedBtn" title="Delete all discarded cards" style="display:none;">Delete Discarded (<span id="discardCountLabel">0</span>)</button>
       <div class="toolbarStats">
@@ -260,6 +261,7 @@
   let lastInteractedCardId = null;
   let scrollTargetId = null;
   let cachedPromptText = null;
+  let advancedVisible = false;
   let tagsVisible = (() => {
     try { const v = localStorage.getItem(tagsKey); return v === null ? false : v === "1"; }
     catch { return false; }
@@ -1501,6 +1503,17 @@
     URL.revokeObjectURL(a.href);
   }
 
+  // Advanced controls toggle
+  const advancedToggleBtn = el("#seeMoreBtn");
+  const advancedControls = () => els('[data-advanced="true"]');
+  function setAdvancedVisible(show){
+    advancedVisible = show;
+    if (advancedToggleBtn) advancedToggleBtn.textContent = show ? "See Less" : "See More";
+    advancedControls().forEach(node => node.classList.toggle("hidden", !show));
+  }
+  setAdvancedVisible(false);
+  if (advancedToggleBtn) advancedToggleBtn.addEventListener("click", ()=> setAdvancedVisible(!advancedVisible));
+
   // Toggle tags UI
   function updateToggleTagsBtn(){
     const b = el("#toggleTagsBtn");
@@ -1577,7 +1590,7 @@
       const blob = await res.blob();
       downloadBlob("cards.apkg", blob);
     }catch(e){
-      alert("APKG download failed. Is the backend running at /apkg?\n" + e.message);
+      alert("Deck download failed. Is the backend running at /apkg?\n" + e.message);
     }
   });
 
