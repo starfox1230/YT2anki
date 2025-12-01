@@ -192,14 +192,13 @@
   <section id="ingest">
     <div class="row" style="align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:8px;">
       <button class="btn" id="copyPromptBtn">Copy prompt for AI</button>
-      <p class="muted" style="margin:0; font-size:14px;">
-        Paste these instructions along with source material in your preferred reasoning AI bot:
-        <a href="https://chatgpt.com" target="_blank" rel="noopener noreferrer">ChatGPT</a>
-        or
-        <a href="https://aistudio.google.com/prompts/new_chat" target="_blank" rel="noopener noreferrer">Google AI Studio</a>.
-      </p>
+      <ol class="muted" style="margin:0; font-size:14px; padding-left:18px;">
+        <li>Tap <b>Copy prompt for AI</b>.</li>
+        <li>Paste the instructions with your source material into ChatGPT or Google AI Studio.</li>
+        <li>Paste the JSON response below and click <b>Load JSON</b>.</li>
+      </ol>
     </div>
-    <p class="muted mini" style="margin-top:0;">Paste JSON produced by your chatbot and click <b>Load JSON</b>.</p>
+    <p class="muted mini" style="margin-top:0;">You can also paste any valid Anki cloze JSON and click <b>Load JSON</b>.</p>
     <textarea id="jsonInput" placeholder='[
   "What is the capital of Australia?<br><br>{{c1::Canberra}}",
   {"content": "The three branches are {{c1::executive}}, {{c1::legislative}}, and {{c1::judicial}}.", "tags":["civics"]},
@@ -415,7 +414,7 @@
 
   async function loadPromptText(){
     if (cachedPromptText !== null) return cachedPromptText;
-    const res = await fetch('ai-prompt-template.txt');
+    const res = await fetch('/static/ai-prompt-template.txt');
     if (!res.ok) throw new Error('Unable to load AI prompt file');
     cachedPromptText = await res.text();
     return cachedPromptText;
