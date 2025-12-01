@@ -1,0 +1,4 @@
+# AI Reviewer Prompt
+
+Replace this text with the full instructions you want to provide to your reasoning AI bot.
+Include any context or source material the bot should consider when generating cloze cards.
