@@ -190,12 +190,16 @@
 
 <main class="wrap">
   <section id="ingest">
-    <p class="muted mini">Paste JSON produced by your chatbot and click <b>Load JSON</b>. Accepted shapes:
-      <code class="pill">["..."]</code>,
-      <code class="pill">[{ "content": "..." }]</code>,
-      <code class="pill">[{ "html": "...", "tags": ["…"], "id": "…" }]</code>.
-      Each string/object must contain <b>cloze HTML</b> like <code>{{c1::answer}}</code>.
-    </p>
+    <div class="row" style="align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:8px;">
+      <button class="btn" id="copyPromptBtn">Copy prompt for AI</button>
+      <p class="muted" style="margin:0; font-size:14px;">
+        Paste these instructions along with source material in your preferred reasoning AI bot:
+        <a href="https://chatgpt.com" target="_blank" rel="noopener noreferrer">ChatGPT</a>
+        or
+        <a href="https://aistudio.google.com/prompts/new_chat" target="_blank" rel="noopener noreferrer">Google AI Studio</a>.
+      </p>
+    </div>
+    <p class="muted mini" style="margin-top:0;">Paste JSON produced by your chatbot and click <b>Load JSON</b>.</p>
     <textarea id="jsonInput" placeholder='[
   "What is the capital of Australia?<br><br>{{c1::Canberra}}",
   {"content": "The three branches are {{c1::executive}}, {{c1::legislative}}, and {{c1::judicial}}.", "tags":["civics"]},
@@ -256,6 +260,7 @@
   const uiState = {};
   let lastInteractedCardId = null;
   let scrollTargetId = null;
+  let cachedPromptText = null;
   let tagsVisible = (() => {
     try { const v = localStorage.getItem(tagsKey); return v === null ? false : v === "1"; }
     catch { return false; }
@@ -406,6 +411,29 @@
       window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
       lastInteractedCardId = id;
     });
+  }
+
+  async function loadPromptText(){
+    if (cachedPromptText !== null) return cachedPromptText;
+    const res = await fetch('ai-prompt-template.txt');
+    if (!res.ok) throw new Error('Unable to load AI prompt file');
+    cachedPromptText = await res.text();
+    return cachedPromptText;
+  }
+
+  async function copyPrompt(){
+    const btn = el('#copyPromptBtn');
+    if (!btn) return;
+    try {
+      const prompt = await loadPromptText();
+      await navigator.clipboard.writeText(prompt);
+      const original = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = original; }, 1600);
+    } catch (err) {
+      console.error(err);
+      alert('Unable to copy the AI prompt. Please try again.');
+    }
   }
 
   function noteToCardHtml(n){
@@ -1485,6 +1513,9 @@
     try { localStorage.setItem(tagsKey, tagsVisible ? "1" : "0"); } catch {}
     renderList();
   });
+
+  const promptBtn = el("#copyPromptBtn");
+  if (promptBtn) promptBtn.addEventListener("click", copyPrompt);
 
     // Wire UI
     if (notes.length){ el("#ingest").classList.add("hidden"); el("#listArea").classList.remove("hidden"); el("#appendArea").classList.remove("hidden"); el("#copyAllBtn").style.display=""; el("#apkgBtn").style.display=""; el("#jsonExportBtn").style.display=""; el("#copyDiffBtn").style.display=""; }
