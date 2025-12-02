@@ -24,12 +24,6 @@ def reviewer():
     return send_from_directory("static", "cloze-reviewer.html")
 #end adding for anki helper app
 
-
-@app.route("/radiology-anki-quest")
-def radiology_anki_quest():
-    """Serve the Radiology Anki Quest experience."""
-    return send_from_directory("static", "radiology-anki-quest.html")
-
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
