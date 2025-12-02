@@ -46,9 +46,13 @@
     .btn.green { background:#2ecc71; border-color:transparent; color:#0b0d12 }
     .seg{display:flex;gap:6px;background:var(--panel);padding:6px;border-radius:10px;border:1px solid #293042}
     .seg .segbtn{
-      background:transparent;border:0;color:var(--muted);padding:8px 12px;border-radius:8px;cursor:pointer
+      background:transparent;border:2px solid transparent;color:var(--muted);padding:8px 12px;border-radius:8px;cursor:pointer
     }
     .seg .segbtn.active{background:var(--surface);color:var(--text);box-shadow:var(--ring)}
+    .seg .segbtn.active[data-view="all"]{border-image:linear-gradient(90deg,var(--warn) 0%,var(--warn) 33.33%,var(--good) 33.33%,var(--good) 66.66%,var(--bad) 66.66%,var(--bad) 100%) 1}
+    .seg .segbtn.active[data-view="new"]{border-color:var(--warn);box-shadow:0 0 0 2px color-mix(in srgb,var(--warn) 65%, transparent)}
+    .seg .segbtn.active[data-view="saved"]{border-color:var(--good);box-shadow:0 0 0 2px color-mix(in srgb,var(--good) 65%, transparent)}
+    .seg .segbtn.active[data-view="discarded"]{border-color:var(--bad);box-shadow:0 0 0 2px color-mix(in srgb,var(--bad) 65%, transparent)}
     .searchRow{display:flex;gap:10px;flex-wrap:wrap;width:100%}
     .input, textarea{
       background:#141821;border:1px solid #2b3243;color:var(--text);
@@ -177,10 +181,10 @@
     <div class="row">
       <button class="btn" id="seeMoreBtn" type="button">See More</button>
       <button class="btn" id="copyAllBtn" data-advanced="true" title="Copy all visible" style="display:none;">Copy Visible</button>
-      <button class="btn" id="apkgBtn" title="Download .apkg" style="display:none;">Download Deck</button>
+      <button class="btn warn" id="nukeBtn" title="Clear local data">Reset</button>
       <button class="btn" id="jsonExportBtn" data-advanced="true" title="Download or copy combined JSON" style="display:none;">JSON Export</button>
       <button class="btn" id="copyDiffBtn" data-advanced="true" title="Copy edited cards diff" style="display:none;">Copy DIFF</button>
-      <button class="btn warn" id="nukeBtn" title="Clear local data">Reset</button>
+      <button class="btn blue" id="apkgBtn" title="Download .apkg" style="display:none;">Download Deck</button>
       <button class="btn red" id="deleteDiscardedBtn" title="Delete all discarded cards" style="display:none;">Delete Discarded (<span id="discardCountLabel">0</span>)</button>
       <div class="toolbarStats">
         <span id="countLabel">0</span> cards
