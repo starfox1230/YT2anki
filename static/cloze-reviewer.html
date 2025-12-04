@@ -1093,7 +1093,15 @@
           ta.focus();
           return;
         }
-        alert("Select text to cloze.");
+
+        const shell = `{{c${k}::}}`;
+        const caret = start + `{{c${k}::`.length;
+        ta.value = txt.slice(0, start) + shell + txt.slice(end);
+        ta.setSelectionRange(caret, caret);
+        recordChange(ta.value);
+        rebuildPlusMinusButtons();
+        updateHintButton();
+        ta.focus();
         return;
       }
 
