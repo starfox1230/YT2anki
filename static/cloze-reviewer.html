@@ -311,30 +311,18 @@
     }, { passive: false, capture: true });
   })();
 
-  // --- FIX: Stronger Scroll Lock for Modals ---
-  let savedScrollY = 0;
-  let modalLockDepth = 0;
-
+  // --- FIX: Simplified Modal Logic (No Body Locking) ---
+  // We remove the complex body locking because it breaks scrolling
+  // on mobile phones when the modal content becomes very tall.
+  
   function openModalBackdrop(div){
-    const alreadyLocked = modalLockDepth > 0;
-    modalLockDepth++;
-
-    // Only capture/lock on the first modal. Nested modals must not stomp the scroll anchor.
-    if (!alreadyLocked) {
-      // 1. Record where we are
-      savedScrollY = window.scrollY;
-
-      // 2. Physically lock the body so it CANNOT scroll.
-      // This prevents the input cursor from misaligning with the view.
-      document.body.style.position = 'fixed';
-      document.body.style.top = `-${savedScrollY}px`;
-      document.body.style.width = '100%';
-      document.body.style.overflow = 'hidden';
-    }
-
-    // 3. Show modal
+    // 1. Show modal
     div.style.display = "flex";
     div.setAttribute("aria-hidden","false");
+    
+    // 2. Simple overflow hide (works on desktop/Android)
+    // We do NOT use position:fixed here anymore, as it freezes mobile scrolling.
+    document.body.style.overflow = 'hidden'; 
   }
 
   function closeModalBackdrop(div){
@@ -342,19 +330,8 @@
     div.style.display = "none";
     div.setAttribute("aria-hidden","true");
 
-    modalLockDepth = Math.max(0, modalLockDepth - 1);
-    const shouldUnlock = modalLockDepth === 0;
-
-    if (shouldUnlock) {
-      // 2. Unlock body
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.width = '';
-      document.body.style.overflow = '';
-
-      // 3. Instant jump back to original position
-      window.scrollTo(0, savedScrollY);
-    }
+    // 2. Restore body scroll
+    document.body.style.overflow = '';
   }
 
   try {
