@@ -149,6 +149,23 @@
     .f1{flex:1}
     .hr{height:1px;background:#2b3243;margin:10px 0;border-radius:1px; flex-shrink: 0;}
 
+    .editAreaWrap{position:relative;}
+    .fontSizeControls{
+      position:absolute; top:8px; right:8px;
+      display:flex; align-items:center; gap:6px;
+      padding:4px 6px; border-radius:10px;
+      background:rgba(0,0,0,0.2); border:1px solid #2b3243;
+      box-shadow:var(--shadow);
+    }
+    .fontSizeLabel{font-size:12px; color:var(--muted);}
+    .fontSizeBtn{
+      width:22px; height:22px; padding:0;
+      display:inline-flex; align-items:center; justify-content:center;
+      border-radius:6px; border:1px solid #2b3243;
+      background:var(--surface); color:var(--text);
+      cursor:pointer; line-height:1;
+    }
+
     /* ---- MOBILE ONLY OVERRIDES ---- */
     @media (max-width: 600px) {
       /* Align modals to the TOP on phone screens */
@@ -254,6 +271,10 @@
   const els = sel => Array.from(document.querySelectorAll(sel));
   const storeKey = "cloze-reviewer-v1";
   const tagsKey = "cloze-reviewer-tags-visible";
+  const fontSizeKey = "cloze-reviewer-editor-font-size";
+  const DEFAULT_EDITOR_FONT = 24;
+  const MIN_EDITOR_FONT = 12;
+  const MAX_EDITOR_FONT = 48;
   let notes = [];
   let view = "all";
   let searchTerm = "";
@@ -268,6 +289,26 @@
     try { const v = localStorage.getItem(tagsKey); return v === null ? false : v === "1"; }
     catch { return false; }
   })();
+
+  function clampEditorFont(size){
+    if (typeof size !== "number" || Number.isNaN(size)) return DEFAULT_EDITOR_FONT;
+    return Math.min(MAX_EDITOR_FONT, Math.max(MIN_EDITOR_FONT, Math.round(size)));
+  }
+
+  function loadEditorFontSize(){
+    try {
+      const raw = localStorage.getItem(fontSizeKey);
+      if (raw !== null) {
+        const parsed = parseInt(raw, 10);
+        if (!Number.isNaN(parsed)) return clampEditorFont(parsed);
+      }
+    } catch {}
+    return DEFAULT_EDITOR_FONT;
+  }
+
+  function saveEditorFontSize(size){
+    try { localStorage.setItem(fontSizeKey, String(clampEditorFont(size))); } catch {}
+  }
 
   // ---- Kill double-tap zoom (iOS Safari & friends) but keep rapid taps working
   (function preventDoubleTapZoom(){
@@ -641,7 +682,14 @@
           <div class="hr"></div>
           <div class="modalContent">
             <div data-editor-shell>
-              <textarea class="input" id="editArea" style="width:100%;min-height:260px;font-size:24px;line-height:1.25">${escapeHtml(prev)}</textarea>
+              <div class="editAreaWrap">
+                <textarea class="input" id="editArea" style="width:100%;min-height:260px;font-size:24px;line-height:1.25">${escapeHtml(prev)}</textarea>
+                <div class="fontSizeControls" aria-label="Editor font size controls">
+                  <button class="fontSizeBtn" type="button" data-font-dec title="Decrease editor font size">−</button>
+                  <span class="fontSizeLabel" data-font-label aria-live="polite"></span>
+                  <button class="fontSizeBtn" type="button" data-font-inc title="Increase editor font size">+</button>
+                </div>
+              </div>
               <!-- Controls -->
               <div class="row" style="margin-top:10px;flex-wrap:wrap;align-items:center">
                 <button class="btn blue" data-undo title="Undo (Ctrl+Z)">
@@ -702,6 +750,9 @@
     document.body.appendChild(area);
     const backdrop = area.firstElementChild;
     const ta = area.querySelector("#editArea");
+    const fontLabel = area.querySelector("[data-font-label]");
+    const fontIncreaseBtn = area.querySelector("[data-font-inc]");
+    const fontDecreaseBtn = area.querySelector("[data-font-dec]");
     const aiBtn = area.querySelector("[data-ai]");
     const editorShell = area.querySelector("[data-editor-shell]");
     const briefOverlay = area.querySelector("[data-brief-overlay]");
@@ -720,6 +771,17 @@
     
     // Immediate show & sync focus for mobile keyboard
     openModalBackdrop(backdrop);
+    let editorFontSize = loadEditorFontSize();
+    const applyFontSize = (size)=>{
+      editorFontSize = clampEditorFont(size);
+      ta.style.fontSize = `${editorFontSize}px`;
+      if (fontLabel) fontLabel.textContent = `${editorFontSize}px`;
+      saveEditorFontSize(editorFontSize);
+    };
+    applyFontSize(editorFontSize);
+
+    fontIncreaseBtn?.addEventListener("click", ()=>{ applyFontSize(editorFontSize + 1); ta.focus(); });
+    fontDecreaseBtn?.addEventListener("click", ()=>{ applyFontSize(editorFontSize - 1); ta.focus(); });
     ta.focus({ preventScroll: true });
     // Cursor to end
     ta.setSelectionRange(ta.value.length, ta.value.length);
