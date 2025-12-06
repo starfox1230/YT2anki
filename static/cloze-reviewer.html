@@ -151,8 +151,9 @@
 
     .editAreaWrap{position:relative;}
     .fontSizeControls{
-      position:absolute; top:8px; right:8px;
       display:flex; align-items:center; gap:6px;
+      justify-content:flex-end;
+      margin:6px 0 2px;
       padding:4px 6px; border-radius:10px;
       background:rgba(0,0,0,0.2); border:1px solid #2b3243;
       box-shadow:var(--shadow);
@@ -684,11 +685,11 @@
             <div data-editor-shell>
               <div class="editAreaWrap">
                 <textarea class="input" id="editArea" style="width:100%;min-height:260px;font-size:24px;line-height:1.25">${escapeHtml(prev)}</textarea>
-                <div class="fontSizeControls" aria-label="Editor font size controls">
-                  <button class="fontSizeBtn" type="button" data-font-dec title="Decrease editor font size">−</button>
-                  <span class="fontSizeLabel" data-font-label aria-live="polite"></span>
-                  <button class="fontSizeBtn" type="button" data-font-inc title="Increase editor font size">+</button>
-                </div>
+              </div>
+              <div class="fontSizeControls" aria-label="Editor font size controls">
+                <button class="fontSizeBtn" type="button" data-font-dec title="Decrease editor font size">−</button>
+                <span class="fontSizeLabel" data-font-label aria-live="polite"></span>
+                <button class="fontSizeBtn" type="button" data-font-inc title="Increase editor font size">+</button>
               </div>
               <!-- Controls -->
               <div class="row" style="margin-top:10px;flex-wrap:wrap;align-items:center">
