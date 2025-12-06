@@ -20,7 +20,7 @@ Rules:
 
 * Use straight double quotes only.
 * Keys allowed: content or html (exactly one of these), tags (required), id (optional unique short string).
-* tags must be an array containing exactly one string: the batch tag (see section 6).
+* tags must be an array containing exactly one string: the batch tag (see section 9).
 * No extra keys. No trailing commas. UTF-8 strings only.
 * Wrap the entire array in a single code block fenced as json.
 
@@ -61,52 +61,53 @@ Prioritize testable, high-yield facts, including:
 
 Avoid:
 
-* Trivial or vague statements
+* Trivial or vague statements (e.g., "X is important")
 * App or UX instructions
 * Boilerplate
 * Administrative or workflow instructions
 * Duplicated content
 
-5. One Fact Per Card Rule
+5. One Fact Per Card Rule (With Multi-Cloze Exception)
 
-Each card should represent one fact or one clean idea whenever feasible.
+Each card should represent one clean idea.
 
-If a draft card uses a semicolon to attach two ideas, or clearly contains two separate teachable statements, split it into two separate cards.
+*   **Multi-Cloze Exception:** You are encouraged to use multiple cloze deletions (c1, c2) in a single sentence IF the concepts are tightly related (e.g., a sign and its diagnosis). This creates two distinct cards from one note.
+    *   Example: "The {{c1::Lightbulb}} sign suggests {{c2::posterior shoulder dislocation}}."
 
-Do not keep two related but distinct statements in one card joined by a semicolon.
+*   **Semicolon Rule:** Do not use a semicolon to glue two *unrelated* ideas together. If the ideas are distinct, split them into two separate JSON objects.
+*   Do not hide multiple unrelated answers in a single cloze deletion.
 
-Do not hide multiple unrelated answers in a single cloze deletion.
+6. Make Every Note Self-Contained and "Locked"
 
-6. Make Every Note Self-Contained
+Cards will be reviewed out of context. The sentence must provide enough specific detail ("locking context") so that the answer is the ONLY logical completion.
 
-Cards will be reviewed out of context. Add brief context (population, modality, anatomic site, clinical scenario) so the fact is unambiguous.
+*   **Bad (Mind-Reading):** "The sky is {{c1::blue}}."
+    *   *Why it fails:* The sky is also "high", "cloudy", "vast", etc. The user has to guess what attribute you are thinking of.
+*   **Good (Locked):** "The classic color of a clear daytime sky is {{c1::blue}}."
+    *   *Why it works:* The adjectives "classic" and "color" lock the answer to blue.
+*   **Good (Medical Context):** "In neonates, low lung volumes with granular lung opacities suggests {{c1::surfactant deficiency}}."
 
-Bad example:
-Low volumes suggests {{c1::RDS}}.
+7. Difficulty, Brevity, Anti-Ambiguity
 
-Good example:
-In neonates, low lung volumes with granular lung opacities suggests {{c1::surfactant deficiency or beta-hemolytic streptococcal pneumonia}}.
-
-7. Difficulty, Brevity, Ambiguity
-
-* Prefer short answers (a word or short phrase). Hide just enough to test recall.
-* Ensure there is a single reasonably correct answer. If multiple answers could be correct, constrain the wording to make it clear, or put the full answer set in one cloze.
-* Use the optional hint form {{c1::answer::hint}} to reduce ambiguity on hard items.
+*   **The "Smart Student" Test:** Ask yourself: "Could a smart student fill in this blank with a different word that is also factually true?"
+    *   If **Yes**: The card is ambiguous. Add more descriptive text to the sentence to narrow it down.
+    *   If **No**: The card is good.
+*   Prefer short answers (a word or short phrase). Hide just enough to test recall.
+*   Use the optional hint form {{c1::answer::hint}} to reduce ambiguity on hard items (e.g., {{c1::Answer::Drug Class}} vs {{c1::Answer::Specific Drug}}).
 
 Do not include arrows or shorthand inside the prose of the card.
-
-Do not include standalone colons mid-sentence for definition style (for example, do not write "X: Y"). Rewrite instead so it sounds natural if spoken aloud.
+Do not include standalone colons mid-sentence. Rewrite so it sounds natural if spoken aloud.
 
 8. Allowed Forms
 
-Fill-in-the-blank (default):
-{"content":"The drug combination known as the triple whammy is {{c1::ACE inhibitor or ARB, diuretic, and NSAID}}.","tags":["#AnkiChat::YYYY.MM.DD_Subject"]}
+Fill-in-the-blank (Specific/Locked):
+{"content":"The drug combination known as the triple whammy is {{c1::ACE inhibitor, diuretic, and NSAID}}.","tags":["#AnkiChat::YYYY.MM.DD_Subject"]}
+
+Multi-cloze (Two directions in one note):
+{"content":"The {{c1::Lightbulb}} sign suggests {{c2::posterior shoulder dislocation}} on AP radiograph.","tags":["#AnkiChat::YYYY.MM.DD_Subject"]}
 
 Question then answer:
 {"content":"What sign suggests posterior shoulder dislocation on an AP shoulder radiograph?<br><br>{{c1::Lightbulb sign}}","tags":["#AnkiChat::YYYY.MM.DD_Subject"]}
-
-Multi-cloze (distinct concepts in one sentence):
-{"html":"{{c1::Canberra}} is the capital of {{c2::Australia}}.","tags":["#AnkiChat::YYYY.MM.DD_Subject"]}
 
 Hinted:
 {"content":"Which bacteria classically lacks a cell wall?<br><br>{{c1::Mycoplasma::no cell wall}}","tags":["#AnkiChat::YYYY.MM.DD_Subject"]}
@@ -143,8 +144,7 @@ Before final output:
 * Normalize cloze syntax.
 * Ensure proper use of <br><br> when doing question then answer.
 * Ensure no arrow notation and no mid-sentence colons outside allowed cloze syntax.
-* Ensure semicolons are not joining what should be separate cards.
-* Ensure each card reads like natural spoken language (minus the hidden cloze parts).
+* **Ambiguity Check:** Scan for loose sentence completions. Ensure every blank is uniquely determined by the surrounding text.
 
 12. Medical and Scientific Notes
 
@@ -152,17 +152,17 @@ When content is medical or scientific:
 
 * Prefer standard names and canonical thresholds and criteria.
 * Mechanism plus consequence is better than an isolated list if that mechanism and result form one fact.
-* Multi-part answers that belong tightly together should live inside one cloze, not spread across multiple unrelated clozes.
+* Multi-part answers that belong tightly together should live inside one cloze.
 * Keep any essential units or qualifiers inside the cloze.
 
 13. Validation Checklist For Each Note
 
-* Self-contained and unambiguous.
+* Self-contained and unambiguous (passed the Smart Student Test).
 * Exactly one clear fact or question being tested.
 * Uses valid cloze syntax {{cN::answer}} or {{cN::answer::hint}}.
 * No arrows.
 * No mid-sentence colon outside cloze syntax.
-* No semicolon gluing two ideas.
+* No semicolon gluing two unrelated ideas.
 * Uses <br><br> correctly for question then answer when relevant.
 * tags is present and contains exactly one string, which is the batch tag.
 * Object has exactly one of content or html, plus tags, plus optional id.
