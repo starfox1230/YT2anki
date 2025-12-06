@@ -31,6 +31,8 @@
     }
     .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px}
     .toolbar .title{font-weight:700;font-size:18px;margin-right:auto}
+    .toolbarTop{display:flex;align-items:center;gap:12px;width:100%;}
+    .toolbarTopRight{margin-left:auto;display:flex;align-items:center;gap:10px;}
     .btn{
       border:1px solid #2a3140;background:var(--surface);color:var(--text);
       padding:9px 12px;border-radius:10px;cursor:pointer;box-shadow:var(--shadow);
@@ -102,8 +104,10 @@
     .row{display:flex;gap:8px;flex-wrap:wrap}
     .row .btn.small{padding:6px 9px;border-radius:8px;font-size:13px}
     .row.right{margin-left:auto}
-    .toolbarStats{margin-left:auto; display:flex; align-items:center; gap:8px; color:var(--muted); font-weight:600;}
+    .toolbarStats{display:flex; align-items:center; gap:8px; color:var(--muted); font-weight:600;}
     .toolbarStats .pill{margin:0; font-weight:600;}
+    .addCardsBtn{background:#ffffff;color:#0b0d12;border-color:#e5e7eb;}
+    #appendArea{scroll-margin-top:90px;}
     .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#151925;border:1px solid #2b3243;color:#cbd3df;font-size:13px}
     .hidden{display:none !important}
 
@@ -166,7 +170,15 @@
 <body>
 <header>
   <div class="toolbar wrap">
-    <div class="title">Cloze Cards Reviewer</div>
+    <div class="toolbarTop">
+      <div class="title">Cloze Cards Reviewer</div>
+      <div class="toolbarTopRight">
+        <div class="toolbarStats">
+          <span id="countLabel">0</span> cards
+        </div>
+        <button class="btn addCardsBtn" id="addCardsBtn" type="button">Add cards</button>
+      </div>
+    </div>
     <div class="seg" role="tablist" aria-label="Views">
       <button class="segbtn active" data-view="all">All</button>
       <button class="segbtn" data-view="new">New</button>
@@ -186,25 +198,11 @@
       <button class="btn" id="copyDiffBtn" data-advanced="true" title="Copy edited cards diff" style="display:none;">Copy DIFF</button>
       <button class="btn blue" id="apkgBtn" title="Download .apkg" style="display:none;">Download Deck</button>
       <button class="btn red" id="deleteDiscardedBtn" title="Delete all discarded cards" style="display:none;">Delete Discarded (<span id="discardCountLabel">0</span>)</button>
-      <div class="toolbarStats">
-        <span id="countLabel">0</span> cards
-      </div>
     </div>
   </div>
 </header>
 
 <main class="wrap">
-  <section id="howTo">
-    <div class="row" style="align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:8px;">
-      <button class="btn copyPromptBtn">Copy prompt for AI</button>
-      <ol class="muted" style="margin:0; font-size:14px; padding-left:18px;">
-        <li>Tap <b>Copy prompt for AI</b>.</li>
-        <li>Paste the instructions with your source material into <a href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer">ChatGPT</a> or <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer">Google AI Studio</a>.</li>
-        <li>Paste the JSON response below and click <b>Load JSON</b>.</li>
-      </ol>
-    </div>
-  </section>
-
   <section id="ingest">
     <textarea id="jsonInput" placeholder=""></textarea>
     <div class="row" style="margin-top:10px;">
@@ -1596,6 +1594,18 @@
   }
   setAdvancedVisible(false);
   if (advancedToggleBtn) advancedToggleBtn.addEventListener("click", ()=> setAdvancedVisible(!advancedVisible));
+
+  const addCardsBtn = el("#addCardsBtn");
+  if (addCardsBtn) {
+    addCardsBtn.addEventListener("click", () => {
+      const appendSection = el("#appendArea");
+      if (!appendSection) return;
+      appendSection.classList.remove("hidden");
+      appendSection.scrollIntoView({ behavior: "smooth", block: "start" });
+      const appendInput = el("#appendInput");
+      if (appendInput) appendInput.focus({ preventScroll: true });
+    });
+  }
 
   // Toggle tags UI
   function updateToggleTagsBtn(){
