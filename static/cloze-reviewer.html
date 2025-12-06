@@ -203,31 +203,25 @@
 </header>
 
 <main class="wrap">
-  <section id="ingest">
-    <textarea id="jsonInput" placeholder=""></textarea>
-    <div class="row" style="margin-top:10px;">
-      <button class="btn primary" id="loadBtn">Load JSON</button>
-    </div>
-  </section>
-
   <section id="listArea" class="hidden">
     <div id="cards" class="cardlist" aria-live="polite"></div>
   </section>
 
-  <section id="appendArea" style="margin-top:28px;">
-    <div class="hr"></div>
-    <h3 style="margin:0 0 8px 0;">Add More Cards</h3>
+  <section id="appendArea" style="margin-top:10px;">
+    <div class="hr" id="appendSep" style="display:none"></div>
+    <h3 style="margin:0 0 8px 0;" id="appendTitle">Add Cards</h3>
     <div class="row" style="align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:8px;">
       <button class="btn copyPromptBtn">Copy prompt for AI</button>
       <ol class="muted" style="margin:0; font-size:14px; padding-left:18px;">
         <li>Tap <b>Copy prompt for AI</b>.</li>
         <li>Paste the instructions with your source material into <a href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer">ChatGPT</a> or <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer">Google AI Studio</a>.</li>
-        <li>Paste the JSON response below and click <b>Append JSON</b>.</li>
+        <li>Paste the JSON response below and click <b id="appendInstructionBtnLabel">Load JSON</b>.</li>
       </ol>
     </div>
-    <textarea id="appendInput" placeholder='["Another {{c1::card}}", {"content":"More {{c1::items}}"}]'></textarea>
+    <!-- Placeholder is now empty as requested -->
+    <textarea id="appendInput" placeholder=""></textarea>
     <div class="row" style="margin-top:10px;">
-      <button class="btn primary" id="appendBtn">Append JSON</button>
+      <button class="btn primary" id="appendBtn">Load JSON</button>
     </div>
   </section>
 </main>
@@ -474,15 +468,27 @@
     const cur = filtered();
     lastRendered = cur.map(n=>n.id);
     el("#countLabel").textContent = String(cur.length);
+    
+    // Toggle List Visibility
     el("#listArea").classList.toggle("hidden", cur.length === 0);
+    
+    // Dynamic UI: Toggle between "Add Cards" (Empty) and "Add More Cards" (Has Data)
     const hasNotes = notes.length > 0;
+    el("#appendTitle").textContent = hasNotes ? "Add More Cards" : "Add Cards";
+    el("#appendBtn").textContent = hasNotes ? "Append JSON" : "Load JSON";
+    el("#appendInstructionBtnLabel").textContent = hasNotes ? "Append JSON" : "Load JSON";
+    el("#appendSep").style.display = hasNotes ? "block" : "none";
+    
+    // Toggle Export Buttons
     el("#copyAllBtn").style.display = hasNotes ? "" : "none";
     el("#apkgBtn").style.display = hasNotes ? "" : "none";
     el("#jsonExportBtn").style.display = hasNotes ? "" : "none";
     el("#copyDiffBtn").style.display = hasNotes ? "" : "none";
+    
     const discardedCount = notes.filter(n => n.status === "discarded").length;
     el("#discardCountLabel").textContent = String(discardedCount);
     el("#deleteDiscardedBtn").style.display = discardedCount ? "" : "none";
+    
     cardsEl.innerHTML = cur.map(noteToCardHtml).join("");
     cur.forEach(n => wireCard(n.id));
     updateToggleTagsBtn();
@@ -1626,7 +1632,6 @@
   });
 
   // Wire UI
-  if (notes.length){ el("#ingest").classList.add("hidden"); el("#listArea").classList.remove("hidden"); el("#appendArea").classList.remove("hidden"); el("#copyAllBtn").style.display=""; el("#apkgBtn").style.display=""; el("#jsonExportBtn").style.display=""; el("#copyDiffBtn").style.display=""; }
   renderList();
 
   els(".segbtn").forEach(b=>{
@@ -1639,26 +1644,30 @@
 
   el("#search").addEventListener("input", e=>{ searchTerm = e.target.value.trim(); renderList(); });
 
-  el("#loadBtn").addEventListener("click", ()=>{
-    let parsed; try { parsed = JSON.parse(el("#jsonInput").value); } catch { alert("Invalid JSON"); return; }
+  // Combined Load/Append Logic
+  el("#appendBtn").addEventListener("click", ()=>{
+    const rawVal = el("#appendInput").value.trim();
+    if (!rawVal) return;
+    
+    let parsed; 
+    try { parsed = JSON.parse(rawVal); } 
+    catch { alert("Invalid JSON"); return; }
+    
     const normalized = normalizeInput(parsed);
     if (!normalized.length){ alert("No valid cards found."); return; }
-    notes = normalized; save();
-    el("#ingest").classList.add("hidden");
-    el("#listArea").classList.remove("hidden");
-    el("#appendArea").classList.remove("hidden");
-    el("#copyAllBtn").style.display=""; el("#apkgBtn").style.display=""; el("#jsonExportBtn").style.display=""; el("#copyDiffBtn").style.display="";
-    renderList(); toast("Loaded");
-  });
-
-  el("#appendBtn").addEventListener("click", ()=>{
-    let parsed; try { parsed = JSON.parse(el("#appendInput").value); } catch { alert("Invalid JSON"); return; }
-    const normalized = normalizeInput(parsed);
-    if (!normalized.length){ alert("No valid cards found to append."); return; }
+    
+    const wasEmpty = notes.length === 0;
+    
+    // Determine IDs
     const ids = new Set(notes.map(n=>n.id));
     normalized.forEach(n=>{ if (ids.has(n.id)) n.id = uid(); });
-    notes = notes.concat(normalized); save();
-    el("#appendInput").value = ""; renderList(); toast("Appended");
+    
+    notes = notes.concat(normalized); 
+    save();
+    
+    el("#appendInput").value = ""; 
+    renderList(); 
+    toast(wasEmpty ? "Loaded" : "Appended");
   });
 
   el("#copyAllBtn").addEventListener("click", async ()=>{
@@ -1740,10 +1749,7 @@
     if (!confirm("Clear local data and start over?")) return;
     localStorage.removeItem(storeKey);
     notes = []; renderList();
-    el("#listArea").classList.add("hidden");
-    el("#ingest").classList.remove("hidden");
-    el("#copyAllBtn").style.display="none"; el("#apkgBtn").style.display="none"; el("#jsonExportBtn").style.display="none"; el("#copyDiffBtn").style.display="none";
-    el("#deleteDiscardedBtn").style.display="none";
+    el("#appendInput").value = "";
   });
 
   el("#deleteDiscardedBtn").addEventListener("click", ()=>{
