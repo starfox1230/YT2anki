@@ -152,11 +152,7 @@
     .editAreaWrap{position:relative;}
     .fontSizeControls{
       display:flex; align-items:center; gap:6px;
-      justify-content:flex-end;
-      margin:6px 0 2px;
-      padding:4px 6px; border-radius:10px;
-      background:rgba(0,0,0,0.2); border:1px solid #2b3243;
-      box-shadow:var(--shadow);
+      margin-left:10px;
     }
     .fontSizeLabel{font-size:12px; color:var(--muted);}
     .fontSizeBtn{
@@ -686,11 +682,6 @@
               <div class="editAreaWrap">
                 <textarea class="input" id="editArea" style="width:100%;min-height:260px;font-size:24px;line-height:1.25">${escapeHtml(prev)}</textarea>
               </div>
-              <div class="fontSizeControls" aria-label="Editor font size controls">
-                <button class="fontSizeBtn" type="button" data-font-dec title="Decrease editor font size">−</button>
-                <span class="fontSizeLabel" data-font-label aria-live="polite"></span>
-                <button class="fontSizeBtn" type="button" data-font-inc title="Increase editor font size">+</button>
-              </div>
               <!-- Controls -->
               <div class="row" style="margin-top:10px;flex-wrap:wrap;align-items:center">
                 <button class="btn blue" data-undo title="Undo (Ctrl+Z)">
@@ -703,6 +694,11 @@
                     <polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
                   </svg>
                 </button>
+                <div class="fontSizeControls" aria-label="Editor font size controls">
+                  <button class="fontSizeBtn" type="button" data-font-dec title="Decrease editor font size">−</button>
+                  <span class="fontSizeLabel" data-font-label aria-live="polite"></span>
+                  <button class="fontSizeBtn" type="button" data-font-inc title="Increase editor font size">+</button>
+                </div>
                 <button class="btn blue hidden" data-view-original title="View the pre-AI version">View Pre-AI</button>
                 <div class="f1"></div>
                 <div class="row" id="plusRow" style="gap:6px"></div>
