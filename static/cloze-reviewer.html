@@ -424,7 +424,7 @@
 
   async function loadPromptText(){
     if (cachedPromptText !== null) return cachedPromptText;
-    const res = await fetch('/static/ai-prompt-template.txt');
+    const res = await fetch('ai-prompt-template.txt');
     if (!res.ok) throw new Error('Unable to load AI prompt file');
     cachedPromptText = await res.text();
     return cachedPromptText;
