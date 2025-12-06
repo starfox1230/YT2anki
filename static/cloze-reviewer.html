@@ -122,6 +122,10 @@
     .briefOverlay .loadingDot:nth-child(2){animation-delay:0.12s;}
     .briefOverlay .loadingDot:nth-child(3){animation-delay:0.24s;}
     .briefOverlay .loadingMessage{color:var(--text);font-weight:700;}
+    .briefLabelRow{display:flex;align-items:center;gap:8px;}
+    .briefLabelRow .labelText{flex:1;}
+    .briefFontControls{margin-left:0;}
+
     @keyframes pulse{0%{transform:scale(.7);opacity:.5;}50%{transform:scale(1);opacity:1;}100%{transform:scale(.7);opacity:.5;}}
     
     .modalBackdrop{
@@ -269,9 +273,13 @@
   const storeKey = "cloze-reviewer-v1";
   const tagsKey = "cloze-reviewer-tags-visible";
   const fontSizeKey = "cloze-reviewer-editor-font-size";
+  const generatedFontSizeKey = "cloze-reviewer-generated-font-size";
   const DEFAULT_EDITOR_FONT = 24;
   const MIN_EDITOR_FONT = 12;
   const MAX_EDITOR_FONT = 48;
+  const DEFAULT_GENERATED_FONT = 16;
+  const MIN_GENERATED_FONT = 12;
+  const MAX_GENERATED_FONT = 32;
   let notes = [];
   let view = "all";
   let searchTerm = "";
@@ -292,6 +300,11 @@
     return Math.min(MAX_EDITOR_FONT, Math.max(MIN_EDITOR_FONT, Math.round(size)));
   }
 
+  function clampGeneratedFont(size) {
+    if (typeof size !== "number" || Number.isNaN(size)) return DEFAULT_GENERATED_FONT;
+    return Math.min(MAX_GENERATED_FONT, Math.max(MIN_GENERATED_FONT, Math.round(size)));
+  }
+
   function loadEditorFontSize(){
     try {
       const raw = localStorage.getItem(fontSizeKey);
@@ -305,6 +318,21 @@
 
   function saveEditorFontSize(size){
     try { localStorage.setItem(fontSizeKey, String(clampEditorFont(size))); } catch {}
+  }
+
+  function loadGeneratedFontSize() {
+    try {
+      const raw = localStorage.getItem(generatedFontSizeKey);
+      if (raw !== null) {
+        const parsed = parseInt(raw, 10);
+        if (!Number.isNaN(parsed)) return clampGeneratedFont(parsed);
+      }
+    } catch {}
+    return DEFAULT_GENERATED_FONT;
+  }
+
+  function saveGeneratedFontSize(size) {
+    try { localStorage.setItem(generatedFontSizeKey, String(clampGeneratedFont(size))); } catch {}
   }
 
   // ---- Kill double-tap zoom (iOS Safari & friends) but keep rapid taps working
@@ -730,7 +758,14 @@
                   <div class="briefCard" data-brief-tertiary></div>
                 </div>
                 <div>
-                  <div class="mutedLabel" data-brief-primary-label>Concise</div>
+                  <div class="mutedLabel briefLabelRow">
+                    <span class="labelText" data-brief-primary-label>Concise</span>
+                    <div class="fontSizeControls briefFontControls hidden" data-brief-font-controls aria-label="Generated cards font controls">
+                      <button class="fontSizeBtn" type="button" data-brief-font-dec title="Decrease generated cards font size">−</button>
+                      <span class="fontSizeLabel" data-brief-font-label aria-live="polite"></span>
+                      <button class="fontSizeBtn" type="button" data-brief-font-inc title="Increase generated cards font size">+</button>
+                    </div>
+                  </div>
                   <div class="briefCard" data-brief-primary></div>
                 </div>
                 <div>
@@ -765,6 +800,10 @@
     const briefLoadingLabel = area.querySelector("[data-brief-loading-label]");
     const briefActions = area.querySelector("[data-brief-actions]");
     const viewOriginalBtn = area.querySelector("[data-view-original]");
+    const briefFontControls = area.querySelector("[data-brief-font-controls]");
+    const briefFontLabel = area.querySelector("[data-brief-font-label]");
+    const briefFontIncreaseBtn = area.querySelector("[data-brief-font-inc]");
+    const briefFontDecreaseBtn = area.querySelector("[data-brief-font-dec]");
     
     // Immediate show & sync focus for mobile keyboard
     openModalBackdrop(backdrop);
@@ -777,8 +816,18 @@
     };
     applyFontSize(editorFontSize);
 
+    let generatedFontSize = loadGeneratedFontSize();
+    const applyGeneratedFontSize = (size) => {
+      generatedFontSize = clampGeneratedFont(size);
+      if (briefPrimary) briefPrimary.style.fontSize = `${generatedFontSize}px`;
+      if (briefFontLabel) briefFontLabel.textContent = `${generatedFontSize}px`;
+      saveGeneratedFontSize(generatedFontSize);
+    };
+
     fontIncreaseBtn?.addEventListener("click", ()=>{ applyFontSize(editorFontSize + 1); ta.focus(); });
     fontDecreaseBtn?.addEventListener("click", ()=>{ applyFontSize(editorFontSize - 1); ta.focus(); });
+    briefFontIncreaseBtn?.addEventListener("click", () => applyGeneratedFontSize(generatedFontSize + 1));
+    briefFontDecreaseBtn?.addEventListener("click", () => applyGeneratedFontSize(generatedFontSize - 1));
     ta.focus({ preventScroll: true });
     // Cursor to end
     ta.setSelectionRange(ta.value.length, ta.value.length);
@@ -873,6 +922,16 @@
       if (briefPrimary) briefPrimary.textContent = primarySection?.text || "";
       if (briefSecondaryLabel) briefSecondaryLabel.textContent = secondarySection?.label || "";
       if (briefSecondary) briefSecondary.textContent = secondarySection?.text || "";
+
+      const isGeneratedCards = (primarySection?.label || "").toLowerCase().includes("generated cards");
+      if (briefFontControls) {
+        briefFontControls.classList.toggle("hidden", !isGeneratedCards);
+      }
+      if (isGeneratedCards) {
+        applyGeneratedFontSize(generatedFontSize);
+      } else if (briefPrimary) {
+        briefPrimary.style.fontSize = "";
+      }
 
       if (briefTertiaryWrap) {
         const hasTertiary = !!(tertiarySection && tertiarySection.text);
