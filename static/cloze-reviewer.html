@@ -746,6 +746,8 @@
     let lastBriefOriginal = preAIVersion;
     let lastBriefSuggestion = "";
     let lastEvenMoreSuggestion = "";
+    let lastUnambiguousOriginal = preAIVersion;
+    let lastUnambiguousSuggestion = "";
     let lastSplitOriginal = preAIVersion;
     let lastSplitCards = [];
 
@@ -859,6 +861,36 @@
       rebuildPlusMinusButtons();
       updateHintButton();
       ta.focus({ preventScroll: true });
+    };
+
+    const reviewUnambiguousSuggestion = () => {
+      const sections = [
+        null,
+        { label: "Clarified", text: formatCardForOverlay(lastUnambiguousSuggestion) },
+        { label: "Original", text: formatCardForOverlay(lastUnambiguousOriginal) },
+      ];
+
+      const actions = [
+        {
+          label: "Use Clarified",
+          className: "btn good",
+          onClick: () => {
+            applyEditorValue(lastUnambiguousSuggestion);
+            hideBriefOverlay();
+            showOriginalToggle();
+          },
+        },
+        {
+          label: "Keep Original",
+          className: "btn",
+          onClick: () => {
+            hideBriefOverlay();
+            showOriginalToggle();
+          },
+        },
+      ];
+
+      showBriefOverlay({ sections, actions });
     };
 
     const reviewBriefSuggestion = () => {
@@ -1260,6 +1292,8 @@
       const current = ta.value.trim();
       if (!current) { alert("Card is empty."); return; }
 
+      lastUnambiguousOriginal = current;
+      lastUnambiguousSuggestion = "";
       setAiLoading(true, "Clarifying...");
       try {
         const res = await fetch("/make_unambiguous", {
@@ -1271,9 +1305,8 @@
         const data = await res.json();
         const suggestion = (data?.suggestion || "").trim();
         if (!suggestion) throw new Error("Empty suggestion");
-        applyEditorValue(suggestion);
-        showOriginalToggle();
-        toast("Card clarified");
+        lastUnambiguousSuggestion = suggestion;
+        reviewUnambiguousSuggestion();
       } catch (err) {
         console.error("Unambiguous card request failed", err);
         alert("Could not clarify the card. Please try again.");
