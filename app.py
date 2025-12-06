@@ -495,6 +495,64 @@ First concise attempt:
     return suggestion
 
 
+def make_card_unambiguous(card_text, model="gpt-4.1"):
+    """
+    Use OpenAI to make a cloze card non-vague and non-guessy,
+    by adding just enough context so the cloze answer is clearly
+    determined by the rest of the sentence.
+    """
+    if not card_text or not card_text.strip():
+        raise ValueError("Card text is empty.")
+
+    prompt = f"""
+You are refining an existing Anki cloze-deletion card.
+
+Goal:
+Rewrite the card so that the hidden answer(s) are clearly determined from the rest of the sentence, instead of being a vague “guess what I’m thinking” question.
+
+Rules:
+- Keep ALL existing cloze answers and numbering exactly the same ({{c1::...}}, {{c2::...}}, etc.).
+- You may add or adjust context around the cloze (who, what, where, which disease, which structure, which modality, etc.) so that the desired answer is unambiguous.
+- If the card uses vague pronouns like "it", "this", "they" as the only clue, replace them with specific nouns or short identifying phrases.
+- Make sure that if someone hides the cloze and just reads the sentence, a knowledgeable learner can tell exactly what answer is being asked for.
+- Do NOT change the underlying fact or swap to a different answer; preserve the same concept being tested.
+- Keep the language concise and clear.
+- Preserve valid HTML and cloze syntax.
+- Output ONLY the revised card text. No quotes, no markdown, no JSON.
+
+Bad example:
+  "In {{c1::this condition}}, levels are high."
+Good rewrite:
+  "In {{c1::primary hyperparathyroidism}}, serum calcium levels are high."
+
+Bad example:
+  "The {{c1::structure}} is injured."
+Good rewrite:
+  "In a non-contact pivoting knee injury, the {{c1::anterior cruciate ligament}} is most commonly injured."
+
+Original card:
+{card_text.strip()}
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.4,
+            max_tokens=800,
+            timeout=60,
+        )
+    except Exception as exc:
+        logger.error("OpenAI API error while making card unambiguous: %s", exc)
+        raise
+
+    suggestion = (response.choices[0].message.content or "").strip()
+    return suggestion
+
+
 def split_card_into_multiple(card_text, num_cards=2, model="gpt-4.1"):
     """Use OpenAI to split a single cloze card into multiple simple cards."""
     if not card_text or not card_text.strip():
@@ -2113,6 +2171,27 @@ def make_more_concise():
     except Exception as exc:
         logger.error("Failed to generate even-more-concise card: %s", exc)
         return {"error": "Failed to generate an even more concise version."}, 500
+
+
+@app.route("/make_unambiguous", methods=["POST"])
+def make_unambiguous():
+    data = request.get_json() or {}
+    text = (data.get("text") or "").strip()
+    model = (data.get("model") or "gpt-4.1").strip() or "gpt-4.1"
+
+    if not text:
+        return {"error": "Card text is required."}, 400
+
+    try:
+        suggestion = make_card_unambiguous(text, model=model)
+        if not suggestion:
+            raise ValueError("Empty response from model")
+        return {"suggestion": suggestion}
+    except ValueError as err:
+        return {"error": str(err)}, 400
+    except Exception as exc:
+        logger.error("Failed to generate unambiguous card: %s", exc)
+        return {"error": "Failed to generate an unambiguous version."}, 500
 
 
 @app.route("/split_card", methods=["POST"])
