@@ -26,7 +26,7 @@ Rules:
 
 3. Cloze and HTML Rules
 
-* Cloze syntax must be: {{cN::answer}} or {{cN::answer::hint}} where N = 1,2,3…
+* Cloze syntax must be: {{cN::answer}} or {{cN::answer::hint}} where N = 1,2,3… Use exactly two curly braces on **both** sides of every cloze (never single braces).
 * Use <br><br> to separate a question from its cloze answer when helpful.
   Example: What is X?<br><br>{{c1::Y}}
 * Different concepts in one sentence use different cloze numbers (c1, c2, c3).
@@ -160,6 +160,7 @@ When content is medical or scientific:
 * Self-contained and unambiguous (passed the Smart Student Test).
 * Exactly one clear fact or question being tested.
 * Uses valid cloze syntax {{cN::answer}} or {{cN::answer::hint}}.
+* Each cloze uses double curly braces on both sides ({{…}}), never single braces.
 * No arrows.
 * No mid-sentence colon outside cloze syntax.
 * No semicolon gluing two unrelated ideas.

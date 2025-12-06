@@ -517,6 +517,7 @@ Rules:
    - Good: "The primary function of mitochondria is to {{c1::make ATP}}."
 3. **Preserve Answers:** Do not change the text inside the {{c1::...}} unless absolutely necessary for grammar. Keep the same cloze numbering.
 4. **Context:** If the fact is only true in a specific scenario (e.g., specific disease, age group), add that context.
+5. **Cloze Formatting:** Ensure every cloze uses double curly braces on both sides (e.g., {{c1::answer}}); never output single braces.
 
 Bad Input: "In competitive inhibition, Vmax {{c1::remains unchanged}}."
 Good Output: "How does competitive inhibition affect Vmax?<br><br>{{c1::Remains unchanged}}"
