@@ -700,9 +700,12 @@
         <div class="modal" role="dialog" aria-modal="true">
           <header class="row" style="gap:10px;">
             <div class="f1">Edit Card</div>
-            <button class="btn" data-ai style="margin-right:14px;">✨ UseAI</button>
-            <button class="btn" data-x>Close</button>
-            <button class="btn green" data-save>⭐ Save</button>
+            <div class="row right" style="gap:8px; align-items:center;" data-header-right>
+              <div class="row hidden" data-brief-header-actions style="gap:8px;"></div>
+              <button class="btn" data-ai style="margin-right:14px;">✨ UseAI</button>
+              <button class="btn" data-x>Close</button>
+              <button class="btn green" data-save>⭐ Save</button>
+            </div>
           </header>
           <div class="hr"></div>
           <div class="modalContent">
@@ -799,6 +802,7 @@
     const briefLoading = area.querySelector("[data-brief-loading]");
     const briefLoadingLabel = area.querySelector("[data-brief-loading-label]");
     const briefActions = area.querySelector("[data-brief-actions]");
+    const briefHeaderActions = area.querySelector("[data-brief-header-actions]");
     const viewOriginalBtn = area.querySelector("[data-view-original]");
     const briefFontControls = area.querySelector("[data-brief-font-controls]");
     const briefFontLabel = area.querySelector("[data-brief-font-label]");
@@ -886,6 +890,10 @@
       if (briefContent) briefContent.classList.remove("hidden");
       if (briefOverlay) briefOverlay.classList.add("hidden");
       if (editorShell) editorShell.classList.remove("hidden");
+      if (briefHeaderActions) {
+        briefHeaderActions.innerHTML = "";
+        briefHeaderActions.classList.add("hidden");
+      }
       setHeaderButtonsVisible(true);
     };
 
@@ -942,8 +950,9 @@
         }
       }
 
-      if (briefActions) {
-        briefActions.innerHTML = "";
+      const renderActionButtons = (target) => {
+        if (!target) return;
+        target.innerHTML = "";
         actions.forEach((action) => {
           const btn = document.createElement("button");
           btn.className = action.className || "btn";
@@ -952,8 +961,26 @@
           if (typeof action.onClick === "function") {
             btn.addEventListener("click", action.onClick);
           }
-          briefActions.appendChild(btn);
+          target.appendChild(btn);
         });
+      };
+
+      if (briefHeaderActions) {
+        briefHeaderActions.classList.toggle("hidden", !isGeneratedCards);
+        if (isGeneratedCards) {
+          renderActionButtons(briefHeaderActions);
+        } else {
+          briefHeaderActions.innerHTML = "";
+        }
+      }
+
+      if (briefActions) {
+        briefActions.classList.toggle("hidden", isGeneratedCards);
+        if (!isGeneratedCards) {
+          renderActionButtons(briefActions);
+        } else {
+          briefActions.innerHTML = "";
+        }
       }
 
       briefOverlay.classList.remove("hidden");
