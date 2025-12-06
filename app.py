@@ -505,30 +505,23 @@ def make_card_unambiguous(card_text, model="gpt-4.1"):
         raise ValueError("Card text is empty.")
 
     prompt = f"""
-You are refining an existing Anki cloze-deletion card.
+You are refining an existing Anki cloze-deletion card to fix "Mind-Reading" ambiguity.
 
-Goal:
-Rewrite the card so that the hidden answer(s) are clearly determined from the rest of the sentence, instead of being a vague “guess what I’m thinking” question.
+Goal: Rewrite the card so the user knows exactly *what* is being asked before revealing the cloze.
 
 Rules:
-- Keep ALL existing cloze answers and numbering exactly the same ({{c1::...}}, {{c2::...}}, etc.).
-- You may add or adjust context around the cloze (who, what, where, which disease, which structure, which modality, etc.) so that the desired answer is unambiguous.
-- If the card uses vague pronouns like "it", "this", "they" as the only clue, replace them with specific nouns or short identifying phrases.
-- Make sure that if someone hides the cloze and just reads the sentence, a knowledgeable learner can tell exactly what answer is being asked for.
-- Do NOT change the underlying fact or swap to a different answer; preserve the same concept being tested.
-- Keep the language concise and clear.
-- Preserve valid HTML and cloze syntax.
-- Output ONLY the revised card text. No quotes, no markdown, no JSON.
+1. **Allow Format Change:** If the card is a vague sentence (e.g., "In X, Y is {{c1::Z}}"), convert it to a Question/Answer format using <br><br> if that makes it clearer.
+   - Example: "How does X affect Y?<br><br>{{c1::It increases Z}}"
+2. **Explicit Relationships:** Ensure the text preceding the cloze defines the category (Mechanism, Function, Side Effect, Threshold).
+   - Bad: "Mitochondria {{c1::make ATP}}."
+   - Good: "The primary function of mitochondria is to {{c1::make ATP}}."
+3. **Preserve Answers:** Do not change the text inside the {{c1::...}} unless absolutely necessary for grammar. Keep the same cloze numbering.
+4. **Context:** If the fact is only true in a specific scenario (e.g., specific disease, age group), add that context.
 
-Bad example:
-  "In {{c1::this condition}}, levels are high."
-Good rewrite:
-  "In {{c1::primary hyperparathyroidism}}, serum calcium levels are high."
+Bad Input: "In competitive inhibition, Vmax {{c1::remains unchanged}}."
+Good Output: "How does competitive inhibition affect Vmax?<br><br>{{c1::Remains unchanged}}"
 
-Bad example:
-  "The {{c1::structure}} is injured."
-Good rewrite:
-  "In a non-contact pivoting knee injury, the {{c1::anterior cruciate ligament}} is most commonly injured."
+Output ONLY the revised card text. No quotes, no markdown.
 
 Original card:
 {card_text.strip()}
