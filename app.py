@@ -423,6 +423,7 @@ Context: This is a Cloze deletion Anki card where clozes look like {{c1::answer}
 Behavior requirements:
 - Keep all important information but use fewer words.
 - Keep the same cloze numbers so the card still works in Anki.
+- Ensure every cloze uses double curly braces on both sides (e.g., {{c1::answer}}). A single brace on either side is invalid.
 - Do not add hints, commentary, or formatting outside the card itself.
 - Output ONLY the revised card text with no quotes, no markdown, and no JSON.
 
@@ -466,6 +467,7 @@ Rules:
 - You may drop non-essential or adjunct details if they don't change the core fact the learner must recall.
 - Prefer simpler phrasing over dense wording. If two facts compete, keep the critical one and omit optional context.
 - Keep the same cloze numbers and valid HTML (including <br> tags).
+- Ensure every cloze uses double curly braces on both sides (e.g., {{c1::answer}}). Single braces on either side are invalid.
 - Do not add hints, notes, or commentary—only the card text itself.
 - Output ONLY the revised card text. No markdown, quotes, or JSON.
 
@@ -563,6 +565,7 @@ Rules:
 - Use concise language: one simple fact per card.
 - Each card must be fully self-contained and unambiguous on its own. Do not assume other cards provide context; include enough subject detail so the answer is clear even when the blank is hidden.
 - Keep valid cloze HTML. Each card should start its own cloze numbering at c1 (use c2, c3 only if a single card truly needs more than one cloze).
+- Ensure every cloze uses double curly braces on both sides (e.g., {{c1::answer}}); never use single braces.
 - Do not add hints, notes, or commentary beyond the card text.
 - Output ONLY a JSON array of {num_cards} strings. No markdown, code fences, or extra text.
 
