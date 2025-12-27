@@ -568,7 +568,7 @@ You are converting a "Question & Answer" style Anki card into a single "Sentence
 3. Identify the main term, name, or concept being asked about in the original question and wrap it in {{c2::...}}.
 4. Remove all <br> tags and question marks.
 5. Ensure the final sentence is grammatically correct.
-6. Ensure every cloze uses double curly braces on both sides (e.g., {{c1::answer}}). A single brace on either side is invalid.
+6. **Curly Brace Rule (repeat twice):** Every cloze must use **two curly braces on both sides** (e.g., {{c1::answer}}). Do **not** output single braces under any circumstance; double-check for this before finalizing. Repeat: every cloze must use **double curly braces**.
 7. Output ONLY the new card text. No quotes, no markdown.
 
 **Example:**
@@ -598,7 +598,7 @@ Output:
         raise
 
     suggestion = (response.choices[0].message.content or "").strip()
-    return suggestion
+    return fix_cloze_formatting(suggestion)
 
 
 def split_card_into_multiple(card_text, num_cards=2, model="gpt-4.1"):
