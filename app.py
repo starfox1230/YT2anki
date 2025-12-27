@@ -549,6 +549,58 @@ Original card:
     return suggestion
 
 
+def convert_to_sentence(card_text, model="gpt-4o"):
+    """
+    Convert a Q&A style card into a declarative sentence card.
+    Example: "What is X? {{c1::Y}}" -> "{{c1::Y}} is {{c2::X}}."
+    """
+    if not card_text or not card_text.strip():
+        raise ValueError("Card text is empty.")
+
+    prompt = f"""
+You are converting a "Question & Answer" style Anki card into a single "Sentence Completion" style card.
+
+**Goal:** Transform the question and answer into one declarative sentence.
+
+**Rules:**
+1. The text currently inside {{c1::...}} must remain {{c1::...}}.
+2. Structure the sentence so the {{c1::...}} content acts as the subject (appearing early in the sentence) if natural.
+3. Identify the main term, name, or concept being asked about in the original question and wrap it in {{c2::...}}.
+4. Remove all <br> tags and question marks.
+5. Ensure the final sentence is grammatically correct.
+6. Ensure every cloze uses double curly braces on both sides (e.g., {{c1::answer}}). A single brace on either side is invalid.
+7. Output ONLY the new card text. No quotes, no markdown.
+
+**Example:**
+Input:
+What are the three main divisions of the Hebrew Bible that give the name Tanakh?<br><br>{{c1::Torah, Nevi'im, and Ketuvim}}
+
+Output:
+{{c1::Torah, Nevi'im, and Ketuvim}} are the three main divisions of the Hebrew Bible that give the name {{c2::Tanakh}}.
+
+**Current Card to Convert:**
+{card_text.strip()}
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.3,
+            max_tokens=800,
+            timeout=60,
+        )
+    except Exception as exc:
+        logger.error("OpenAI API error while converting to sentence: %s", exc)
+        raise
+
+    suggestion = (response.choices[0].message.content or "").strip()
+    return suggestion
+
+
 def split_card_into_multiple(card_text, num_cards=2, model="gpt-4.1"):
     """Use OpenAI to split a single cloze card into multiple simple cards."""
     if not card_text or not card_text.strip():
@@ -2189,6 +2241,27 @@ def make_unambiguous():
     except Exception as exc:
         logger.error("Failed to generate unambiguous card: %s", exc)
         return {"error": "Failed to generate an unambiguous version."}, 500
+
+
+@app.route("/make_sentence", methods=["POST"])
+def make_sentence():
+    data = request.get_json() or {}
+    text = (data.get("text") or "").strip()
+    model = (data.get("model") or "gpt-4o").strip() or "gpt-4o"
+
+    if not text:
+        return {"error": "Card text is required."}, 400
+
+    try:
+        suggestion = convert_to_sentence(text, model=model)
+        if not suggestion:
+            raise ValueError("Empty response from model")
+        return {"suggestion": suggestion}
+    except ValueError as err:
+        return {"error": str(err)}, 400
+    except Exception as exc:
+        logger.error("Failed to convert card to sentence: %s", exc)
+        return {"error": "Failed to convert card."}, 500
 
 
 @app.route("/split_card", methods=["POST"])

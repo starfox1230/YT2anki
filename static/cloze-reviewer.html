@@ -1469,6 +1469,38 @@
       }
     }
 
+    async function requestSentenceCard(){
+      if (!aiBtn || aiInFlight) return;
+      const current = ta.value.trim();
+      if (!current) { alert("Card is empty."); return; }
+
+      // We reuse the existing unambiguous variables/UI to compare Original vs New
+      lastUnambiguousOriginal = current;
+      lastUnambiguousSuggestion = ""; 
+      
+      setAiLoading(true, "Rewriting...");
+      try {
+        const res = await fetch("/make_sentence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: current })
+        });
+        if (!res.ok) throw new Error(`Server responded with ${res.status}`);
+        const data = await res.json();
+        const suggestion = (data?.suggestion || "").trim();
+        if (!suggestion) throw new Error("Empty suggestion");
+        
+        lastUnambiguousSuggestion = suggestion;
+        reviewUnambiguousSuggestion(); // This reuses the existing comparison modal
+        
+      } catch (err) {
+        console.error("Sentence card request failed", err);
+        alert("Could not rewrite the card. Please try again.");
+      } finally {
+        setAiLoading(false);
+      }
+    }
+
     async function requestEvenMoreConcise(){
       if (!aiBtn || aiInFlight) return;
       const original = (lastBriefOriginal || "").trim();
@@ -1503,6 +1535,7 @@
         title: "Use AI",
         message: "Choose what you want to do with this card.",
         options: [
+          { label: "🔄 Make into Sentence", value: "sentence" },
           { label: "🧭 Make Unambiguous", value: "unambiguous" },
           { label: "✨ Make Brief", value: "brief" },
           { label: "🧩 Make into Multiple Cards", value: "split" },
@@ -1510,6 +1543,10 @@
         cancelLabel: "Cancel",
       });
       if (!action) return;
+      if (action === "sentence") {
+        requestSentenceCard();
+        return;
+      }
       if (action === "unambiguous") {
         requestUnambiguousCard();
         return;
