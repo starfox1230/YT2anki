@@ -287,6 +287,7 @@
   let soloIndex = 0;
   const uiState = {};
   let lastInteractedCardId = null;
+  const setLastInteracted = (id) => { lastInteractedCardId = id; };
   let scrollTargetId = null;
   let cachedPromptText = null;
   let advancedVisible = false;
@@ -478,7 +479,7 @@
       const offset = (header?.offsetHeight || 0) + 8;
       const top = cardEl.getBoundingClientRect().top + window.scrollY - offset;
       window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
-      lastInteractedCardId = id;
+      setLastInteracted(id);
     });
   }
 
@@ -587,26 +588,28 @@
     update();
 
     root.addEventListener("click", e=>{
-      lastInteractedCardId = id;
+      setLastInteracted(id);
       if (e.target.closest(".row,.btn,.clozeTop")) return;
       uiState[id].hidden = !uiState[id].hidden; update();
     });
 
     htmlBox.addEventListener("dblclick", (e) => {
       e.preventDefault(); e.stopPropagation();
+      setLastInteracted(id);
       openEditor(note.id, update);
     });
 
     const prevBtn = root.querySelector('[data-action="clozePrev"]');
     const nextBtn = root.querySelector('[data-action="clozeNext"]');
-    if (prevBtn) prevBtn.addEventListener("click", (e)=>{ e.stopPropagation(); const st=uiState[id], n=st.nums.length; if(!n)return; st.idx=(st.idx-1+n)%n; st.hidden=true; update(); });
-    if (nextBtn) nextBtn.addEventListener("click", (e)=>{ e.stopPropagation(); const st=uiState[id], n=st.nums.length; if(!n)return; st.idx=(st.idx+1)%n; st.hidden=true; update(); });
+    if (prevBtn) prevBtn.addEventListener("click", (e)=>{ e.stopPropagation(); setLastInteracted(id); const st=uiState[id], n=st.nums.length; if(!n)return; st.idx=(st.idx-1+n)%n; st.hidden=true; update(); });
+    if (nextBtn) nextBtn.addEventListener("click", (e)=>{ e.stopPropagation(); setLastInteracted(id); const st=uiState[id], n=st.nums.length; if(!n)return; st.idx=(st.idx+1)%n; st.hidden=true; update(); });
 
-    get("copy").addEventListener("click", (e) => { e.stopPropagation(); navigator.clipboard.writeText(note.html).then(()=> toast("Copied")); });
-    get("edit").addEventListener("click", (e) => { e.stopPropagation(); openEditor(note.id, update); });
+    get("copy").addEventListener("click", (e) => { e.stopPropagation(); setLastInteracted(id); navigator.clipboard.writeText(note.html).then(()=> toast("Copied")); });
+    get("edit").addEventListener("click", (e) => { e.stopPropagation(); setLastInteracted(id); openEditor(note.id, update); });
 
     get("save").addEventListener("click", (e) => {
       e.stopPropagation();
+      setLastInteracted(id);
       if (note.status === "saved") { note.status = "new"; note.fav = false; }
       else { note.status = "saved"; note.fav = true; }
       save(); renderList();
@@ -614,6 +617,7 @@
 
     get("discard").addEventListener("click", (e) => {
       e.stopPropagation();
+      setLastInteracted(id);
       if (note.status === "discarded") { note.status = "new"; note.fav = false; }
       else { note.status = "discarded"; note.fav = false; }
       save(); if (view === "new") root.classList.add("hidden"); else renderList();
@@ -691,6 +695,7 @@
   }
 
   function openEditor(id, onSaved){
+    setLastInteracted(id);
     const note = notes.find(n=>n.id===id);
     const prev = note.html;
     if (typeof note.originalHtml !== "string") note.originalHtml = prev;
@@ -1709,6 +1714,7 @@
   function drawSolo(){
     const cur = filtered(); if (!cur || !cur[soloIndex]) return;
     const n = cur[soloIndex];
+    setLastInteracted(n.id);
     const nums = soloState.nums = getClozeNumbers(n.html);
     const target = nums[soloState.idx] || null;
     const body = nums.length ? renderClozeTarget(n.html, target, soloState.hidden) : trimHtml(n.html);
@@ -1738,7 +1744,12 @@
   }
   function openSolo(index=0){
     const cur = filtered(); if (!cur.length) return;
-    soloIndex = Math.max(0, Math.min(index, cur.length-1));
+    let startIndex = typeof index === "number" ? index : 0;
+    if (lastInteractedCardId){
+      const found = cur.findIndex(n => n.id === lastInteractedCardId);
+      if (found >= 0) startIndex = found;
+    }
+    soloIndex = Math.max(0, Math.min(startIndex, cur.length-1));
     soloState.idx = 0; soloState.hidden = true;
     drawSolo();
     openModalBackdrop(soloBack);
