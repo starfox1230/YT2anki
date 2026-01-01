@@ -694,7 +694,8 @@
     });
   }
 
-  function openEditor(id, onSaved){
+  function openEditor(id, onSaved, opts = {}){
+    const { onClose } = opts;
     setLastInteracted(id);
     const note = notes.find(n=>n.id===id);
     const prev = note.html;
@@ -1236,6 +1237,7 @@
       closeModalBackdrop(backdrop);
       area.remove();
       document.removeEventListener('keydown', editorKeydownHandler);
+      if (typeof onClose === "function") onClose();
     };
     area.querySelector("[data-x]").onclick = close;
     area.querySelector("[data-undo]").onclick = () => { performUndo(); ta.focus(); };
@@ -1713,6 +1715,7 @@
   const soloTTSBtn = el("#soloTTS"); // Ref to new button
   let soloState = { idx:0, hidden:true, nums:[] };
   let ttsEnabled = false; // TTS State
+  let soloShortcutsLocked = false;
 
   // --- TTS Helpers ---
   function stripHtml(html) {
@@ -1857,7 +1860,8 @@
   el("#soloEdit").addEventListener("click", ()=>{
     const cur = filtered()[soloIndex]; if (!cur) return;
     window.speechSynthesis.cancel();
-    openEditor(cur.id, ()=>{ drawSolo(false); });
+    soloShortcutsLocked = true;
+    openEditor(cur.id, ()=>{ drawSolo(false); }, { onClose: () => { soloShortcutsLocked = false; } });
   });
 
   function saveCurrentAndNext() {
@@ -1907,6 +1911,7 @@
   // --- Keyboard Shortcuts ---
 
   window.addEventListener("keydown", (e)=>{
+    if (soloShortcutsLocked) return;
     if (el("#soloBack").style.display !== "flex") return; // Only in Solo View
     const cur = filtered()[soloIndex];
     if (!cur) return;
