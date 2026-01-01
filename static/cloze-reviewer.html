@@ -260,7 +260,7 @@
         <button class="btn good small" id="soloSave">⭐ Save</button>
         <button class="btn small" id="soloCopy">📋 Copy</button>
         <button class="btn small" id="soloEdit">✏️ Edit</button>
-        <button class="btn small" id="soloTTS">🗣️ TTS: Off</button> <button class="btn bad small" id="soloDiscard">🗑️ Discard</button>
+        <button class="btn bad small" id="soloDiscard">🗑️ Discard</button> <button class="btn small" id="soloTTS">🗣️ TTS: Off</button>
         </div>
     </div>
   </div>
@@ -1875,7 +1875,16 @@
     cur.status = "discarded"; cur.fav = false;
     save();
     // Move next
-    const m=filtered().length-1; 
+    const m=filtered().length-1;
+    if (soloIndex<m){ soloIndex++; soloState.idx=0; soloState.hidden=true; drawSolo(true); }
+    else { renderList(); drawSolo(false); }
+  }
+
+  function resetCurrentToNewAndNext() {
+    const cur=filtered()[soloIndex]; if (!cur) return;
+    cur.status = "new"; cur.fav = false;
+    save();
+    const m=filtered().length-1;
     if (soloIndex<m){ soloIndex++; soloState.idx=0; soloState.hidden=true; drawSolo(true); }
     else { renderList(); drawSolo(false); }
   }
@@ -1967,11 +1976,10 @@
 
     // Right Arrow Interaction
     if (e.key === "ArrowRight") {
-      // If revealed, move next without changing status
+      // If revealed, reset to New and move next
       if (!soloState.hidden) {
         e.preventDefault();
-        const m=filtered().length-1; 
-        if (soloIndex<m){ soloIndex++; soloState.idx=0; soloState.hidden=true; drawSolo(true); }
+        resetCurrentToNewAndNext();
       } else {
         // If unrevealed, standard behavior (next cloze index)
         el("#soloClozeNext").click();
