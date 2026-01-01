@@ -260,7 +260,7 @@
         <button class="btn good small" id="soloSave">⭐ Save</button>
         <button class="btn small" id="soloCopy">📋 Copy</button>
         <button class="btn small" id="soloEdit">✏️ Edit</button>
-        <button class="btn bad small" id="soloDiscard">🗑️ Discard</button>
+        <button class="btn small" id="soloTTS">🗣️ TTS: Off</button> <button class="btn bad small" id="soloDiscard">🗑️ Discard</button>
         </div>
     </div>
   </div>
@@ -1710,14 +1710,81 @@
 
   const soloBack = el("#soloBack");
   const soloCard = el("#soloCard");
+  const soloTTSBtn = el("#soloTTS"); // Ref to new button
   let soloState = { idx:0, hidden:true, nums:[] };
-  function drawSolo(){
+  let ttsEnabled = false; // TTS State
+
+  // --- TTS Helpers ---
+  function stripHtml(html) {
+    const tmp = document.createElement("DIV");
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || "";
+  }
+
+  function getClozeText(html, nums, idx, mode) {
+    // Modes: 'blank' (replace active with blank), 'answer' (just the answer), 'context' (context then answer)
+    const targetNum = nums[idx] || nums[0];
+    if (!targetNum) return stripHtml(html);
+
+    const re = /{{c(\d+)::([^]*?)(?:::([^]*?))?}}/g;
+    
+    // Mode: Answer Only
+    if (mode === 'answer') {
+      let ans = "";
+      let m;
+      while ((m = re.exec(html))) {
+        if (parseInt(m[1], 10) === targetNum) ans = m[2];
+      }
+      return stripHtml(ans);
+    }
+
+    // Mode: Blank (Unrevealed)
+    if (mode === 'blank') {
+      const processed = html.replace(re, (_, num, ans, hint) => {
+        return parseInt(num, 10) === targetNum ? " blank " : ans;
+      });
+      return stripHtml(processed);
+    }
+
+    // Mode: Context then Answer (F4 Revealed)
+    if (mode === 'context') {
+      let foundAns = "";
+      const context = html.replace(re, (_, num, ans, hint) => {
+        if (parseInt(num, 10) === targetNum) {
+          foundAns = ans;
+          return " "; // Remove answer from context
+        }
+        return ans;
+      });
+      return stripHtml(context) + ". " + stripHtml(foundAns);
+    }
+  }
+
+  function speak(text) {
+    if (!ttsEnabled || !text) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    window.speechSynthesis.speak(u);
+  }
+
+  function toggleTTS() {
+    ttsEnabled = !ttsEnabled;
+    soloTTSBtn.textContent = ttsEnabled ? "🗣️ TTS: On" : "🗣️ TTS: Off";
+    if (!ttsEnabled) window.speechSynthesis.cancel();
+  }
+  
+  if (soloTTSBtn) soloTTSBtn.addEventListener("click", toggleTTS);
+
+  // --- Drawing & Navigation ---
+
+  function drawSolo(autoPlay = false){
     const cur = filtered(); if (!cur || !cur[soloIndex]) return;
     const n = cur[soloIndex];
     setLastInteracted(n.id);
     const nums = soloState.nums = getClozeNumbers(n.html);
     const target = nums[soloState.idx] || null;
     const body = nums.length ? renderClozeTarget(n.html, target, soloState.hidden) : trimHtml(n.html);
+    
     soloCard.innerHTML = `
       <div class="statusBar ${statusClass(n.status)}">
         <div class="statusTitle">${statusLabel(n.status)}</div>
@@ -1730,8 +1797,17 @@
       ${tagsVisible && n.tags.length ? `<div class="meta"><div class="tags">${n.tags.map(t=>`<span class="pill">${t}</span>`).join("")}</div></div>` : ""}
       <div class="notehtml" id="soloHtml">${body}</div>
     `;
+
     const soloHtml = soloCard.querySelector("#soloHtml");
-    soloHtml.onclick = ()=>{ soloState.hidden = !soloState.hidden; drawSolo(); };
+    soloHtml.onclick = ()=>{ 
+      // Manual click logic implies standard toggle
+      soloState.hidden = !soloState.hidden; 
+      drawSolo(false); // Do not auto-read on click toggle to avoid double speak
+      // But if user clicks to reveal, per spec "when it reveals... it reads answer"
+      if (!soloState.hidden && ttsEnabled) {
+         speak(getClozeText(n.html, nums, soloState.idx, 'answer'));
+      }
+    };
     soloHtml.addEventListener("dblclick", (e) => {
       e.preventDefault();
       el("#soloEdit").click();
@@ -1739,9 +1815,17 @@
 
     const prevBtn = soloCard.querySelector("#soloClozePrev");
     const nextBtn = soloCard.querySelector("#soloClozeNext");
-    if (prevBtn) prevBtn.onclick = ()=>{ if (!nums.length) return; soloState.idx=(soloState.idx-1+nums.length)%nums.length; soloState.hidden=true; drawSolo(); };
-    if (nextBtn) nextBtn.onclick = ()=>{ if (!nums.length) return; soloState.idx=(soloState.idx+1)%nums.length; soloState.hidden=true; drawSolo(); };
+    if (prevBtn) prevBtn.onclick = ()=>{ if (!nums.length) return; soloState.idx=(soloState.idx-1+nums.length)%nums.length; soloState.hidden=true; drawSolo(true); };
+    if (nextBtn) nextBtn.onclick = ()=>{ if (!nums.length) return; soloState.idx=(soloState.idx+1)%nums.length; soloState.hidden=true; drawSolo(true); };
+
+    // Auto Play Logic
+    if (autoPlay && ttsEnabled) {
+      // "When you go to the next card... plays card... hits closed deletion says blank"
+      // This applies to the Unrevealed state (which is default on load)
+      speak(getClozeText(n.html, nums, soloState.idx, 'blank'));
+    }
   }
+
   function openSolo(index=0){
     const cur = filtered(); if (!cur.length) return;
     let startIndex = typeof index === "number" ? index : 0;
@@ -1751,10 +1835,158 @@
     }
     soloIndex = Math.max(0, Math.min(startIndex, cur.length-1));
     soloState.idx = 0; soloState.hidden = true;
-    drawSolo();
+    drawSolo(true); // Auto-play on open
     openModalBackdrop(soloBack);
   }
-  function closeSolo(){ closeModalBackdrop(soloBack); renderList(); }
+
+  function closeSolo(){ 
+    window.speechSynthesis.cancel();
+    closeModalBackdrop(soloBack); 
+    renderList(); 
+  }
+
+  // --- Solo Actions ---
+
+  el("#soloBtn").addEventListener("click", ()=> openSolo(0));
+  el("#soloClose").addEventListener("click", closeSolo);
+  el("#soloPrev").addEventListener("click", ()=> { if (soloIndex>0){ soloIndex--; soloState.idx=0; soloState.hidden=true; drawSolo(true); } });
+  el("#soloNext").addEventListener("click", ()=> { const m=filtered().length-1; if (soloIndex<m){ soloIndex++; soloState.idx=0; soloState.hidden=true; drawSolo(true); } });
+  
+  el("#soloCopy").addEventListener("click", ()=> { const cur = filtered()[soloIndex]; navigator.clipboard.writeText(cur.html).then(()=>toast("Copied")); });
+  
+  el("#soloEdit").addEventListener("click", ()=>{
+    const cur = filtered()[soloIndex]; if (!cur) return;
+    window.speechSynthesis.cancel();
+    openEditor(cur.id, ()=>{ drawSolo(false); });
+  });
+
+  function saveCurrentAndNext() {
+    const cur=filtered()[soloIndex]; if (!cur) return;
+    cur.status = "saved"; cur.fav = true;
+    save(); 
+    // Move next
+    const m=filtered().length-1; 
+    if (soloIndex<m){ soloIndex++; soloState.idx=0; soloState.hidden=true; drawSolo(true); }
+    else { renderList(); drawSolo(false); } // Refreshes UI if at end
+  }
+
+  function discardCurrentAndNext() {
+    const cur=filtered()[soloIndex]; if (!cur) return;
+    cur.status = "discarded"; cur.fav = false;
+    save();
+    // Move next
+    const m=filtered().length-1; 
+    if (soloIndex<m){ soloIndex++; soloState.idx=0; soloState.hidden=true; drawSolo(true); }
+    else { renderList(); drawSolo(false); }
+  }
+
+  el("#soloSave").addEventListener("click", ()=>{
+    const cur=filtered()[soloIndex]; if (!cur) return;
+    // Standard button toggle behavior (not the spacebar next behavior)
+    if (cur.status === "saved") { cur.status = "new"; cur.fav = false; }
+    else { cur.status = "saved"; cur.fav = true; }
+    save(); drawSolo(false);
+  });
+
+  el("#soloDiscard").addEventListener("click", ()=>{
+    const cur=filtered()[soloIndex]; if (!cur) return;
+    if (cur.status === "discarded") { cur.status = "new"; cur.fav = false; }
+    else { cur.status = "discarded"; cur.fav = false; }
+    save(); drawSolo(false);
+  });
+
+  // --- Keyboard Shortcuts ---
+
+  window.addEventListener("keydown", (e)=>{
+    if (el("#soloBack").style.display !== "flex") return; // Only in Solo View
+    const cur = filtered()[soloIndex];
+    if (!cur) return;
+
+    // F12: Previous Card
+    if (e.key === "F12") {
+      e.preventDefault();
+      if (soloIndex > 0) { soloIndex--; soloState.idx=0; soloState.hidden=true; drawSolo(true); }
+      return;
+    }
+
+    // F4: Replay Audio
+    if (e.key === "F4") {
+      e.preventDefault();
+      if (!ttsEnabled) return;
+      
+      if (soloState.hidden) {
+        // Not revealed: Read text with "blank"
+        speak(getClozeText(cur.html, soloState.nums, soloState.idx, 'blank'));
+      } else {
+        // Revealed: Read text (no answer) then answer
+        speak(getClozeText(cur.html, soloState.nums, soloState.idx, 'context'));
+      }
+      return;
+    }
+
+    // Period: Play/Pause
+    if (e.key === ".") {
+      e.preventDefault();
+      if (!ttsEnabled) return;
+      if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+      else if (window.speechSynthesis.speaking) window.speechSynthesis.pause();
+      return;
+    }
+
+    // Spacebar Interaction
+    if (e.key === " ") {
+      e.preventDefault();
+      
+      if (soloState.hidden) {
+        // REVEAL
+        soloState.hidden = false;
+        drawSolo(false); // Update UI
+        // Read just the answer
+        if (ttsEnabled) {
+          speak(getClozeText(cur.html, soloState.nums, soloState.idx, 'answer'));
+        }
+      } else {
+        // ALREADY REVEALED -> Save & Next
+        saveCurrentAndNext();
+      }
+      return;
+    }
+
+    // Left Arrow Interaction
+    if (e.key === "ArrowLeft") {
+      // If revealed, discard and move next
+      if (!soloState.hidden) {
+        e.preventDefault();
+        discardCurrentAndNext();
+      } else {
+        // If unrevealed, standard behavior (previous cloze index)
+        el("#soloClozePrev").click();
+      }
+      return;
+    }
+
+    // Right Arrow Interaction
+    if (e.key === "ArrowRight") {
+      // If revealed, move next without changing status
+      if (!soloState.hidden) {
+        e.preventDefault();
+        const m=filtered().length-1; 
+        if (soloIndex<m){ soloIndex++; soloState.idx=0; soloState.hidden=true; drawSolo(true); }
+      } else {
+        // If unrevealed, standard behavior (next cloze index)
+        el("#soloClozeNext").click();
+      }
+      return;
+    }
+
+    // Other shortcuts
+    if (e.key==="Escape"){ closeSolo(); }
+    else if (e.key.toLowerCase()==="s"){ el("#soloSave").click(); }
+    else if (e.key.toLowerCase()==="d"){ el("#soloDiscard").click(); }
+    else if (e.key.toLowerCase()==="e"){ el("#soloEdit").click(); }
+    else if (e.key.toLowerCase()==="c"){ el("#soloCopy").click(); }
+  });
+
 
   // Export helpers
   function visibleNotes(){
@@ -1955,43 +2187,6 @@
     save();
     renderList();
     toast("Discarded cards deleted");
-  });
-
-  // Solo controls
-  el("#soloBtn").addEventListener("click", ()=> openSolo(0));
-  el("#soloClose").addEventListener("click", closeSolo);
-  el("#soloPrev").addEventListener("click", ()=> { if (soloIndex>0){ soloIndex--; drawSolo(); } });
-  el("#soloNext").addEventListener("click", ()=> { const m=filtered().length-1; if (soloIndex<m){ soloIndex++; drawSolo(); } });
-  el("#soloCopy").addEventListener("click", ()=> { const cur = filtered()[soloIndex]; navigator.clipboard.writeText(cur.html).then(()=>toast("Copied")); });
-  el("#soloEdit").addEventListener("click", ()=>{
-    const cur = filtered()[soloIndex]; if (!cur) return;
-    openEditor(cur.id, ()=>{ drawSolo(); });
-  });
-
-  el("#soloSave").addEventListener("click", ()=>{
-     const cur=filtered()[soloIndex]; if (!cur) return;
-    if (cur.status === "saved") { cur.status = "new"; cur.fav = false; }
-    else { cur.status = "saved"; cur.fav = true; }
-    save(); renderList(); drawSolo();
-  });
-  el("#soloDiscard").addEventListener("click", ()=>{
-    const cur=filtered()[soloIndex]; if (!cur) return;
-    if (cur.status === "discarded") { cur.status = "new"; cur.fav = false; }
-    else { cur.status = "discarded"; cur.fav = false; }
-    save(); renderList(); drawSolo();
-  });
-
-  window.addEventListener("keydown", (e)=>{
-    if (el("#soloBack").style.display==="flex"){
-      if (e.key==="Escape"){ closeSolo(); }
-      else if (e.key==="ArrowLeft"){ el("#soloPrev").click(); }
-      else if (e.key==="ArrowRight"){ el("#soloNext").click(); }
-      else if (e.key===" "){ e.preventDefault(); const body = el("#soloCard #soloHtml"); if (body) body.click(); }
-      else if (e.key.toLowerCase()==="s"){ el("#soloSave").click(); }
-      else if (e.key.toLowerCase()==="d"){ el("#soloDiscard").click(); }
-      else if (e.key.toLowerCase()==="e"){ el("#soloEdit").click(); }
-      else if (e.key.toLowerCase()==="c"){ el("#soloCopy").click(); }
-    }
   });
 
   // Global card shortcuts (E, D, S, C)
