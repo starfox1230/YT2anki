@@ -1655,6 +1655,11 @@
 
     ta.addEventListener("keydown", (e)=>{
       const key = e.key.toLowerCase();
+      if ((e.ctrlKey || e.metaKey) && key === 'enter') {
+        e.preventDefault();
+        area.querySelector("[data-save]")?.click();
+        return;
+      }
       if (e.altKey && key === 'c') {
         e.preventDefault();
         removeAll();
