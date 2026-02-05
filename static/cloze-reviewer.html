@@ -1827,8 +1827,17 @@
 
     const prevBtn = soloCard.querySelector("#soloClozePrev");
     const nextBtn = soloCard.querySelector("#soloClozeNext");
-    if (prevBtn) prevBtn.onclick = ()=>{ if (!nums.length) return; soloState.idx=(soloState.idx-1+nums.length)%nums.length; soloState.hidden=true; drawSolo(true); };
-    if (nextBtn) nextBtn.onclick = ()=>{ if (!nums.length) return; soloState.idx=(soloState.idx+1)%nums.length; soloState.hidden=true; drawSolo(true); };
+    const moveCloze = (delta) => {
+      if (nums.length <= 1) return false;
+      const nextIdx = soloState.idx + delta;
+      if (nextIdx < 0 || nextIdx >= nums.length) return false;
+      soloState.idx = nextIdx;
+      soloState.hidden = true;
+      drawSolo(true);
+      return true;
+    };
+    if (prevBtn) prevBtn.onclick = ()=>{ moveCloze(-1); };
+    if (nextBtn) nextBtn.onclick = ()=>{ moveCloze(1); };
 
     // Auto Play Logic
     if (autoPlay && ttsEnabled) {
