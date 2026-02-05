@@ -1735,6 +1735,10 @@
     if (!targetNum) return stripHtml(html);
 
     const re = /{{c(\d+)::([^]*?)(?:::([^]*?))?}}/g;
+    const hintOrBlank = (hint) => {
+      const trimmed = (hint || "").trim();
+      return trimmed ? trimmed : "blank";
+    };
     
     // Mode: Answer Only
     if (mode === 'answer') {
@@ -1749,7 +1753,7 @@
     // Mode: Blank (Unrevealed)
     if (mode === 'blank') {
       const processed = html.replace(re, (_, num, ans, hint) => {
-        return parseInt(num, 10) === targetNum ? " blank " : ans;
+        return parseInt(num, 10) === targetNum ? ` ${hintOrBlank(hint)} ` : ans;
       });
       return stripHtml(processed);
     }
@@ -1760,7 +1764,7 @@
       const context = html.replace(re, (_, num, ans, hint) => {
         if (parseInt(num, 10) === targetNum) {
           foundAns = ans;
-          return " "; // Remove answer from context
+          return ` ${hintOrBlank(hint)} `; // Replace answer with hint/blank in context
         }
         return ans;
       });
