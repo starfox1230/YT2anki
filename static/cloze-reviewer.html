@@ -1921,10 +1921,32 @@
     const cur = filtered()[soloIndex];
     if (!cur) return;
 
-    // F12: Previous Card
-    if (e.key === "F12") {
+    // F12/F9: Previous Card
+    if (e.key === "F12" || e.key === "F9") {
       e.preventDefault();
       if (soloIndex > 0) { soloIndex--; soloState.idx=0; soloState.hidden=true; drawSolo(true); }
+      return;
+    }
+
+    // F10: Next Card
+    if (e.key === "F10") {
+      e.preventDefault();
+      const m = filtered().length - 1;
+      if (soloIndex < m) { soloIndex++; soloState.idx=0; soloState.hidden=true; drawSolo(true); }
+      return;
+    }
+
+    // F11: Previous Cloze
+    if (e.key === "F11") {
+      e.preventDefault();
+      el("#soloClozePrev").click();
+      return;
+    }
+
+    // F8: Next Cloze
+    if (e.key === "F8") {
+      e.preventDefault();
+      el("#soloClozeNext").click();
       return;
     }
 
