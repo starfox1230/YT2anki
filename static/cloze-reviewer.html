@@ -557,7 +557,8 @@
     el("#deleteDiscardedBtn").style.display = discardedCount ? "" : "none";
     
     cardsEl.innerHTML = cur.map(noteToCardHtml).join("");
-    cur.forEach(n => wireCard(n.id));
+    // Wire using the current note object to avoid an O(n²) notes.find() pass on large lists.
+    cur.forEach(wireCard);
     updateToggleTagsBtn();
     if (scrollTargetId) {
       const targetId = scrollTargetId;
@@ -565,10 +566,10 @@
       scrollCardIntoView(targetId);
     }
   }
-  function wireCard(id){
+  function wireCard(note){
+    const id = note.id;
     const root = el(`#card-${CSS.escape(id)}`);
     const get = a => root.querySelector(`[data-action="${a}"]`);
-    const note = notes.find(x=>x.id===id);
     const htmlBox = root.querySelector(".notehtml");
     const indicator = root.querySelector('[data-role="clozeIndicator"]');
     const nav = root.querySelector('.clozeTop');
