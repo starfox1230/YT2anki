@@ -409,7 +409,10 @@
   } catch {}
   if (!Array.isArray(notes)) notes = [];
   notes.forEach(n => {
-    if (n && typeof n === "object" && typeof n.originalHtml !== "string") {
+    if (!n || typeof n !== "object") return;
+    if (typeof n.html === "string") n.html = normalizeClozeBraces(n.html);
+    if (typeof n.originalHtml === "string") n.originalHtml = normalizeClozeBraces(n.originalHtml);
+    if (typeof n.originalHtml !== "string") {
       n.originalHtml = n.html;
     }
   });
@@ -418,6 +421,13 @@
   function save(){ localStorage.setItem(storeKey, JSON.stringify(notes)); }
   function trimHtml(s){ return (s||"").toString().trim(); }
   function escapeHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function normalizeClozeBraces(text){
+    if (typeof text !== "string" || !text.includes("::")) return text;
+    return text
+      .replace(/\{+c(\d+)::([\s\S]*?)\}+/g, (_m, n, body) => `{{c${n}::${body}}}`)
+      .replace(/\{{3,}c/g, "{{c")
+      .replace(/\}{3,}/g, "}}");
+  }
   function getClozeNumbers(html){ const set=new Set(); const re=/{{c(\d+)::/g; let m; while((m=re.exec(html))){ set.add(parseInt(m[1],10)); } return Array.from(set).sort((a,b)=>a-b); }
   function normalizeBreaks(str){
     const escaped = escapeHtml(str);
@@ -452,7 +462,7 @@
     };
     (input||[]).forEach((v,i)=>{
       const html = tryStr(v); if (!html) return;
-      const val = String(html);
+      const val = normalizeClozeBraces(String(html));
       const status = tryStatus(v);
       const fav = typeof v?.fav === "boolean" ? v.fav : status === "saved";
       out.push({
