@@ -446,10 +446,24 @@
     const out = [];
     const tryStr = v => typeof v === "string" ? v : (v && typeof v.content === "string" ? v.content : (v && typeof v.html === "string" ? v.html : null));
     const tryTags = v => Array.isArray(v?.tags) ? v.tags.map(t=>String(t)) : [];
+    const tryStatus = v => {
+      const status = typeof v?.status === "string" ? v.status.toLowerCase() : "new";
+      return ["new", "saved", "discarded"].includes(status) ? status : "new";
+    };
     (input||[]).forEach((v,i)=>{
       const html = tryStr(v); if (!html) return;
       const val = String(html);
-      out.push({ id:(v&&v.id)?String(v.id):uid(), html:val, originalHtml:val, tags:tryTags(v), status:"new", fav:false, createdAt:Date.now()+i });
+      const status = tryStatus(v);
+      const fav = typeof v?.fav === "boolean" ? v.fav : status === "saved";
+      out.push({
+        id:(v&&v.id)?String(v.id):uid(),
+        html:val,
+        originalHtml:typeof v?.originalHtml === "string" ? v.originalHtml : val,
+        tags:tryTags(v),
+        status,
+        fav,
+        createdAt:Number.isFinite(v?.createdAt) ? Number(v.createdAt) : Date.now()+i
+      });
     });
     return out;
   }
@@ -2059,7 +2073,10 @@
       html: n.html,
       tags: Array.isArray(n.tags) ? n.tags : [],
       id: n.id,
-      status: n.status
+      status: n.status,
+      fav: !!n.fav,
+      originalHtml: typeof n.originalHtml === "string" ? n.originalHtml : n.html,
+      createdAt: Number.isFinite(n.createdAt) ? n.createdAt : Date.now()
     }));
   }
   function downloadBlob(filename, blob){
