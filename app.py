@@ -302,12 +302,22 @@ def chunk_text(text, max_size, min_size=100):
 
 def fix_cloze_formatting(card):
     """
-    Ensures that cloze deletions in the card use exactly two curly braces on each side.
-    If the API returns a card like "{c1::...}" then this function converts it to "{{c1::...}}".
+    Normalize cloze deletions so they always use exactly two curly braces
+    on each side, even when the model outputs one, three, or more braces.
     """
-    if "{{" not in card:
-        card = card.replace("{c", "{{c")
-    card = re.sub(r'(?<!})}(?!})', '}}', card)
+    if not isinstance(card, str) or "::" not in card:
+        return card
+
+    # Normalize attempted cloze tokens like {c1::...}, {{{c2::...}}}, etc.
+    card = re.sub(
+        r"\{+c(\d+)::([\s\S]*?)\}+",
+        lambda m: "{{{{c{}::{}}}}}".format(m.group(1), m.group(2)),
+        card,
+    )
+
+    # Safety pass: collapse over-openers and over-closers around valid clozes.
+    card = re.sub(r"\{{3,}c", "{{c", card)
+    card = re.sub(r"\}{3,}", "}}", card)
     return card
 
 def get_anki_cards_for_chunk(transcript_chunk, user_preferences="", model="gpt-4o"):
@@ -447,7 +457,7 @@ Original card text:
         raise
 
     suggestion = (response.choices[0].message.content or "").strip()
-    return suggestion
+    return fix_cloze_formatting(suggestion)
 
 
 def make_card_even_more_concise(original_text, concise_text, model="gpt-4.1"):
@@ -494,7 +504,7 @@ First concise attempt:
         raise
 
     suggestion = (response.choices[0].message.content or "").strip()
-    return suggestion
+    return fix_cloze_formatting(suggestion)
 
 
 def make_card_unambiguous(card_text, model="gpt-4.1"):
@@ -546,7 +556,7 @@ Original card:
         raise
 
     suggestion = (response.choices[0].message.content or "").strip()
-    return suggestion
+    return fix_cloze_formatting(suggestion)
 
 
 def convert_to_sentence(card_text, model="gpt-4o"):
