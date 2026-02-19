@@ -1675,6 +1675,18 @@
         area.querySelector("[data-save]")?.click();
         return;
       }
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && key === 'c') {
+        const start = ta.selectionStart;
+        const end = ta.selectionEnd;
+        if (start !== end) {
+          e.preventDefault();
+          e.stopPropagation();
+          const nums = getNums(ta.value);
+          const nextClozeNum = nums.length ? (Math.max(...nums) + 1) : 1;
+          addClozeAs(nextClozeNum);
+          return;
+        }
+      }
       if (e.altKey && key === 'c') {
         e.preventDefault();
         removeAll();
