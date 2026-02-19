@@ -865,7 +865,14 @@
     const htmlToggleBtn = area.querySelector("[data-html-toggle]");
 
     let htmlModeEnabled = false;
-    const toPlainEditorText = (html) => (html || "").replace(/<br\s*\/?>/gi, "\n");
+    const toPlainEditorText = (html) => {
+      if (!html) return "";
+      const normalized = String(html)
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<\/p>/gi, "\n")
+        .replace(/<\/div>/gi, "\n");
+      return stripHtml(normalized);
+    };
     const toHtmlEditorText = (text) => (text || "").replace(/\r\n?/g, "\n").replace(/\n/g, "<br>");
     const getEditorHtmlValue = () => htmlModeEnabled ? ta.value : toHtmlEditorText(ta.value);
     const setEditorFromHtml = (html) => {
