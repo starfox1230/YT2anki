@@ -166,6 +166,26 @@
       background:var(--surface); color:var(--text);
       cursor:pointer; line-height:1;
     }
+    .htmlToggleBtn{
+      min-width:52px;
+      height:30px;
+      padding:0 10px;
+      border-radius:999px;
+      border:1px solid #3d4457;
+      background:#2a303d;
+      color:#aeb7c8;
+      font-size:12px;
+      font-weight:700;
+      letter-spacing:.03em;
+      transition:background-color .18s ease, color .18s ease, border-color .18s ease, box-shadow .18s ease;
+      box-shadow:none;
+    }
+    .htmlToggleBtn.active{
+      background:linear-gradient(180deg,#9b87fd,#7f65f0);
+      border-color:transparent;
+      color:#0b0d12;
+      box-shadow:var(--ring);
+    }
 
     /* ---- MOBILE ONLY OVERRIDES ---- */
     @media (max-width: 600px) {
@@ -730,7 +750,10 @@
       <div class="modalBackdrop">
         <div class="modal" role="dialog" aria-modal="true">
           <header class="row" style="gap:10px;">
-            <div class="f1">Edit Card</div>
+            <div class="row f1" style="align-items:center;gap:8px;">
+              <span>Edit Card</span>
+              <button class="btn htmlToggleBtn" data-html-toggle type="button" title="Toggle HTML source mode" aria-pressed="false">HTML</button>
+            </div>
             <div class="row right" style="gap:8px; align-items:center;" data-header-right>
               <div class="row hidden" data-brief-header-actions style="gap:8px;"></div>
               <button class="btn" data-ai style="margin-right:14px;">✨ UseAI</button>
@@ -839,6 +862,21 @@
     const briefFontLabel = area.querySelector("[data-brief-font-label]");
     const briefFontIncreaseBtn = area.querySelector("[data-brief-font-inc]");
     const briefFontDecreaseBtn = area.querySelector("[data-brief-font-dec]");
+    const htmlToggleBtn = area.querySelector("[data-html-toggle]");
+
+    let htmlModeEnabled = false;
+    const toPlainEditorText = (html) => (html || "").replace(/<br\s*\/?>/gi, "\n");
+    const toHtmlEditorText = (text) => (text || "").replace(/\r\n?/g, "\n").replace(/\n/g, "<br>");
+    const getEditorHtmlValue = () => htmlModeEnabled ? ta.value : toHtmlEditorText(ta.value);
+    const setEditorFromHtml = (html) => {
+      ta.value = htmlModeEnabled ? (html || "") : toPlainEditorText(html || "");
+    };
+    const syncHtmlToggleUi = () => {
+      if (!htmlToggleBtn) return;
+      htmlToggleBtn.classList.toggle("active", htmlModeEnabled);
+      htmlToggleBtn.setAttribute("aria-pressed", htmlModeEnabled ? "true" : "false");
+      htmlToggleBtn.title = htmlModeEnabled ? "Viewing HTML source" : "Viewing plain text";
+    };
     
     // Immediate show & sync focus for mobile keyboard
     openModalBackdrop(backdrop);
@@ -878,6 +916,21 @@
       lastInputType = null;
       lastInputTime = 0;
     };
+
+    syncHtmlToggleUi();
+    setEditorFromHtml(prev);
+    history[0] = ta.value;
+
+    htmlToggleBtn?.addEventListener("click", ()=>{
+      const htmlValue = getEditorHtmlValue();
+      htmlModeEnabled = !htmlModeEnabled;
+      syncHtmlToggleUi();
+      ta.value = htmlModeEnabled ? htmlValue : toPlainEditorText(htmlValue);
+      recordChange(ta.value);
+      rebuildPlusMinusButtons();
+      updateHintButton();
+      ta.focus({ preventScroll: true });
+    });
 
     const recordChange = (newValue, { merge = false } = {}) => {
       if (history[historyIndex] === newValue) return;
@@ -1041,7 +1094,7 @@
     };
 
     const applyEditorValue = (value) => {
-      ta.value = value;
+      setEditorFromHtml(value);
       recordChange(ta.value);
       rebuildPlusMinusButtons();
       updateHintButton();
@@ -1622,7 +1675,7 @@
     if (viewOriginalBtn) viewOriginalBtn.onclick = () => reviewPreAIVersion();
 
     area.querySelector("[data-save]").onclick = ()=>{
-      const v = ta.value;
+      const v = getEditorHtmlValue();
       note.html = v; note.status = "saved"; note.fav = true;
       save();
       uiState[id] = { nums:getClozeNumbers(v), idx:0, hidden:true };
@@ -1713,6 +1766,7 @@
         }
       }
       else if (!e.altKey && !e.ctrlKey && !e.metaKey && key === 'enter') {
+        if (!htmlModeEnabled) return;
         e.preventDefault();
         const start = ta.selectionStart;
         const end = ta.selectionEnd;
