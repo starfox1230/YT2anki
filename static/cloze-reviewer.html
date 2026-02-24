@@ -388,27 +388,6 @@
     try { localStorage.setItem(generatedFontSizeKey, String(clampGeneratedFont(size))); } catch {}
   }
 
-  // ---- Kill double-tap zoom (iOS Safari & friends) but keep rapid taps working
-  (function preventDoubleTapZoom(){
-    const isEditable = el => !!(el && el.closest('input, textarea, [contenteditable="true"]'));
-    document.addEventListener('dblclick', (e) => {
-      if (isEditable(e.target)) return;
-      e.preventDefault();
-    }, { passive: false, capture: true });
-    let lastTouchEnd = 0;
-    document.addEventListener('touchend', (e) => {
-      if (e.touches && e.touches.length) return;
-      if (isEditable(e.target)) return;
-      const now = Date.now();
-      if (now - lastTouchEnd <= 300) {
-        e.preventDefault();
-        const target = e.target.closest('button, .btn, .segbtn, a, [role="button"]');
-        if (target) target.click();
-      }
-      lastTouchEnd = now;
-    }, { passive: false, capture: true });
-  })();
-
   // --- FIX: Stronger Scroll Lock for Modals ---
   let savedScrollY = 0;
   let modalLockDepth = 0;
@@ -642,6 +621,20 @@
       scrollCardIntoView(targetId);
     }
   }
+  function updateCardDOM(note, cardElement) {
+    const statusBar = cardElement.querySelector('.statusBar');
+    statusBar.className = `statusBar ${statusClass(note.status)}`;
+    cardElement.querySelector('.statusTitle').textContent = statusLabel(note.status);
+
+    if (view !== "all" && view !== note.status) {
+      cardElement.classList.add("hidden");
+    }
+
+    const cur = filtered();
+    el("#countLabel").textContent = String(cur.filter(n => !el(`#card-${CSS.escape(n.id)}`).classList.contains("hidden")).length);
+    el("#discardCountLabel").textContent = String(notes.filter(n => n.status === "discarded").length);
+  }
+
   function wireCard(note){
     const id = note.id;
     const root = el(`#card-${CSS.escape(id)}`);
@@ -689,7 +682,8 @@
       setLastInteracted(id);
       if (note.status === "saved") { note.status = "new"; note.fav = false; }
       else { note.status = "saved"; note.fav = true; }
-      save(); renderList();
+      save();
+      updateCardDOM(note, root);
     });
 
     get("discard").addEventListener("click", (e) => {
@@ -697,7 +691,8 @@
       setLastInteracted(id);
       if (note.status === "discarded") { note.status = "new"; note.fav = false; }
       else { note.status = "discarded"; note.fav = false; }
-      save(); if (view === "new") root.classList.add("hidden"); else renderList();
+      save();
+      updateCardDOM(note, root);
     });
   }
 
@@ -1737,16 +1732,6 @@
     };
     backdrop.addEventListener('touchstart', trapFocus, { passive: false, capture: true });
     backdrop.addEventListener('mousedown', trapFocus, { capture: true });
-
-    ta.addEventListener('blur', (e) => {
-      if (closingEditor) return;
-      const related = e.relatedTarget;
-      if (related && related.closest('button, .btn, .segbtn')) return;
-      setTimeout(() => {
-        if (!closingEditor) ta.focus({ preventScroll: true });
-      }, 0);
-    });
-
     ta.addEventListener("input", (e) => {
       if (e.isComposing) return;
       const type = e.inputType || "";
