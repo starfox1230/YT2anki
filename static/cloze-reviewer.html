@@ -29,6 +29,32 @@
       position:sticky;top:0;z-index:5;background:linear-gradient(180deg,var(--bg),rgba(15,17,21,.8));
       backdrop-filter: blur(8px); border-bottom:1px solid #262b35;
     }
+    .pageBanner{
+      position:sticky;
+      top:0;
+      z-index:15;
+      transition:transform .22s ease;
+    }
+    .pageBanner.collapsed{ transform:translateY(calc(-100% + 26px)); }
+    .bannerToggleTab{
+      position:absolute;
+      right:12px;
+      bottom:0;
+      transform:translateY(100%);
+      border:1px solid #2a3140;
+      border-top:none;
+      border-bottom-left-radius:10px;
+      border-bottom-right-radius:10px;
+      background:var(--surface);
+      color:var(--text);
+      font-size:12px;
+      font-weight:700;
+      letter-spacing:.02em;
+      padding:3px 10px 4px;
+      cursor:pointer;
+      box-shadow:var(--shadow);
+      line-height:1;
+    }
     .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px}
     .toolbar .title{font-weight:700;font-size:18px;margin-right:auto}
     .toolbarTop{display:flex;align-items:center;gap:12px;width:100%;}
@@ -206,7 +232,7 @@
   </style>
 </head>
 <body>
-<header>
+<header id="topBanner" class="pageBanner">
   <div class="toolbar wrap">
     <div class="toolbarTop">
       <div class="title">Cloze Cards Reviewer</div>
@@ -238,6 +264,7 @@
       <button class="btn red" id="deleteDiscardedBtn" title="Delete all discarded cards" style="display:none;">Delete Discarded (<span id="discardCountLabel">0</span>)</button>
     </div>
   </div>
+  <button class="bannerToggleTab" id="bannerToggleBtn" type="button" aria-expanded="true">Hide</button>
 </header>
 
 <main class="wrap">
@@ -294,6 +321,7 @@
   const tagsKey = "cloze-reviewer-tags-visible";
   const fontSizeKey = "cloze-reviewer-editor-font-size";
   const generatedFontSizeKey = "cloze-reviewer-generated-font-size";
+  const bannerCollapsedKey = "cloze-reviewer-banner-collapsed";
   const DEFAULT_EDITOR_FONT = 24;
   const MIN_EDITOR_FONT = 12;
   const MAX_EDITOR_FONT = 48;
@@ -311,6 +339,10 @@
   let scrollTargetId = null;
   let cachedPromptText = null;
   let advancedVisible = false;
+  let bannerCollapsed = (() => {
+    try { return localStorage.getItem(bannerCollapsedKey) === "1"; }
+    catch { return false; }
+  })();
   let tagsVisible = (() => {
     try { const v = localStorage.getItem(tagsKey); return v === null ? false : v === "1"; }
     catch { return false; }
@@ -2189,6 +2221,22 @@
       const appendInput = el("#appendInput");
       if (appendInput) appendInput.focus({ preventScroll: true });
     });
+  }
+
+  const topBanner = el("#topBanner");
+  const bannerToggleBtn = el("#bannerToggleBtn");
+  function setBannerCollapsed(collapsed){
+    bannerCollapsed = !!collapsed;
+    if (topBanner) topBanner.classList.toggle("collapsed", bannerCollapsed);
+    if (bannerToggleBtn) {
+      bannerToggleBtn.textContent = bannerCollapsed ? "Show" : "Hide";
+      bannerToggleBtn.setAttribute("aria-expanded", bannerCollapsed ? "false" : "true");
+    }
+    try { localStorage.setItem(bannerCollapsedKey, bannerCollapsed ? "1" : "0"); } catch {}
+  }
+  setBannerCollapsed(bannerCollapsed);
+  if (bannerToggleBtn) {
+    bannerToggleBtn.addEventListener("click", () => setBannerCollapsed(!bannerCollapsed));
   }
 
   // Toggle tags UI
