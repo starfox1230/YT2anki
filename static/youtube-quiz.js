@@ -44,6 +44,9 @@
     let currentFilter = 'all';
     let favoriteQuestions = new Set();
     let isPreviewMode = false;
+    let generationTimerId = null;
+    let generationStartedAt = 0;
+    let generationTimerMessage = '';
     const quizSettingsKey = 'quizGeneratorSettings';
     let userSettings = {
         hideChoicesUntilReveal: false
@@ -57,7 +60,28 @@
         return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
     }
 
+    function formatElapsedTime(totalMilliseconds) {
+        const totalSeconds = Math.max(0, Math.floor(totalMilliseconds / 1000));
+        const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+        const seconds = String(totalSeconds % 60).padStart(2, '0');
+        return `${minutes}:${seconds}`;
+    }
+
+    function clearGenerationTimer() {
+        if (generationTimerId) {
+            clearInterval(generationTimerId);
+            generationTimerId = null;
+        }
+    }
+
+    function renderGeneratingStatus() {
+        const elapsed = formatElapsedTime(Date.now() - generationStartedAt);
+        generationStatus.innerHTML = `${generationTimerMessage}<span class="status-timer">${elapsed}</span><span class="loading-dot"></span><span class="loading-dot"></span><span class="loading-dot"></span>`;
+        generationStatus.className = 'status-line';
+    }
+
     function showStatus(message, type = '') {
+        clearGenerationTimer();
         generationStatus.textContent = message;
         generationStatus.className = 'status-line';
         if (type) generationStatus.classList.add(type);
@@ -67,10 +91,17 @@
         generateBtn.disabled = isGenerating;
         youtubeUrlInput.disabled = isGenerating;
         if (isGenerating) {
-            generationStatus.innerHTML = `${message}<span class="loading-dot"></span><span class="loading-dot"></span><span class="loading-dot"></span>`;
-            generationStatus.className = 'status-line';
+            clearGenerationTimer();
+            generationTimerMessage = message;
+            generationStartedAt = Date.now();
+            renderGeneratingStatus();
+            generationTimerId = setInterval(renderGeneratingStatus, 1000);
         } else if (message) {
             showStatus(message);
+        } else {
+            clearGenerationTimer();
+            generationStatus.textContent = '';
+            generationStatus.className = 'status-line';
         }
     }
 
