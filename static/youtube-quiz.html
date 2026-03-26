@@ -106,6 +106,19 @@
             text-align: left;
         }
 
+        .inline-helper-link {
+            color: #aab3ff;
+            text-decoration: none;
+            font-size: 0.92em;
+            font-weight: 400;
+            margin-left: 6px;
+        }
+
+        .inline-helper-link:hover {
+            color: #d2d7ff;
+            text-decoration: underline;
+        }
+
         .url-input,
         textarea {
             width: 100%;
@@ -697,7 +710,10 @@
         <div class="generator-container">
             <h1>YouTube Quiz Generator</h1>
 
-            <label class="input-label" for="youtubeUrlInput">YouTube URL</label>
+            <label class="input-label" for="youtubeUrlInput">
+                YouTube URL
+                <a class="inline-helper-link" href="https://starfox1230.github.io/The-Library/apps/quiz-generator/index.html" target="_blank" rel="noopener noreferrer">(Other Media?)</a>
+            </label>
             <input id="youtubeUrlInput" class="url-input" type="url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" spellcheck="false">
 
             <div id="generationStatus" class="status-line"></div>
