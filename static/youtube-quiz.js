@@ -7,13 +7,6 @@
     const generationStatus = document.getElementById('generationStatus');
     const mainSessionsModal = document.getElementById('main-sessions-modal');
     const sessionsList = document.getElementById('sessions-list');
-    const fetchTranscriptBtn = document.getElementById('fetchTranscriptBtn');
-    const useFetchedTranscriptToggle = document.getElementById('useFetchedTranscriptToggle');
-    const transcriptStatus = document.getElementById('transcriptStatus');
-    const transcriptMeta = document.getElementById('transcriptMeta');
-    const transcriptPreview = document.getElementById('transcriptPreview');
-    const copyTranscriptBtn = document.getElementById('copyTranscriptBtn');
-    const clearTranscriptBtn = document.getElementById('clearTranscriptBtn');
 
     const quizTitleEl = document.getElementById('quiz-title');
     const questionCounterElement = document.getElementById('question-counter');
@@ -50,7 +43,6 @@
     let currentFilter = 'all';
     let favoriteQuestions = new Set();
     let isPreviewMode = false;
-    let fetchedTranscriptData = null;
     const quizSettingsKey = 'quizGeneratorSettings';
     let userSettings = {
         hideChoicesUntilReveal: false
@@ -73,109 +65,11 @@
     function setGeneratingState(isGenerating, message = '') {
         generateBtn.disabled = isGenerating;
         youtubeUrlInput.disabled = isGenerating;
-        fetchTranscriptBtn.disabled = isGenerating;
         if (isGenerating) {
             generationStatus.innerHTML = `${message}<span class="loading-dot"></span><span class="loading-dot"></span><span class="loading-dot"></span>`;
             generationStatus.className = 'status-line';
         } else if (message) {
             showStatus(message);
-        }
-    }
-
-    function setTranscriptStatus(message, type = '') {
-        transcriptStatus.textContent = message;
-        transcriptStatus.className = 'status-line';
-        if (type) transcriptStatus.classList.add(type);
-    }
-
-    function setTranscriptFetchingState(isFetching, message = '') {
-        fetchTranscriptBtn.disabled = isFetching;
-        generateBtn.disabled = isFetching || generateBtn.disabled;
-        youtubeUrlInput.disabled = isFetching || youtubeUrlInput.disabled;
-        if (isFetching) {
-            transcriptStatus.innerHTML = `${message}<span class="loading-dot"></span><span class="loading-dot"></span><span class="loading-dot"></span>`;
-            transcriptStatus.className = 'status-line';
-        } else if (message) {
-            setTranscriptStatus(message);
-        }
-    }
-
-    function resetTranscriptTools(clearToggle = false) {
-        fetchedTranscriptData = null;
-        transcriptPreview.value = '';
-        transcriptMeta.textContent = '';
-        transcriptMeta.style.display = 'none';
-        transcriptStatus.textContent = '';
-        transcriptStatus.className = 'status-line';
-        copyTranscriptBtn.disabled = true;
-        clearTranscriptBtn.disabled = true;
-        if (clearToggle) useFetchedTranscriptToggle.checked = false;
-    }
-
-    function buildTranscriptMetaText(transcriptPayload) {
-        if (!transcriptPayload) return '';
-        const kind = transcriptPayload.isGenerated ? 'auto-generated' : 'manual';
-        return `Language: ${transcriptPayload.language || 'Unknown'} (${transcriptPayload.languageCode || 'unknown'}) | Type: ${kind} | Segments: ${transcriptPayload.segmentCount || 0}`;
-    }
-
-    function renderTranscriptData(payload, sourceUrl) {
-        fetchedTranscriptData = {
-            sourceUrl,
-            videoId: payload.videoId,
-            transcript: payload.transcript,
-            transcriptText: payload.transcriptText
-        };
-        transcriptPreview.value = payload.transcriptText || '';
-        transcriptMeta.textContent = buildTranscriptMetaText(payload.transcript);
-        transcriptMeta.style.display = transcriptMeta.textContent ? 'block' : 'none';
-        copyTranscriptBtn.disabled = !payload.transcriptText;
-        clearTranscriptBtn.disabled = !payload.transcriptText;
-    }
-
-    async function fetchTranscriptForCurrentUrl(options = {}) {
-        const preservePrimaryBusyState = Boolean(options.preservePrimaryBusyState);
-        const youtubeUrl = youtubeUrlInput.value.trim();
-        if (!youtubeUrl) {
-            setTranscriptStatus('Paste a YouTube URL before fetching a transcript.', 'error');
-            return null;
-        }
-
-        setTranscriptFetchingState(true, 'Fetching transcript');
-
-        try {
-            const response = await fetch('/api/youtube-quiz/transcript', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ youtubeUrl })
-            });
-
-            let payload;
-            try {
-                payload = await response.json();
-            } catch (_) {
-                payload = null;
-            }
-
-            if (!response.ok) {
-                throw new Error((payload && payload.error) || 'Transcript fetch failed.');
-            }
-
-            renderTranscriptData(payload, youtubeUrl);
-            setTranscriptStatus('Transcript fetched successfully.', 'success');
-            return fetchedTranscriptData;
-        } catch (error) {
-            console.error('Failed to fetch transcript:', error);
-            resetTranscriptTools(false);
-            setTranscriptStatus(error.message || 'Transcript fetch failed.', 'error');
-            return null;
-        } finally {
-            fetchTranscriptBtn.disabled = false;
-            if (!preservePrimaryBusyState) {
-                generateBtn.disabled = false;
-                youtubeUrlInput.disabled = false;
-            }
         }
     }
 
@@ -619,10 +513,9 @@
     function buildSessionData(apiPayload, youtubeUrl) {
         const datePrefix = formatDatePrefix(new Date());
         const baseTitle = apiPayload.quiz.title.trim();
-        const costSuffix = apiPayload.usage && apiPayload.usage.display ? ` ${apiPayload.usage.display}` : '';
 
         return {
-            title: `${datePrefix} ${baseTitle}${costSuffix}`,
+            title: `${datePrefix} ${baseTitle}`,
             questions: apiPayload.quiz.questions,
             sourceUrl: youtubeUrl,
             videoId: apiPayload.videoId,
@@ -635,42 +528,20 @@
 
     async function generateQuizFromYouTube() {
         const youtubeUrl = youtubeUrlInput.value.trim();
-        const sourceMode = useFetchedTranscriptToggle.checked ? 'transcript' : 'video';
         if (!youtubeUrl) {
             showStatus('Please paste a YouTube URL first.', 'error');
             return;
         }
 
-        const generationMessage = sourceMode === 'transcript'
-            ? 'Generating quiz from transcript'
-            : 'Generating quiz from YouTube video';
-        setGeneratingState(true, generationMessage);
+        setGeneratingState(true, 'Generating quiz from YouTube video');
 
         try {
-            let transcriptText = '';
-            if (sourceMode === 'transcript') {
-                const needsFreshTranscript = !fetchedTranscriptData || fetchedTranscriptData.sourceUrl !== youtubeUrl;
-                if (needsFreshTranscript) {
-                    const transcriptPayload = await fetchTranscriptForCurrentUrl({
-                        preservePrimaryBusyState: true
-                    });
-                    if (!transcriptPayload) {
-                        throw new Error('Transcript mode is selected, but the transcript could not be fetched.');
-                    }
-                }
-                transcriptText = fetchedTranscriptData ? fetchedTranscriptData.transcriptText : '';
-            }
-
             const response = await fetch('/api/youtube-quiz/generate', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    youtubeUrl,
-                    sourceMode,
-                    transcriptText
-                })
+                body: JSON.stringify({ youtubeUrl })
             });
 
             let payload;
@@ -686,14 +557,13 @@
 
             const sessionData = buildSessionData(payload, youtubeUrl);
             saveSessionData(sessionData);
-            showStatus(`Generated with ${payload.model} using ${sourceMode === 'transcript' ? 'transcript mode' : 'direct video mode'}. Cost label: ${payload.usage.display}`, 'success');
+            showStatus(`Generated with ${payload.model}.`, 'success');
             openQuiz(sessionData);
         } catch (error) {
             console.error('Failed to generate quiz:', error);
             showStatus(error.message || 'Failed to generate quiz.', 'error');
         } finally {
             generateBtn.disabled = false;
-            fetchTranscriptBtn.disabled = false;
             youtubeUrlInput.disabled = false;
         }
     }
@@ -792,39 +662,11 @@
         mainSessionsModal.style.display = 'flex';
     });
 
-    fetchTranscriptBtn.addEventListener('click', fetchTranscriptForCurrentUrl);
     generateBtn.addEventListener('click', generateQuizFromYouTube);
     youtubeUrlInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
             event.preventDefault();
             generateQuizFromYouTube();
-        }
-    });
-    youtubeUrlInput.addEventListener('input', () => {
-        if (fetchedTranscriptData && fetchedTranscriptData.sourceUrl !== youtubeUrlInput.value.trim()) {
-            resetTranscriptTools(false);
-        }
-    });
-    copyTranscriptBtn.addEventListener('click', () => {
-        if (!transcriptPreview.value) return;
-        navigator.clipboard.writeText(transcriptPreview.value).then(() => {
-            const originalText = copyTranscriptBtn.textContent;
-            copyTranscriptBtn.textContent = 'Copied!';
-            setTimeout(() => {
-                copyTranscriptBtn.textContent = originalText;
-            }, 1500);
-        });
-    });
-    clearTranscriptBtn.addEventListener('click', () => {
-        resetTranscriptTools(true);
-    });
-    useFetchedTranscriptToggle.addEventListener('change', () => {
-        if (useFetchedTranscriptToggle.checked) {
-            setTranscriptStatus('Transcript mode enabled. Fetch a transcript or generate and the app will try to fetch one first.');
-        } else if (fetchedTranscriptData) {
-            setTranscriptStatus('Transcript fetched and available, but direct video mode is active.');
-        } else {
-            setTranscriptStatus('');
         }
     });
 

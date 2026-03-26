@@ -86,73 +86,13 @@
             text-align: left;
         }
 
-        .info-section,
-        .explanation-container,
-        .transcript-tools {
+        .explanation-container {
             background-color: var(--surface-bg);
             border: 1px solid var(--border-color);
             border-radius: 8px;
             padding: 20px;
             text-align: left;
             box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.2);
-        }
-
-        .info-section {
-            margin-top: 20px;
-            margin-bottom: 30px;
-            font-size: 0.95em;
-        }
-
-        .transcript-tools {
-            margin-bottom: 24px;
-        }
-
-        .transcript-tools h2 {
-            margin-top: 0;
-            margin-bottom: 8px;
-            font-size: 1.1rem;
-        }
-
-        .transcript-actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
-            align-items: center;
-            margin: 14px 0 16px;
-        }
-
-        .transcript-checkbox {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin: 0;
-            color: var(--font-color);
-        }
-
-        .transcript-checkbox input {
-            width: 18px;
-            height: 18px;
-            margin: 0;
-        }
-
-        .transcript-meta {
-            display: none;
-            margin-bottom: 12px;
-            color: #b9c2ff;
-            font-size: 0.92em;
-            line-height: 1.5;
-        }
-
-        .transcript-preview {
-            min-height: 200px;
-            resize: vertical;
-            margin-bottom: 12px;
-        }
-
-        .transcript-button-row {
-            justify-content: flex-start;
-            margin-top: 0;
-            margin-bottom: 0;
         }
 
         .info-section strong,
@@ -734,37 +674,9 @@
     <section id="home-view" class="page-view">
         <div class="generator-container">
             <h1>YouTube Quiz Generator</h1>
-            <p>Paste a YouTube URL and this page will send the public video straight to Gemini, then open the quiz with the same review workflow as before.</p>
-
-            <div class="info-section">
-                <strong>How it works:</strong>
-                <p>1. Enter a public YouTube link.</p>
-                <p>2. By default, the app sends that video URL directly to Gemini for quiz generation.</p>
-                <p>3. If you want, you can also test transcript fetching below and optionally generate from the fetched transcript instead.</p>
-                <p>4. The saved quiz name keeps the usual date prefix and ends with the generation cost label.</p>
-            </div>
 
             <label class="input-label" for="youtubeUrlInput">YouTube URL</label>
             <input id="youtubeUrlInput" class="url-input" type="url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" spellcheck="false">
-
-            <div class="transcript-tools">
-                <h2>Optional Transcript Tools</h2>
-                <p>Direct video analysis is the default. Use this section if you want to test transcript fetching or force quiz generation from transcript text instead.</p>
-                <div class="transcript-actions">
-                    <button id="fetchTranscriptBtn" class="secondary-button" type="button">Fetch Transcript</button>
-                    <label class="transcript-checkbox" for="useFetchedTranscriptToggle">
-                        <input id="useFetchedTranscriptToggle" type="checkbox">
-                        <span>Generate from fetched transcript instead of direct video analysis</span>
-                    </label>
-                </div>
-                <div id="transcriptStatus" class="status-line"></div>
-                <div id="transcriptMeta" class="transcript-meta"></div>
-                <textarea id="transcriptPreview" class="transcript-preview" readonly placeholder="Fetched transcript will appear here if the transcript API succeeds."></textarea>
-                <div class="button-group transcript-button-row">
-                    <button id="copyTranscriptBtn" class="secondary-button" type="button" disabled>Copy Transcript</button>
-                    <button id="clearTranscriptBtn" class="secondary-button" type="button" disabled>Clear Transcript</button>
-                </div>
-            </div>
 
             <div id="generationStatus" class="status-line"></div>
 

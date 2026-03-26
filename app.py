@@ -15,7 +15,6 @@ from flask import send_from_directory
 from openai import OpenAI  # Ensure you have the correct version installed
 from youtube_quiz import (
     YouTubeQuizError,
-    fetch_transcript_from_youtube_url,
     generate_quiz_from_youtube_url,
 )
 
@@ -38,42 +37,17 @@ def youtube_quiz_page():
 def youtube_quiz_generate():
     payload = request.get_json(silent=True) or {}
     youtube_url = (payload.get("youtubeUrl") or "").strip()
-    source_mode = (payload.get("sourceMode") or "video").strip().lower()
-    transcript_text = payload.get("transcriptText")
     if not youtube_url:
         return {"error": "Please enter a YouTube URL."}, 400
-    if source_mode not in {"video", "transcript"}:
-        return {"error": "Invalid source mode."}, 400
 
     try:
-        result = generate_quiz_from_youtube_url(
-            youtube_url,
-            source_mode=source_mode,
-            transcript_text=transcript_text,
-        )
+        result = generate_quiz_from_youtube_url(youtube_url)
         return result
     except YouTubeQuizError as exc:
         return {"error": exc.message}, exc.status_code
     except Exception as exc:
         logger.exception("Unexpected error while generating YouTube quiz")
         return {"error": "An unexpected error occurred while generating the quiz."}, 500
-
-
-@app.route("/api/youtube-quiz/transcript", methods=["POST"])
-def youtube_quiz_transcript():
-    payload = request.get_json(silent=True) or {}
-    youtube_url = (payload.get("youtubeUrl") or "").strip()
-    if not youtube_url:
-        return {"error": "Please enter a YouTube URL."}, 400
-
-    try:
-        result = fetch_transcript_from_youtube_url(youtube_url)
-        return result
-    except YouTubeQuizError as exc:
-        return {"error": exc.message}, exc.status_code
-    except Exception:
-        logger.exception("Unexpected error while fetching YouTube transcript")
-        return {"error": "An unexpected error occurred while fetching the transcript."}, 500
 #end adding for anki helper app
 
 # Set up logging

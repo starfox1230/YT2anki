@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import re
-from dataclasses import dataclass
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -11,34 +10,12 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-# As of March 25, 2026, use Gemini 3.1 Pro Preview for both transcript-driven
-# quiz generation and direct public YouTube URL analysis.
 DEFAULT_GEMINI_MODEL = "gemini-3.1-pro-preview"
-DEFAULT_GEMINI_VIDEO_MODEL = DEFAULT_GEMINI_MODEL
 GEMINI_API_URL_TEMPLATE = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
     "{model}:generateContent?key={api_key}"
 )
-
-DEFAULT_LANGUAGE_PREFERENCES = ["en", "en-US", "en-GB"]
-
-# Gemini 2.5 Pro paid-tier Developer API pricing, configurable via env vars so
-# Render can stay accurate if Google updates rates later.
-INPUT_RATE_UNDER_200K = float(
-    os.environ.get("YOUTUBE_QUIZ_INPUT_RATE_UNDER_200K_USD_PER_MILLION", "1.25")
-)
-INPUT_RATE_OVER_200K = float(
-    os.environ.get("YOUTUBE_QUIZ_INPUT_RATE_OVER_200K_USD_PER_MILLION", "2.50")
-)
-OUTPUT_RATE_UNDER_200K = float(
-    os.environ.get("YOUTUBE_QUIZ_OUTPUT_RATE_UNDER_200K_USD_PER_MILLION", "10.00")
-)
-OUTPUT_RATE_OVER_200K = float(
-    os.environ.get("YOUTUBE_QUIZ_OUTPUT_RATE_OVER_200K_USD_PER_MILLION", "15.00")
-)
-YOUTUBE_URL_PREVIEW_COST_DISPLAY = os.environ.get(
-    "YOUTUBE_QUIZ_YOUTUBE_URL_PREVIEW_DISPLAY", "[$0.00 preview]"
-)
+YOUTUBE_URL_PREVIEW_COST_DISPLAY = "[$0.00 preview]"
 
 QUIZ_RESPONSE_SCHEMA = {
     "type": "OBJECT",
@@ -68,16 +45,6 @@ QUIZ_RESPONSE_SCHEMA = {
     },
     "required": ["title", "questions"],
 }
-
-
-@dataclass
-class TranscriptPayload:
-    video_id: str
-    text: str
-    language: str
-    language_code: str
-    is_generated: bool
-    segment_count: int
 
 
 class YouTubeQuizError(Exception):
@@ -114,121 +81,6 @@ def extract_youtube_video_id(raw_url_or_id: str) -> str:
                     return path_parts[idx + 1]
 
     raise YouTubeQuizError("That does not look like a valid YouTube URL.", status_code=400)
-
-
-def _clean_transcript_text(text: str) -> str:
-    text_no_timestamps = re.sub(r"\d{2}:\d{2}:\d{2}[.,]\d{3}", "", text)
-    cleaned_text = re.sub(r"\s+", " ", text_no_timestamps)
-    return cleaned_text.strip()
-
-
-def fetch_transcript(video_id: str) -> TranscriptPayload:
-    try:
-        from youtube_transcript_api import YouTubeTranscriptApi
-    except ImportError as exc:
-        raise YouTubeQuizError(
-            "The transcript dependency is not installed on the server.",
-            status_code=500,
-        ) from exc
-
-    try:
-        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-    except Exception as exc:
-        logger.exception("Failed to list transcripts for video %s", video_id)
-        raise YouTubeQuizError(
-            "Unable to read captions for that video. Make sure it is public and has subtitles.",
-            status_code=400,
-        ) from exc
-
-    transcript = None
-    lookup_attempts = (
-        "find_manually_created_transcript",
-        "find_generated_transcript",
-        "find_transcript",
-    )
-    for method_name in lookup_attempts:
-        finder = getattr(transcript_list, method_name, None)
-        if not finder:
-            continue
-        try:
-            transcript = finder(DEFAULT_LANGUAGE_PREFERENCES)
-            if transcript:
-                break
-        except Exception:
-            continue
-
-    if transcript is None:
-        try:
-            transcript = next(iter(transcript_list))
-        except StopIteration as exc:
-            raise YouTubeQuizError(
-                "No transcript tracks were found for that video.",
-                status_code=400,
-            ) from exc
-
-    if not str(transcript.language_code).startswith("en") and getattr(
-        transcript, "is_translatable", False
-    ):
-        try:
-            transcript = transcript.translate("en")
-        except Exception:
-            logger.info(
-                "Transcript for %s could not be translated to English; using %s",
-                video_id,
-                transcript.language_code,
-            )
-
-    try:
-        fetched = transcript.fetch()
-    except Exception as exc:
-        logger.exception("Failed to fetch transcript for video %s", video_id)
-        raise YouTubeQuizError(
-            "The transcript was found, but the caption text could not be fetched.",
-            status_code=400,
-        ) from exc
-
-    snippets = getattr(fetched, "snippets", fetched)
-    text_parts = []
-    for snippet in snippets:
-        if hasattr(snippet, "text"):
-            text_parts.append(snippet.text)
-        elif isinstance(snippet, dict):
-            text_parts.append(snippet.get("text", ""))
-
-    transcript_text = _clean_transcript_text(" ".join(part for part in text_parts if part))
-    if not transcript_text:
-        raise YouTubeQuizError(
-            "That video has captions, but the transcript text came back empty.",
-            status_code=400,
-        )
-
-    return TranscriptPayload(
-        video_id=video_id,
-        text=transcript_text,
-        language=getattr(transcript, "language", "Unknown"),
-        language_code=getattr(transcript, "language_code", "unknown"),
-        is_generated=bool(getattr(transcript, "is_generated", False)),
-        segment_count=len(text_parts),
-    )
-
-
-def _build_generation_prompt(transcript_text: str) -> str:
-    return (
-        "Based solely on the transcript below, first create a concise, descriptive title "
-        "for the subject matter (5-7 words). Then generate exactly 30 board-exam-level "
-        "multiple-choice questions that probe deep factual and conceptual mastery of the "
-        "material. Questions must test understanding of facts and concepts as they apply "
-        "in general contexts, not recall of the transcript's exact wording.\n\n"
-        'For each question, include exactly these four properties:\n'
-        '1. "question": the question stem, phrased like a high-level exam item.\n'
-        '2. "options": an array of four distinct answer strings.\n'
-        '3. "correctAnswer": the one option that is correct and matches exactly one entry in "options".\n'
-        '4. "explanation": a brief, board-style rationale grounded in the transcript.\n\n'
-        'Format the output as a single JSON object with exactly two top-level properties: "title" and "questions".\n'
-        'Do not include markdown, code fences, or commentary.\n\n'
-        "Transcript:\n"
-        f"{transcript_text}"
-    )
 
 
 def _build_video_generation_prompt() -> str:
@@ -289,10 +141,7 @@ def _parse_quiz_json(raw_text: str) -> dict[str, Any]:
 
 def _normalize_question(question: Any, index: int) -> dict[str, Any]:
     if not isinstance(question, dict):
-        raise YouTubeQuizError(
-            f"Question {index + 1} is not an object.",
-            status_code=502,
-        )
+        raise YouTubeQuizError(f"Question {index + 1} is not an object.", status_code=502)
 
     normalized = {
         "question": str(question.get("question", "")).strip(),
@@ -360,9 +209,7 @@ def normalize_quiz_payload(raw_payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _post_gemini_request(
-    request_payload: dict[str, Any], model: str
-) -> dict[str, Any]:
+def _post_gemini_request(request_payload: dict[str, Any]) -> dict[str, Any]:
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise YouTubeQuizError(
@@ -370,7 +217,7 @@ def _post_gemini_request(
             status_code=500,
         )
 
-    url = GEMINI_API_URL_TEMPLATE.format(model=model, api_key=api_key)
+    url = GEMINI_API_URL_TEMPLATE.format(model=DEFAULT_GEMINI_MODEL, api_key=api_key)
     try:
         response = requests.post(
             url,
@@ -394,10 +241,7 @@ def _post_gemini_request(
             message = error_payload.get("error", {}).get("message") or message
         except ValueError:
             pass
-        raise YouTubeQuizError(
-            message,
-            status_code=502,
-        )
+        raise YouTubeQuizError(message, status_code=502)
 
     try:
         return response.json()
@@ -409,51 +253,8 @@ def _post_gemini_request(
         ) from exc
 
 
-def _parse_quiz_response(
-    response_json: dict[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    raw_quiz_text = _extract_json_text(response_json)
-    parsed_quiz = _parse_quiz_json(raw_quiz_text)
-    normalized_quiz = normalize_quiz_payload(parsed_quiz)
-    usage_metadata = response_json.get("usageMetadata") or {}
-    return normalized_quiz, usage_metadata
-
-
-def call_gemini_for_quiz_from_transcript(
-    transcript_text: str, model: str = DEFAULT_GEMINI_MODEL
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    request_payload = {
-        "systemInstruction": {
-            "parts": [
-                {
-                    "text": (
-                        "You are an expert exam writer. Use only the provided transcript. "
-                        "Return strict JSON that matches the requested schema."
-                    )
-                }
-            ]
-        },
-        "contents": [
-            {
-                "parts": [
-                    {
-                        "text": _build_generation_prompt(transcript_text)
-                    }
-                ]
-            }
-        ],
-        "generationConfig": {
-            "temperature": 0.35,
-            "response_mime_type": "application/json",
-            "response_schema": QUIZ_RESPONSE_SCHEMA,
-        },
-    }
-    response_json = _post_gemini_request(request_payload, model=model)
-    return _parse_quiz_response(response_json)
-
-
 def call_gemini_for_quiz_from_youtube_url(
-    youtube_url: str, model: str = DEFAULT_GEMINI_VIDEO_MODEL
+    youtube_url: str,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     request_payload = {
         "systemInstruction": {
@@ -486,37 +287,13 @@ def call_gemini_for_quiz_from_youtube_url(
             "response_schema": QUIZ_RESPONSE_SCHEMA,
         },
     }
-    response_json = _post_gemini_request(request_payload, model=model)
-    return _parse_quiz_response(response_json)
 
-
-def estimate_cost_from_usage(usage_metadata: dict[str, Any]) -> dict[str, Any]:
-    prompt_tokens = int(usage_metadata.get("promptTokenCount") or 0)
-    candidate_tokens = int(usage_metadata.get("candidatesTokenCount") or 0)
-    total_tokens = int(usage_metadata.get("totalTokenCount") or (prompt_tokens + candidate_tokens))
-    thoughts_tokens = int(usage_metadata.get("thoughtsTokenCount") or 0)
-
-    if prompt_tokens <= 200000:
-        input_rate = INPUT_RATE_UNDER_200K
-        output_rate = OUTPUT_RATE_UNDER_200K
-    else:
-        input_rate = INPUT_RATE_OVER_200K
-        output_rate = OUTPUT_RATE_OVER_200K
-
-    estimated_cost = (prompt_tokens / 1_000_000 * input_rate) + (
-        candidate_tokens / 1_000_000 * output_rate
-    )
-
-    return {
-        "usd": round(estimated_cost, 6),
-        "display": format_cost_display(estimated_cost),
-        "promptTokens": prompt_tokens,
-        "candidateTokens": candidate_tokens,
-        "thoughtsTokens": thoughts_tokens,
-        "totalTokens": total_tokens,
-        "inputRatePerMillionUsd": input_rate,
-        "outputRatePerMillionUsd": output_rate,
-    }
+    response_json = _post_gemini_request(request_payload)
+    raw_quiz_text = _extract_json_text(response_json)
+    parsed_quiz = _parse_quiz_json(raw_quiz_text)
+    normalized_quiz = normalize_quiz_payload(parsed_quiz)
+    usage_metadata = response_json.get("usageMetadata") or {}
+    return normalized_quiz, usage_metadata
 
 
 def build_preview_cost_estimate(usage_metadata: dict[str, Any]) -> dict[str, Any]:
@@ -536,70 +313,16 @@ def build_preview_cost_estimate(usage_metadata: dict[str, Any]) -> dict[str, Any
     }
 
 
-def format_cost_display(estimated_cost: float) -> str:
-    if estimated_cost >= 1:
-        cost_text = f"${estimated_cost:.2f}"
-    elif estimated_cost >= 0.1:
-        cost_text = f"${estimated_cost:.3f}"
-    else:
-        cost_text = f"${estimated_cost:.4f}"
-    return f"[{cost_text} est]"
-
-
-def serialize_transcript_payload(transcript: TranscriptPayload) -> dict[str, Any]:
-    return {
-        "language": transcript.language,
-        "languageCode": transcript.language_code,
-        "isGenerated": transcript.is_generated,
-        "segmentCount": transcript.segment_count,
-    }
-
-
-def fetch_transcript_from_youtube_url(youtube_url: str) -> dict[str, Any]:
+def generate_quiz_from_youtube_url(youtube_url: str) -> dict[str, Any]:
     video_id = extract_youtube_video_id(youtube_url)
-    transcript = fetch_transcript(video_id)
-    return {
-        "videoId": transcript.video_id,
-        "transcript": serialize_transcript_payload(transcript),
-        "transcriptText": transcript.text,
-    }
-
-
-def generate_quiz_from_youtube_url(
-    youtube_url: str,
-    source_mode: str = "video",
-    transcript_text: str | None = None,
-) -> dict[str, Any]:
-    video_id = extract_youtube_video_id(youtube_url)
-
-    if source_mode == "transcript":
-        transcript = None
-        normalized_transcript_text = (transcript_text or "").strip()
-        if not normalized_transcript_text:
-            transcript = fetch_transcript(video_id)
-            normalized_transcript_text = transcript.text
-
-        quiz_payload, usage_metadata = call_gemini_for_quiz_from_transcript(
-            normalized_transcript_text
-        )
-        cost_estimate = estimate_cost_from_usage(usage_metadata)
-        transcript_metadata = (
-            serialize_transcript_payload(transcript)
-            if transcript is not None
-            else None
-        )
-        model_used = DEFAULT_GEMINI_MODEL
-    else:
-        quiz_payload, usage_metadata = call_gemini_for_quiz_from_youtube_url(youtube_url)
-        cost_estimate = build_preview_cost_estimate(usage_metadata)
-        transcript_metadata = None
-        model_used = DEFAULT_GEMINI_VIDEO_MODEL
+    quiz_payload, usage_metadata = call_gemini_for_quiz_from_youtube_url(youtube_url)
+    cost_estimate = build_preview_cost_estimate(usage_metadata)
 
     return {
         "quiz": quiz_payload,
-        "model": model_used,
+        "model": DEFAULT_GEMINI_MODEL,
         "videoId": video_id,
-        "sourceMode": source_mode,
-        "transcript": transcript_metadata,
+        "sourceMode": "video",
+        "transcript": None,
         "usage": cost_estimate,
     }
