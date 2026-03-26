@@ -29,6 +29,7 @@
     const resetQuizBtn = document.getElementById('reset-quiz-btn');
     const navigatorOverlay = document.getElementById('navigator-overlay');
     const navigatorGrid = document.getElementById('navigator-grid');
+    const navigatorSourceLink = document.getElementById('navigator-source-link');
     const navigatorClose = document.getElementById('navigator-close');
     const viewProgressReviewBtn = document.getElementById('view-progress-review-btn');
     const reviewListEl = document.getElementById('review-list');
@@ -283,6 +284,16 @@
 
     function buildNavigatorGrid() {
         navigatorGrid.innerHTML = '';
+
+        const sourceUrl = activeSessionData && activeSessionData.sourceUrl;
+        if (sourceUrl) {
+            navigatorSourceLink.href = sourceUrl;
+            navigatorSourceLink.style.display = 'block';
+        } else {
+            navigatorSourceLink.removeAttribute('href');
+            navigatorSourceLink.style.display = 'none';
+        }
+
         for (let i = 0; i < quizData.length; i += 1) {
             const item = document.createElement('div');
             item.classList.add('nav-item');

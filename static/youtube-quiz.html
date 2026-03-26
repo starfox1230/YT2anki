@@ -452,6 +452,28 @@
             cursor: pointer;
         }
 
+        .navigator-source-link {
+            display: none;
+            margin-top: 10px;
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--base-blue);
+            border-radius: 8px;
+            color: var(--bright-blue);
+            text-decoration: none;
+            text-align: center;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.9em;
+            transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+        }
+
+        .navigator-source-link:hover {
+            background: linear-gradient(45deg, var(--base-blue), var(--bright-blue));
+            color: #ffffff;
+            box-shadow: 0 6px 15px rgba(74, 74, 245, 0.5);
+            transform: scale(1.02);
+        }
+
         #question-text {
             font-size: 1.3em;
             color: #f0f0ff;
@@ -698,6 +720,7 @@
 
             <div id="navigator-overlay" class="navigator-overlay">
                 <div id="navigator-grid" class="navigator-grid"></div>
+                <a id="navigator-source-link" class="navigator-source-link" href="#" target="_blank" rel="noopener noreferrer">Open Source Video</a>
                 <button id="view-progress-review-btn" class="navigator-close" type="button">View Answers So Far</button>
                 <button id="navigator-close" class="navigator-close" type="button">Close Menu</button>
             </div>
