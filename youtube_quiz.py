@@ -11,13 +11,10 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-# As of March 25, 2026, Google's official Gemini API docs list gemini-2.5-pro
-# as the stable Pro model. Keep these overrideable so deployment can switch later
-# without another code change.
-DEFAULT_GEMINI_MODEL = os.environ.get("YOUTUBE_QUIZ_GEMINI_MODEL", "gemini-2.5-pro")
-DEFAULT_GEMINI_VIDEO_MODEL = os.environ.get(
-    "YOUTUBE_QUIZ_GEMINI_VIDEO_MODEL", DEFAULT_GEMINI_MODEL
-)
+# As of March 25, 2026, use Gemini 3.1 Pro Preview for both transcript-driven
+# quiz generation and direct public YouTube URL analysis.
+DEFAULT_GEMINI_MODEL = "gemini-3.1-pro-preview"
+DEFAULT_GEMINI_VIDEO_MODEL = DEFAULT_GEMINI_MODEL
 GEMINI_API_URL_TEMPLATE = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
     "{model}:generateContent?key={api_key}"
