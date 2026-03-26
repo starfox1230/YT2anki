@@ -7,6 +7,8 @@
     const generationStatus = document.getElementById('generationStatus');
     const mainSessionsModal = document.getElementById('main-sessions-modal');
     const sessionsList = document.getElementById('sessions-list');
+    const sessionsEmptyState = document.getElementById('sessions-empty-state');
+    const uploadHomeSessionsInput = document.getElementById('upload-home-sessions');
 
     const quizTitleEl = document.getElementById('quiz-title');
     const questionCounterElement = document.getElementById('question-counter');
@@ -487,7 +489,6 @@
         listElement.innerHTML = '';
 
         if (pastSessions.length === 0) {
-            listElement.innerHTML = '<li>No past quizzes found.</li>';
             return;
         }
 
@@ -514,7 +515,41 @@
         showPanel(pastSessionsPanelEl);
     }
 
-    function handleFileUpload(event, isMultiple) {
+    function importSessionsPayload(data, mode) {
+        let pastSessions = getPastSessions();
+
+        if (mode === 'multiple') {
+            if (!Array.isArray(data)) throw new Error('File should contain an array of sessions.');
+            const sessionMap = new Map(pastSessions.map((session) => [session.title, session]));
+            data.forEach((newSession) => {
+                if (newSession.title && Array.isArray(newSession.questions)) {
+                    sessionMap.set(newSession.title, newSession);
+                }
+            });
+            pastSessions = Array.from(sessionMap.values());
+            localStorage.setItem('pastQuizSessions', JSON.stringify(pastSessions));
+            return `Merged ${data.length} quizzes. Total quizzes now: ${pastSessions.length}.`;
+        }
+
+        if (mode === 'single') {
+            if (!data.title || !Array.isArray(data.questions)) {
+                throw new Error('Invalid session JSON format.');
+            }
+            const existingIndex = pastSessions.findIndex((session) => session.title === data.title);
+            if (existingIndex > -1) pastSessions[existingIndex] = data;
+            else pastSessions.push(data);
+            localStorage.setItem('pastQuizSessions', JSON.stringify(pastSessions));
+            return `Quiz "${data.title}" was successfully uploaded.`;
+        }
+
+        if (Array.isArray(data)) {
+            return importSessionsPayload(data, 'multiple');
+        }
+
+        return importSessionsPayload(data, 'single');
+    }
+
+    function handleFileUpload(event, mode, onSuccess) {
         const file = event.target.files[0];
         if (!file) return;
 
@@ -522,27 +557,9 @@
         reader.onload = (loadEvent) => {
             try {
                 const data = JSON.parse(loadEvent.target.result);
-                let pastSessions = getPastSessions();
-                if (isMultiple) {
-                    if (!Array.isArray(data)) throw new Error('File should contain an array of sessions.');
-                    const sessionMap = new Map(pastSessions.map((session) => [session.title, session]));
-                    data.forEach((newSession) => {
-                        if (newSession.title && Array.isArray(newSession.questions)) {
-                            sessionMap.set(newSession.title, newSession);
-                        }
-                    });
-                    pastSessions = Array.from(sessionMap.values());
-                    alert(`Merged ${data.length} quizzes. Total quizzes now: ${pastSessions.length}.`);
-                } else {
-                    if (!data.title || !Array.isArray(data.questions)) {
-                        throw new Error('Invalid session JSON format.');
-                    }
-                    const existingIndex = pastSessions.findIndex((session) => session.title === data.title);
-                    if (existingIndex > -1) pastSessions[existingIndex] = data;
-                    else pastSessions.push(data);
-                    alert(`Quiz "${data.title}" was successfully uploaded.`);
-                }
-                localStorage.setItem('pastQuizSessions', JSON.stringify(pastSessions));
+                const successMessage = importSessionsPayload(data, mode);
+                alert(successMessage);
+                if (typeof onSuccess === 'function') onSuccess();
             } catch (error) {
                 alert('Error processing file: ' + error.message);
             }
@@ -675,8 +692,16 @@
     document.getElementById('download-all-sessions-btn').addEventListener('click', () => {
         downloadFile(localStorage.getItem('pastQuizSessions') || '[]', 'all_past_quizzes.json', 'application/json');
     });
-    document.getElementById('upload-single-session').addEventListener('change', (event) => handleFileUpload(event, false));
-    document.getElementById('upload-multiple-sessions').addEventListener('change', (event) => handleFileUpload(event, true));
+    document.getElementById('upload-single-session').addEventListener('change', (event) => handleFileUpload(event, 'single'));
+    document.getElementById('upload-multiple-sessions').addEventListener('change', (event) => handleFileUpload(event, 'multiple'));
+    uploadHomeSessionsInput.addEventListener('change', (event) => handleFileUpload(event, 'auto', () => {
+        populateSessionList(sessionsList, (session) => {
+            mainSessionsModal.style.display = 'none';
+            openQuiz(session);
+        });
+        const hasSessions = getPastSessions().length > 0;
+        sessionsEmptyState.style.display = hasSessions ? 'none' : 'block';
+    }));
 
     revealChoicesToggleEl.addEventListener('change', (event) => {
         userSettings.hideChoicesUntilReveal = event.target.checked;
@@ -701,6 +726,8 @@
             mainSessionsModal.style.display = 'none';
             openQuiz(session);
         });
+        const hasSessions = getPastSessions().length > 0;
+        sessionsEmptyState.style.display = hasSessions ? 'none' : 'block';
         mainSessionsModal.style.display = 'flex';
     });
 

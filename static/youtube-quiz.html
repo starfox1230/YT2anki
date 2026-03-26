@@ -330,6 +330,26 @@
             border-bottom: none;
         }
 
+        .empty-state-panel {
+            display: none;
+            margin-top: 12px;
+            padding: 18px;
+            border: 1px dashed #4a4a7e;
+            border-radius: 12px;
+            text-align: center;
+            background: rgba(32, 32, 53, 0.65);
+        }
+
+        .empty-state-panel p {
+            margin: 0 0 14px;
+            text-align: center;
+            color: #c7c9ff;
+        }
+
+        .empty-state-panel input[type="file"] {
+            display: none;
+        }
+
         #quizTopControls {
             position: fixed;
             top: 15px;
@@ -785,6 +805,11 @@
             <button class="modal-close-btn" type="button">&times;</button>
             <h2>Select a Past Quiz to View</h2>
             <ul id="sessions-list"></ul>
+            <div id="sessions-empty-state" class="empty-state-panel">
+                <p>No past quizzes found yet.</p>
+                <label for="upload-home-sessions" class="file-upload-label">Load Past Quizzes JSON</label>
+                <input id="upload-home-sessions" type="file" accept=".json">
+            </div>
         </div>
     </div>
 
