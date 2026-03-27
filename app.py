@@ -82,55 +82,75 @@ SACLOZE_FRONT_TEMPLATE = """<div id=\"kard\">
 <!-- Tiny bar timer for Anki (desktop, AnkiMobile, AnkiDroid)-->
 
 <script>
-/* Re-entrant bar timer for Anki (desktop, AnkiMobile, AnkiDroid)
-   - Attaches on every card load (no global guard)
+/* Re-entrant bar timer for Anki
+   - Runs only on iPhone/iPad
+   - Attaches on every card load
    - Starts once per element via data flag
    - Works even when Anki swaps DOM without reloading the page
 */
 (function(){
+  function isIOSClient(){
+    var htmlCls = (document.documentElement && document.documentElement.className) || "";
+    var bodyCls = (document.body && document.body.className) || "";
+    var cls = (htmlCls + " " + bodyCls).toLowerCase();
+    return /\\biphone\\b|\\bipad\\b/.test(cls);
+  }
+
+  if (!isIOSClient()) return;
+
   function colorFor(p){
     var hStart = 170, hEnd = 0, h = hEnd + (hStart - hEnd) * p;
     return "hsl(" + h + ",95%,55%)";
   }
-  function pad2(n){ return (n<10? "0":"") + n }
+  function pad2(n){ return (n<10 ? "0" : "") + n; }
 
   function startTimerOn(el){
     if (!el || el.hasAttribute("data-bar-started")) return;
     el.setAttribute("data-bar-started","1");
 
-    var secs = parseFloat(el.getAttribute("data-seconds")||"12");
-    if (!(secs>0)) secs = 1;
-    var fill  = el.querySelector(".tfill");
-    var txt   = el.querySelector(".tleft");
+    var secs = parseFloat(el.getAttribute("data-seconds") || "12");
+    if (!(secs > 0)) secs = 1;
+
+    var fill = el.querySelector(".tfill");
+    var txt = el.querySelector(".tleft");
     if (!fill || !txt) return;
 
-    var durMs = secs*1000, start = performance.now();
+    var durMs = secs * 1000;
+    var start = performance.now();
 
     function tick(t){
       var left = Math.max(0, durMs - (t - start));
       var frac = left / durMs;
-      fill.style.width = (frac*100).toFixed(3) + "%";
+
+      fill.style.width = (frac * 100).toFixed(3) + "%";
       fill.style.background = colorFor(frac);
 
-      var s = Math.ceil(left/1000), mm = Math.floor(s/60), ss = s%60;
+      var s = Math.ceil(left / 1000);
+      var mm = Math.floor(s / 60);
+      var ss = s % 60;
       txt.textContent = mm ? (mm + ":" + pad2(ss)) : (s + "s");
 
-      if (left>0) requestAnimationFrame(tick);
-      else el.classList.add("done");
+      if (left > 0) {
+        requestAnimationFrame(tick);
+      } else {
+        el.classList.add("done");
+      }
     }
+
     requestAnimationFrame(tick);
   }
 
   function scanAndStart(){
     var bars = document.querySelectorAll(".tbar");
-    for (var i=0;i<bars.length;i++) startTimerOn(bars[i]);
+    for (var i = 0; i < bars.length; i++) startTimerOn(bars[i]);
   }
 
-  // Run now (script is after .tbar HTML)
   scanAndStart();
 
-  // Also run whenever Anki swaps/rebuilds the DOM
-  var mo = new MutationObserver(function(){ scanAndStart(); });
+  var mo = new MutationObserver(function(){
+    scanAndStart();
+  });
+
   if (document.body){
     mo.observe(document.body, { childList: true, subtree: true });
   } else {
@@ -157,9 +177,9 @@ SACLOZE_FRONT_TEMPLATE = """<div id=\"kard\">
 SACLOZE_BACK_TEMPLATE = """<div id=\"kard\">
 
 <!-- Bar timer (Back) -->
-<div class=\"tbar\" data-seconds=\"8\" role=\"timer\" aria-label=\"Back timer\">
+<div class=\"tbar\" data-seconds=\"12\" role=\"timer\" aria-label=\"Front timer\">
   <div class=\"ttrack\"><div class=\"tfill\"></div></div>
-  <span class=\"tleft\">00:08</span>
+  <span class=\"tleft\">00:12</span>
 </div>
 <!-- END Bar timer (Back) -->
 
@@ -169,6 +189,92 @@ SACLOZE_BACK_TEMPLATE = """<div id=\"kard\">
 <div id='extra'>{{edit:Extra}}</div>
 
 </div>
+
+<!-- Tiny bar timer for Anki (desktop, AnkiMobile, AnkiDroid)-->
+
+<script>
+/* Re-entrant bar timer for Anki
+   - Runs only on iPhone/iPad
+   - Attaches on every card load
+   - Starts once per element via data flag
+   - Works even when Anki swaps DOM without reloading the page
+*/
+(function(){
+  function isIOSClient(){
+    var htmlCls = (document.documentElement && document.documentElement.className) || "";
+    var bodyCls = (document.body && document.body.className) || "";
+    var cls = (htmlCls + " " + bodyCls).toLowerCase();
+    return /\\biphone\\b|\\bipad\\b/.test(cls);
+  }
+
+  if (!isIOSClient()) return;
+
+  function colorFor(p){
+    var hStart = 170, hEnd = 0, h = hEnd + (hStart - hEnd) * p;
+    return "hsl(" + h + ",95%,55%)";
+  }
+
+  function pad2(n){ return (n<10 ? "0" : "") + n; }
+
+  function startTimerOn(el){
+    if (!el || el.hasAttribute("data-bar-started")) return;
+    el.setAttribute("data-bar-started","1");
+
+    var secs = parseFloat(el.getAttribute("data-seconds") || "12");
+    if (!(secs > 0)) secs = 1;
+
+    var fill = el.querySelector(".tfill");
+    var txt = el.querySelector(".tleft");
+    if (!fill || !txt) return;
+
+    var durMs = secs * 1000;
+    var start = performance.now();
+
+    function tick(t){
+      var left = Math.max(0, durMs - (t - start));
+      var frac = left / durMs;
+
+      fill.style.width = (frac * 100).toFixed(3) + "%";
+      fill.style.background = colorFor(frac);
+
+      var s = Math.ceil(left / 1000);
+      var mm = Math.floor(s / 60);
+      var ss = s % 60;
+      txt.textContent = mm ? (mm + ":" + pad2(ss)) : (s + "s");
+
+      if (left > 0) {
+        requestAnimationFrame(tick);
+      } else {
+        el.classList.add("done");
+      }
+    }
+
+    requestAnimationFrame(tick);
+  }
+
+  function scanAndStart(){
+    var bars = document.querySelectorAll(".tbar");
+    for (var i = 0; i < bars.length; i++) startTimerOn(bars[i]);
+  }
+
+  scanAndStart();
+
+  var mo = new MutationObserver(function(){
+    scanAndStart();
+  });
+
+  if (document.body){
+    mo.observe(document.body, { childList: true, subtree: true });
+  } else {
+    document.addEventListener("DOMContentLoaded", function(){
+      mo.observe(document.body, { childList: true, subtree: true });
+      scanAndStart();
+    });
+  }
+})();
+</script>
+
+<!-- END Tiny bar timer for Anki (desktop, AnkiMobile, AnkiDroid)-->
 
 
 <br>
@@ -199,6 +305,15 @@ background-color: #2F2F31; /* BACKGROUND COLOR -- "#333B45" is original */
 
 .cloze, .cloze b, .cloze u, .cloze i { font-weight: bold; color: MediumSeaGreen !important;}
 
+/* show timer only on iPhone/iPad */
+.tbar {
+  display: none;
+}
+
+.iphone .tbar,
+.ipad .tbar {
+  display: block;
+}
 
 
 /* --- Bar timer --- */
