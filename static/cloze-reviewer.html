@@ -251,7 +251,7 @@
     </div>
     <button class="btn" id="soloBtn" title="One-at-a-time viewer (optional)">Solo View</button>
     <div class="searchRow hidden" data-advanced="true">
-      <input class="input" id="search" placeholder="Search">
+      <input class="input" id="search" placeholder="Search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-gramm="false">
       <button class="btn" id="toggleTagsBtn" data-advanced="true" title="Show/Hide tags">Show Tags</button>
     </div>
     <div class="row">
@@ -284,7 +284,7 @@
       </ol>
     </div>
     <!-- Placeholder is now empty as requested -->
-    <textarea id="appendInput" placeholder=""></textarea>
+    <textarea id="appendInput" placeholder="" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-gramm="false"></textarea>
     <div class="row" style="margin-top:10px;">
       <button class="btn primary" id="appendBtn">Load JSON</button>
     </div>
@@ -410,12 +410,14 @@
     }
 
     // 3. Show modal
+    div.style.pointerEvents = "auto";
     div.style.display = "flex";
     div.setAttribute("aria-hidden","false");
   }
 
   function closeModalBackdrop(div){
     // 1. Hide modal
+    div.style.pointerEvents = "none";
     div.style.display = "none";
     div.setAttribute("aria-hidden","true");
 
@@ -447,11 +449,30 @@
       n.originalHtml = n.html;
     }
   });
+  disableMobileCorrections(el("#search"));
+  disableMobileCorrections(el("#appendInput"));
 
   function uid(){ return "n_" + Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
   function save(){ localStorage.setItem(storeKey, JSON.stringify(notes)); }
   function trimHtml(s){ return (s||"").toString().trim(); }
   function escapeHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function getEventElementTarget(evt){
+    const target = evt?.target;
+    if (target instanceof Element) return target;
+    if (target?.parentElement instanceof Element) return target.parentElement;
+    return null;
+  }
+  function isInteractiveTarget(target){
+    return !!target?.closest?.('button, .btn, .segbtn, a, input, textarea, select, label, summary, [role="button"], [contenteditable="true"]');
+  }
+  function disableMobileCorrections(field){
+    if (!field) return;
+    field.setAttribute("autocomplete", "off");
+    field.setAttribute("autocorrect", "off");
+    field.setAttribute("autocapitalize", "off");
+    field.setAttribute("spellcheck", "false");
+    field.setAttribute("data-gramm", "false");
+  }
   function normalizeClozeBraces(text){
     if (typeof text !== "string" || !text.includes("::")) return text;
     return text
@@ -792,7 +813,7 @@
           <div class="modalContent">
             <div data-editor-shell>
               <div class="editAreaWrap">
-                <textarea class="input" id="editArea" style="width:100%;min-height:260px;font-size:24px;line-height:1.25">${escapeHtml(prev)}</textarea>
+                <textarea class="input" id="editArea" style="width:100%;min-height:260px;font-size:24px;line-height:1.25" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-gramm="false">${escapeHtml(prev)}</textarea>
               </div>
               <!-- Controls -->
               <div class="row" style="margin-top:10px;flex-wrap:wrap;align-items:center">
@@ -866,6 +887,7 @@
     document.body.appendChild(area);
     const backdrop = area.firstElementChild;
     const ta = area.querySelector("#editArea");
+    disableMobileCorrections(ta);
     const fontLabel = area.querySelector("[data-font-label]");
     const fontIncreaseBtn = area.querySelector("[data-font-inc]");
     const fontDecreaseBtn = area.querySelector("[data-font-dec]");
@@ -1722,12 +1744,16 @@
     // Aggressive Focus Retention Logic (Keyboard Keep-Alive)
     const trapFocus = (e) => {
       if (closingEditor) return;
-      const t = e.target;
-      if (t === ta) return;
-      if (t.closest('button, .btn, .segbtn')) return;
-      e.preventDefault();
+      const target = getEventElementTarget(e);
+      if (!target || target === ta) return;
+      if (isInteractiveTarget(target)) return;
+      const tappedEditorChrome = target === backdrop || !!target.closest?.('[data-editor-shell]');
+      if (!tappedEditorChrome) return;
+      if (e.cancelable) e.preventDefault();
       if (document.activeElement !== ta) {
-        ta.focus({ preventScroll: true });
+        requestAnimationFrame(() => {
+          if (!closingEditor) ta.focus({ preventScroll: true });
+        });
       }
     };
     backdrop.addEventListener('touchstart', trapFocus, { passive: false, capture: true });
