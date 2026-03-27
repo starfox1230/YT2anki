@@ -312,14 +312,13 @@ background-color: #2F2F31; /* BACKGROUND COLOR -- "#333B45" is original */
 
 .iphone .tbar,
 .ipad .tbar {
-  display: block;
+  display: grid;
 }
 
 
 /* --- Bar timer --- */
 .tbar{
   position: sticky; top: 0; z-index: 1;
-  display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   column-gap: 8px;
