@@ -319,13 +319,17 @@ background-color: #2F2F31; /* BACKGROUND COLOR -- "#333B45" is original */
 /* --- Bar timer --- */
 .tbar{
   position: sticky; top: 0; z-index: 1;
-  display: flex; align-items: center; gap: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
   padding: 6px 8px; margin: 0 0 12px 0;
   background: rgba(16,24,40,.25); border: 1px solid rgba(34,50,77,.65);
   border-radius: 12px; backdrop-filter: blur(6px);
 }
 .ttrack{
-  flex: 1 1 auto; height: 8px; border-radius: 999px;
+  min-width: 0;
+  height: 8px; border-radius: 999px;
   background: #102035; border: 1px solid #22324d; overflow: hidden;
 }
 .tfill{
@@ -333,6 +337,8 @@ background-color: #2F2F31; /* BACKGROUND COLOR -- "#333B45" is original */
   transform-origin: left center;
 }
 .tleft{
+  display: inline-flex;
+  align-items: center;
   font-size: 12px; color: #A6ABB9; line-height: 1;
   white-space: nowrap; font-variant-numeric: tabular-nums;
   min-width: 52px; text-align: right; /* keeps it on one line */
