@@ -810,6 +810,80 @@ Original card text:
         logger.error("Failed to parse split-card response: %s", exc)
         raise ValueError("Invalid response while generating multiple cards")
 
+
+def make_cards_uniform(cards, model="gpt-4.1"):
+    """Use OpenAI to rewrite related cloze cards into a parallel, uniform set."""
+    if not isinstance(cards, list) or len(cards) < 2:
+        raise ValueError("At least two cards are required.")
+
+    cleaned_cards = []
+    for raw in cards:
+        text = (raw or "").strip() if isinstance(raw, str) else ""
+        if text:
+            cleaned_cards.append(text)
+
+    if len(cleaned_cards) < 2:
+        raise ValueError("At least two non-empty cards are required.")
+
+    numbered_cards = "\n\n".join(
+        f"{idx}. \"\"\"{card}\"\"\"" for idx, card in enumerate(cleaned_cards, start=1)
+    )
+
+    prompt = f"""
+You are rewriting a small set of related Anki cloze-deletion cards so they become highly uniform and parallel.
+
+Goal:
+- Return exactly {len(cleaned_cards)} rewritten cards, in the same order as the originals.
+- Each rewritten card should still test its own original fact, but the cards should now share very similar wording and structure.
+- The cards should differ mainly in the information being recalled inside or immediately around the cloze deletion(s).
+
+Rules:
+- Preserve the factual meaning of each original card. Do not invent facts.
+- Keep each card self-contained, clear, and unambiguous on its own.
+- Use the same sentence template or question template across the set whenever possible.
+- Minimize incidental clues that make one card easier than the others; keep non-answer wording as parallel as possible.
+- Preserve each card's existing cloze numbering whenever reasonably possible so the note still behaves the same.
+- Keep the answer text inside each cloze as close to the original as possible unless a tiny grammatical adjustment is necessary.
+- Keep valid cloze HTML and ensure every cloze uses exactly two curly braces on both sides (for example, {{{{c1::answer}}}}).
+- Do not add commentary, bullets, markdown, or explanations.
+- Output ONLY a JSON array of {len(cleaned_cards)} strings.
+
+Original cards:
+{numbered_cards}
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.4,
+            max_tokens=2000,
+            timeout=60,
+        )
+    except Exception as exc:
+        logger.error("OpenAI API error while making cards uniform: %s", exc)
+        raise
+
+    raw = (response.choices[0].message.content or "").strip()
+    try:
+        rewritten_cards = json.loads(raw)
+        if not isinstance(rewritten_cards, list):
+            raise ValueError("Response was not a list")
+        rewritten_cards = [
+            fix_cloze_formatting(card)
+            for card in rewritten_cards
+            if isinstance(card, str) and card.strip()
+        ]
+        if len(rewritten_cards) != len(cleaned_cards):
+            raise ValueError("Unexpected number of cards returned")
+        return rewritten_cards
+    except Exception as exc:
+        logger.error("Failed to parse uniform-card response: %s", exc)
+        raise ValueError("Invalid response while making cards uniform")
+
 def get_all_anki_cards(transcript, user_preferences="", max_chunk_size=4000, model="gpt-4o"):
     """
     Preprocesses the transcript, splits it into chunks, and processes each chunk.
@@ -2446,6 +2520,29 @@ def split_card():
     except Exception as exc:
         logger.error("Failed to split card: %s", exc)
         return {"error": "Failed to generate multiple cards."}, 500
+
+
+@app.route("/make_uniform_cards", methods=["POST"])
+def make_uniform_cards():
+    data = request.get_json() or {}
+    raw_cards = data.get("cards")
+    model = (data.get("model") or "gpt-4.1").strip() or "gpt-4.1"
+
+    if not isinstance(raw_cards, list):
+        return {"error": "Cards must be provided as a list."}, 400
+
+    cards = [str(card).strip() for card in raw_cards if isinstance(card, str) and card.strip()]
+    if len(cards) < 2:
+        return {"error": "At least two cards are required."}, 400
+
+    try:
+        rewritten_cards = make_cards_uniform(cards, model=model)
+        return {"cards": rewritten_cards}
+    except ValueError as err:
+        return {"error": str(err)}, 400
+    except Exception as exc:
+        logger.error("Failed to make cards uniform: %s", exc)
+        return {"error": "Failed to make cards uniform."}, 500
 
 @app.route("/download_apkg", methods=["POST"])
 def download_apkg():

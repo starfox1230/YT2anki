@@ -10,7 +10,7 @@
       --accent:#9b87fd; --accent-weak:#b6a9ff; --good:#2ecc71; --bad:#e74c3c; --warn:#f39c12;
       --ring:0 0 0 2px rgba(155,135,253,.35);
       --radius:14px; --shadow:0 10px 30px rgba(0,0,0,.35);
-      --code:#0b0d12;
+      --code:#0b0d12; --selection:#4a90e2;
     }
     *{box-sizing:border-box}
     body{margin:0;background:var(--bg);color:var(--text);font:16px/1.35 system-ui,Segoe UI,Roboto,Inter,Helvetica,Arial}
@@ -64,6 +64,7 @@
       padding:9px 12px;border-radius:10px;cursor:pointer;box-shadow:var(--shadow);
       display: inline-flex; align-items: center; justify-content: center; gap: 6px;
     }
+    .btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}
     .btn:focus{outline:none;box-shadow:var(--ring)}
     .btn.primary{background:var(--accent);border-color:transparent;color:#0b0d12}
     .btn.good{background:var(--good);border-color:transparent;color:#0b0d12}
@@ -93,6 +94,13 @@
       position:relative;
       background:var(--surface);border:1px solid #2b3243;border-radius:var(--radius);padding:12px;
       box-shadow:var(--shadow);display:flex;flex-direction:column;gap:10px
+    }
+    .card, .card .notehtml, .card .notehtml *{
+      -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+    }
+    .card.selectedForAi{
+      border-color:var(--selection);
+      box-shadow:0 0 0 2px rgba(74,144,226,.68), var(--shadow);
     }
     .statusBar{
       margin:-12px -12px 8px -12px;
@@ -136,6 +144,26 @@
     #appendArea{scroll-margin-top:90px;}
     .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#151925;border:1px solid #2b3243;color:#cbd3df;font-size:13px}
     .hidden{display:none !important}
+    body.selectionModeActive main.wrap{padding-bottom:110px;}
+    .selectionBar{
+      position:fixed;left:0;right:0;bottom:0;z-index:18;
+      padding:12px max(12px, env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+      background:linear-gradient(180deg,rgba(15,17,21,0),rgba(15,17,21,.92) 34%,rgba(15,17,21,.98));
+      backdrop-filter:blur(10px);
+    }
+    .selectionBarContent{
+      max-width:880px;margin:0 auto;
+      display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+      background:linear-gradient(180deg,#14304d,#0f2136);
+      border:1px solid rgba(74,144,226,.5);
+      border-radius:16px;
+      padding:12px 14px;
+      box-shadow:0 16px 40px rgba(0,0,0,.38);
+    }
+    .selectionSummary{display:flex;flex-direction:column;gap:4px}
+    .selectionSummary strong{font-size:15px}
+    .selectionHint{color:#c8dfff;font-size:13px}
+    .selectionActions{display:flex;gap:8px;flex-wrap:wrap}
 
     .briefCard{white-space:pre-wrap;padding:10px;border-radius:10px;border:1px solid #2b3243;background:#121621;line-height:1.4;}
     .mutedLabel{color:var(--muted);font-size:13px;}
@@ -178,6 +206,14 @@
     .modal header{border:0;background:transparent;flex-shrink:0;padding-bottom:8px}
     .f1{flex:1}
     .hr{height:1px;background:#2b3243;margin:10px 0;border-radius:1px; flex-shrink: 0;}
+    .reviewChoiceRow{display:flex;gap:8px;flex-wrap:wrap}
+    .reviewChoiceBtn.active{
+      border-color:var(--selection);
+      box-shadow:0 0 0 2px rgba(74,144,226,.35);
+    }
+    .reviewSummary{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--muted);font-size:13px}
+    .reviewFooter{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:4px}
+    .reviewFooter .row{align-items:center}
 
     .editAreaWrap{position:relative;}
     .fontSizeControls{
@@ -291,6 +327,19 @@
   </section>
 </main>
 
+<div class="selectionBar hidden" id="selectionBar" aria-live="polite">
+  <div class="selectionBarContent">
+    <div class="selectionSummary">
+      <strong><span id="selectionCount">0</span> card<span id="selectionCountSuffix">s</span> selected</strong>
+      <div class="selectionHint" id="selectionHint">Select at least 2 cards to use AI.</div>
+    </div>
+    <div class="selectionActions">
+      <button class="btn" id="selectionCancelBtn" type="button">Cancel</button>
+      <button class="btn blue" id="selectionUseAiBtn" type="button" disabled>Use AI to Make Uniform</button>
+    </div>
+  </div>
+</div>
+
 <!-- Solo modal -->
 <div class="modalBackdrop" id="soloBack" aria-hidden="true">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="soloTitle">
@@ -309,6 +358,49 @@
         <button class="btn small" id="soloEdit">✏️ Edit</button>
         <button class="btn bad small" id="soloDiscard">🗑️ Discard</button> <button class="btn small" id="soloTTS">🗣️ TTS: Off</button>
         </div>
+    </div>
+  </div>
+</div>
+
+<div class="modalBackdrop" id="uniformReviewBack" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="uniformReviewTitle">
+    <header class="row" style="gap:10px;">
+      <div class="f1">
+        <div id="uniformReviewTitle">Review Uniform Cards</div>
+        <div class="mutedLabel" id="uniformReviewCounter"></div>
+      </div>
+      <button class="btn" id="uniformReviewPrev" type="button">Prev</button>
+      <button class="btn" id="uniformReviewNext" type="button">Next</button>
+      <button class="btn" id="uniformReviewClose" type="button">Close</button>
+      <button class="btn green" id="uniformReviewApply" type="button">Apply Choices</button>
+    </header>
+    <div class="hr"></div>
+    <div class="modalContent">
+      <div class="briefOverlay" style="margin-top:0;">
+        <div class="reviewSummary">
+          <span class="pill" id="uniformReviewDecision">Using AI</span>
+          <span id="uniformReviewDecisionSummary"></span>
+        </div>
+        <div>
+          <div class="mutedLabel">Uniform version</div>
+          <div class="briefCard" id="uniformReviewSuggestion"></div>
+        </div>
+        <div>
+          <div class="mutedLabel">Original</div>
+          <div class="briefCard" id="uniformReviewOriginal"></div>
+        </div>
+        <div class="reviewChoiceRow">
+          <button class="btn blue reviewChoiceBtn" id="uniformReviewUseAi" type="button">Use AI</button>
+          <button class="btn reviewChoiceBtn" id="uniformReviewKeepOriginal" type="button">Keep Original</button>
+        </div>
+        <div class="reviewFooter">
+          <div class="mutedLabel" id="uniformReviewStatus">Choose which version to keep for this card.</div>
+          <div class="row" style="gap:8px;">
+            <button class="btn" id="uniformReviewKeepAndNext" type="button">Keep Original and Next</button>
+            <button class="btn good" id="uniformReviewUseAndNext" type="button">Use AI and Next</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -338,6 +430,12 @@
   const setLastInteracted = (id) => { lastInteractedCardId = id; };
   let scrollTargetId = null;
   let cachedPromptText = null;
+  let multiSelectMode = false;
+  let uniformAiInFlight = false;
+  const selectedCardIds = new Set();
+  let suppressedCardClickId = null;
+  let suppressedCardClickUntil = 0;
+  let uniformReviewState = { items: [], choices: [], index: 0 };
   let advancedVisible = false;
   let bannerCollapsed = (() => {
     try { return localStorage.getItem(bannerCollapsedKey) === "1"; }
@@ -504,6 +602,9 @@
       }
     });
   }
+  function formatCardTextForDisplay(card){
+    return (card || "").replace(/<br\s*\/?\>/gi, "\n");
+  }
   function normalizeInput(input){
     const out = [];
     const tryStr = v => typeof v === "string" ? v : (v && typeof v.content === "string" ? v.content : (v && typeof v.html === "string" ? v.html : null));
@@ -545,6 +646,226 @@
   const viewLabel = v => ({all:"All", new:"New", saved:"Saved", discarded:"Discarded"})[v] || v;
 
   const cardsEl = el("#cards");
+  const selectionBar = el("#selectionBar");
+  const selectionCountEl = el("#selectionCount");
+  const selectionCountSuffixEl = el("#selectionCountSuffix");
+  const selectionHintEl = el("#selectionHint");
+  const selectionCancelBtn = el("#selectionCancelBtn");
+  const selectionUseAiBtn = el("#selectionUseAiBtn");
+  const uniformReviewBack = el("#uniformReviewBack");
+  const uniformReviewCounter = el("#uniformReviewCounter");
+  const uniformReviewDecision = el("#uniformReviewDecision");
+  const uniformReviewDecisionSummary = el("#uniformReviewDecisionSummary");
+  const uniformReviewSuggestion = el("#uniformReviewSuggestion");
+  const uniformReviewOriginal = el("#uniformReviewOriginal");
+  const uniformReviewStatus = el("#uniformReviewStatus");
+  const uniformReviewPrev = el("#uniformReviewPrev");
+  const uniformReviewNext = el("#uniformReviewNext");
+  const uniformReviewClose = el("#uniformReviewClose");
+  const uniformReviewApply = el("#uniformReviewApply");
+  const uniformReviewUseAi = el("#uniformReviewUseAi");
+  const uniformReviewKeepOriginal = el("#uniformReviewKeepOriginal");
+  const uniformReviewKeepAndNext = el("#uniformReviewKeepAndNext");
+  const uniformReviewUseAndNext = el("#uniformReviewUseAndNext");
+
+  function clearTextSelection(){
+    const selection = window.getSelection?.();
+    if (selection?.removeAllRanges) selection.removeAllRanges();
+  }
+
+  function setSuppressedCardClick(id, durationMs = 900){
+    suppressedCardClickId = id;
+    suppressedCardClickUntil = Date.now() + durationMs;
+  }
+
+  function consumeSuppressedCardClick(id){
+    if (suppressedCardClickId !== id) return false;
+    const active = Date.now() <= suppressedCardClickUntil;
+    suppressedCardClickId = null;
+    suppressedCardClickUntil = 0;
+    return active;
+  }
+
+  function syncSelectedCardsWithNotes(){
+    const noteIds = new Set(notes.map(n => n.id));
+    Array.from(selectedCardIds).forEach(id => {
+      if (!noteIds.has(id)) selectedCardIds.delete(id);
+    });
+    if (multiSelectMode && !selectedCardIds.size) multiSelectMode = false;
+  }
+
+  function updateVisibleSelectedCards(){
+    els(".card").forEach(card => {
+      const id = card.getAttribute("data-id") || "";
+      const isSelected = multiSelectMode && selectedCardIds.has(id);
+      card.classList.toggle("selectedForAi", isSelected);
+      card.setAttribute("aria-selected", isSelected ? "true" : "false");
+    });
+  }
+
+  function updateSelectionBar(){
+    syncSelectedCardsWithNotes();
+    const count = selectedCardIds.size;
+    const needed = Math.max(0, 2 - count);
+    if (selectionCountEl) selectionCountEl.textContent = String(count);
+    if (selectionCountSuffixEl) selectionCountSuffixEl.textContent = count === 1 ? "" : "s";
+    if (selectionHintEl) {
+      if (!count) selectionHintEl.textContent = "Select at least 2 cards to use AI.";
+      else if (needed > 0) selectionHintEl.textContent = `Select ${needed} more card${needed === 1 ? "" : "s"} to enable AI.`;
+      else selectionHintEl.textContent = "Ready to rewrite these cards into a more uniform set.";
+    }
+    if (selectionUseAiBtn) {
+      selectionUseAiBtn.disabled = uniformAiInFlight || count < 2;
+      selectionUseAiBtn.textContent = uniformAiInFlight ? "Using AI..." : "Use AI to Make Uniform";
+    }
+    if (selectionBar) selectionBar.classList.toggle("hidden", !multiSelectMode);
+    document.body.classList.toggle("selectionModeActive", multiSelectMode);
+    updateVisibleSelectedCards();
+  }
+
+  function clearSelectionMode(){
+    multiSelectMode = false;
+    selectedCardIds.clear();
+    updateSelectionBar();
+  }
+
+  function enterSelectionMode(id, { preserveExisting = false } = {}){
+    multiSelectMode = true;
+    if (!preserveExisting) selectedCardIds.clear();
+    if (id) selectedCardIds.add(id);
+    clearTextSelection();
+    updateSelectionBar();
+  }
+
+  function toggleSelectedCard(id){
+    if (!id) return;
+    multiSelectMode = true;
+    if (selectedCardIds.has(id)) selectedCardIds.delete(id);
+    else selectedCardIds.add(id);
+    if (!selectedCardIds.size) multiSelectMode = false;
+    updateSelectionBar();
+  }
+
+  function getSelectedNotes(){
+    if (!selectedCardIds.size) return [];
+    return notes.filter(n => selectedCardIds.has(n.id));
+  }
+
+  function closeUniformReview(){
+    closeModalBackdrop(uniformReviewBack);
+  }
+
+  function renderUniformReview(){
+    const { items, choices, index } = uniformReviewState;
+    const item = items[index];
+    if (!item) {
+      closeUniformReview();
+      return;
+    }
+    const currentChoice = choices[index] === "original" ? "original" : "ai";
+    const aiCount = choices.filter(choice => choice === "ai").length;
+    if (uniformReviewCounter) uniformReviewCounter.textContent = `Card ${index + 1} of ${items.length}`;
+    if (uniformReviewDecision) uniformReviewDecision.textContent = currentChoice === "ai" ? "Using AI" : "Keeping Original";
+    if (uniformReviewDecisionSummary) uniformReviewDecisionSummary.textContent = `${aiCount} of ${items.length} cards currently set to use AI.`;
+    if (uniformReviewSuggestion) uniformReviewSuggestion.textContent = formatCardTextForDisplay(item.suggestion);
+    if (uniformReviewOriginal) uniformReviewOriginal.textContent = formatCardTextForDisplay(item.original);
+    if (uniformReviewStatus) {
+      uniformReviewStatus.textContent = currentChoice === "ai"
+        ? "The AI rewrite will be used for this card."
+        : "The original card will be kept for this card.";
+    }
+    uniformReviewUseAi?.classList.toggle("active", currentChoice === "ai");
+    uniformReviewKeepOriginal?.classList.toggle("active", currentChoice === "original");
+    if (uniformReviewPrev) uniformReviewPrev.disabled = index === 0;
+    if (uniformReviewNext) uniformReviewNext.disabled = index >= items.length - 1;
+    if (uniformReviewApply) {
+      uniformReviewApply.textContent = aiCount
+        ? `Apply ${aiCount} AI Change${aiCount === 1 ? "" : "s"}`
+        : "Keep Originals";
+    }
+  }
+
+  function setUniformReviewChoice(choice, { advance = false } = {}){
+    const { items, index } = uniformReviewState;
+    if (!items[index]) return;
+    uniformReviewState.choices[index] = choice === "original" ? "original" : "ai";
+    if (advance && index < items.length - 1) uniformReviewState.index += 1;
+    renderUniformReview();
+  }
+
+  function openUniformReview(items){
+    uniformReviewState = {
+      items,
+      choices: items.map(() => "ai"),
+      index: 0,
+    };
+    renderUniformReview();
+    openModalBackdrop(uniformReviewBack);
+  }
+
+  function applyUniformReviewChoices(){
+    const { items, choices } = uniformReviewState;
+    if (!items.length) {
+      closeUniformReview();
+      return;
+    }
+
+    let appliedCount = 0;
+    let firstChangedId = null;
+
+    items.forEach((item, idx) => {
+      if (choices[idx] !== "ai") return;
+      const note = notes.find(n => n.id === item.id);
+      if (!note) return;
+      const nextHtml = trimHtml(item.suggestion);
+      if (!nextHtml) return;
+      if (note.html !== nextHtml) {
+        note.originalHtml = item.original;
+        note.html = nextHtml;
+        uiState[note.id] = { nums:getClozeNumbers(nextHtml), idx:0, hidden:true };
+        appliedCount += 1;
+        if (!firstChangedId) firstChangedId = note.id;
+      }
+    });
+
+    if (firstChangedId) scrollTargetId = firstChangedId;
+    closeUniformReview();
+    clearSelectionMode();
+    save();
+    renderList();
+    toast(appliedCount ? `Applied AI to ${appliedCount} card${appliedCount === 1 ? "" : "s"}` : "Kept original cards");
+  }
+
+  async function requestUniformCards(){
+    if (uniformAiInFlight) return;
+    const selectedNotes = getSelectedNotes();
+    if (selectedNotes.length < 2) return;
+
+    uniformAiInFlight = true;
+    updateSelectionBar();
+    try {
+      const res = await fetch("/make_uniform_cards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cards: selectedNotes.map(note => note.html) }),
+      });
+      if (!res.ok) throw new Error(`Server responded with ${res.status}`);
+      const data = await res.json();
+      const rewritten = Array.isArray(data?.cards) ? data.cards.filter(Boolean) : [];
+      if (rewritten.length !== selectedNotes.length) throw new Error("Unexpected response length");
+      openUniformReview(selectedNotes.map((note, idx) => ({
+        id: note.id,
+        original: note.html,
+        suggestion: rewritten[idx],
+      })));
+    } catch (err) {
+      console.error("Uniform card request failed", err);
+      alert("Could not make the selected cards uniform. Please try again.");
+    } finally {
+      uniformAiInFlight = false;
+      updateSelectionBar();
+    }
+  }
 
   function scrollCardIntoView(id){
     if (!id) return;
@@ -586,8 +907,9 @@
     const nums = getClozeNumbers(n.html);
     if (!uiState[n.id]) uiState[n.id] = { nums, idx:0, hidden:true };
     else uiState[n.id].nums = nums;
+    const isSelected = multiSelectMode && selectedCardIds.has(n.id);
     return `
-      <article class="card" id="card-${n.id}" data-id="${n.id}">
+      <article class="card${isSelected ? " selectedForAi" : ""}" id="card-${n.id}" data-id="${n.id}" aria-selected="${isSelected ? "true" : "false"}">
         <div class="statusBar ${statusClass(n.status)}">
           <div class="statusTitle">${statusLabel(n.status)}</div>
           <div class="clozeTop ${nums.length? "" : "hidden"}">
@@ -608,6 +930,7 @@
     `;
   }
   function renderList(){
+    syncSelectedCardsWithNotes();
     const cur = filtered();
     lastRendered = cur.map(n=>n.id);
     el("#countLabel").textContent = String(cur.length);
@@ -635,6 +958,7 @@
     cardsEl.innerHTML = cur.map(noteToCardHtml).join("");
     // Wire using the current note object to avoid an O(n²) notes.find() pass on large lists.
     cur.forEach(wireCard);
+    updateSelectionBar();
     updateToggleTagsBtn();
     if (scrollTargetId) {
       const targetId = scrollTargetId;
@@ -646,6 +970,9 @@
     const statusBar = cardElement.querySelector('.statusBar');
     statusBar.className = `statusBar ${statusClass(note.status)}`;
     cardElement.querySelector('.statusTitle').textContent = statusLabel(note.status);
+    const isSelected = multiSelectMode && selectedCardIds.has(note.id);
+    cardElement.classList.toggle("selectedForAi", isSelected);
+    cardElement.setAttribute("aria-selected", isSelected ? "true" : "false");
 
     if (view !== "all" && view !== note.status) {
       cardElement.classList.add("hidden");
@@ -663,6 +990,19 @@
     const htmlBox = root.querySelector(".notehtml");
     const indicator = root.querySelector('[data-role="clozeIndicator"]');
     const nav = root.querySelector('.clozeTop');
+    const LONG_PRESS_MS = 500;
+    const MOVE_CANCEL_PX = 12;
+    let longPressTimer = null;
+    let longPressTriggered = false;
+    let longPressStartX = 0;
+    let longPressStartY = 0;
+
+    const clearLongPress = () => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    };
 
     function update(){
       const st = uiState[id];
@@ -678,14 +1018,62 @@
     if (!uiState[id]) uiState[id] = { nums:getClozeNumbers(note.html), idx:0, hidden:true };
     update();
 
+    root.addEventListener("pointerdown", e => {
+      if (multiSelectMode || e.pointerType === "mouse") return;
+      const target = getEventElementTarget(e);
+      if (!target || isInteractiveTarget(target) || target.closest(".clozeTop")) return;
+      longPressTriggered = false;
+      longPressStartX = e.clientX;
+      longPressStartY = e.clientY;
+      clearLongPress();
+      longPressTimer = window.setTimeout(() => {
+        longPressTriggered = true;
+        clearTextSelection();
+        enterSelectionMode(id);
+        setSuppressedCardClick(id);
+      }, LONG_PRESS_MS);
+    });
+
+    root.addEventListener("pointermove", e => {
+      if (!longPressTimer) return;
+      if (Math.abs(e.clientX - longPressStartX) > MOVE_CANCEL_PX || Math.abs(e.clientY - longPressStartY) > MOVE_CANCEL_PX) {
+        clearLongPress();
+      }
+    });
+
+    ["pointerup", "pointercancel", "pointerleave"].forEach(evt => {
+      root.addEventListener(evt, e => {
+        if (longPressTriggered && e?.cancelable) e.preventDefault();
+        clearLongPress();
+        if (evt !== "pointerleave") longPressTriggered = false;
+      });
+    });
+
+    root.addEventListener("contextmenu", e => {
+      const target = getEventElementTarget(e);
+      if (!target || isInteractiveTarget(target)) return;
+      e.preventDefault();
+    });
+
     root.addEventListener("click", e=>{
       setLastInteracted(id);
+      if (consumeSuppressedCardClick(id)) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
       if (e.target.closest(".row,.btn,.clozeTop")) return;
+      if (multiSelectMode) {
+        e.preventDefault();
+        toggleSelectedCard(id);
+        return;
+      }
       uiState[id].hidden = !uiState[id].hidden; update();
     });
 
     htmlBox.addEventListener("dblclick", (e) => {
       e.preventDefault(); e.stopPropagation();
+      if (multiSelectMode) return;
       setLastInteracted(id);
       openEditor(note.id, update);
     });
@@ -696,7 +1084,7 @@
     if (nextBtn) nextBtn.addEventListener("click", (e)=>{ e.stopPropagation(); setLastInteracted(id); const st=uiState[id], n=st.nums.length; if(!n)return; st.idx=(st.idx+1)%n; st.hidden=true; update(); });
 
     get("copy").addEventListener("click", (e) => { e.stopPropagation(); setLastInteracted(id); navigator.clipboard.writeText(note.html).then(()=> toast("Copied")); });
-    get("edit").addEventListener("click", (e) => { e.stopPropagation(); setLastInteracted(id); openEditor(note.id, update); });
+    get("edit").addEventListener("click", (e) => { e.stopPropagation(); if (multiSelectMode) clearSelectionMode(); setLastInteracted(id); openEditor(note.id, update); });
 
     get("save").addEventListener("click", (e) => {
       e.stopPropagation();
@@ -786,6 +1174,30 @@
       });
     });
   }
+
+  selectionCancelBtn?.addEventListener("click", clearSelectionMode);
+  selectionUseAiBtn?.addEventListener("click", requestUniformCards);
+  uniformReviewClose?.addEventListener("click", closeUniformReview);
+  uniformReviewPrev?.addEventListener("click", () => {
+    if (uniformReviewState.index > 0) {
+      uniformReviewState.index -= 1;
+      renderUniformReview();
+    }
+  });
+  uniformReviewNext?.addEventListener("click", () => {
+    if (uniformReviewState.index < uniformReviewState.items.length - 1) {
+      uniformReviewState.index += 1;
+      renderUniformReview();
+    }
+  });
+  uniformReviewUseAi?.addEventListener("click", () => setUniformReviewChoice("ai"));
+  uniformReviewKeepOriginal?.addEventListener("click", () => setUniformReviewChoice("original"));
+  uniformReviewUseAndNext?.addEventListener("click", () => setUniformReviewChoice("ai", { advance: true }));
+  uniformReviewKeepAndNext?.addEventListener("click", () => setUniformReviewChoice("original", { advance: true }));
+  uniformReviewApply?.addEventListener("click", applyUniformReviewChoices);
+  uniformReviewBack?.addEventListener("click", (e) => {
+    if (e.target === uniformReviewBack) closeUniformReview();
+  }, { capture: true });
 
   function openEditor(id, onSaved, opts = {}){
     const { onClose } = opts;
@@ -1252,9 +1664,7 @@
       showBriefOverlay({ sections, actions });
     };
 
-    const formatCardForOverlay = (card) => {
-      return (card || "").replace(/<br\s*\/?\>/gi, "\n");
-    };
+    const formatCardForOverlay = (card) => formatCardTextForDisplay(card);
 
     const reviewSplitSuggestion = () => {
       const formatted = Array.isArray(lastSplitCards)
@@ -2009,7 +2419,7 @@
 
   // --- Solo Actions ---
 
-  el("#soloBtn").addEventListener("click", ()=> openSolo(0));
+  el("#soloBtn").addEventListener("click", ()=> { if (multiSelectMode) clearSelectionMode(); openSolo(0); });
   el("#soloClose").addEventListener("click", closeSolo);
   el("#soloPrev").addEventListener("click", ()=> { if (soloIndex>0){ soloIndex--; soloState.idx=0; soloState.hidden=true; drawSolo(true); } });
   el("#soloNext").addEventListener("click", ()=> { const m=filtered().length-1; if (soloIndex<m){ soloIndex++; soloState.idx=0; soloState.hidden=true; drawSolo(true); } });
