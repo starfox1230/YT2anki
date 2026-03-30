@@ -5,6 +5,9 @@
     const generateBtn = document.getElementById('generateBtn');
     const viewPastSessionsBtn = document.getElementById('viewPastSessionsBtn');
     const generationStatus = document.getElementById('generationStatus');
+    const togglePromptBtn = document.getElementById('togglePromptBtn');
+    const promptEditorWrap = document.getElementById('promptEditorWrap');
+    const promptOverrideInput = document.getElementById('promptOverrideInput');
     const mainSessionsModal = document.getElementById('main-sessions-modal');
     const sessionsList = document.getElementById('sessions-list');
     const sessionsEmptyState = document.getElementById('sessions-empty-state');
@@ -92,6 +95,8 @@
     function setGeneratingState(isGenerating, message = '') {
         generateBtn.disabled = isGenerating;
         youtubeUrlInput.disabled = isGenerating;
+        if (togglePromptBtn) togglePromptBtn.disabled = isGenerating;
+        if (promptOverrideInput) promptOverrideInput.disabled = isGenerating;
         if (isGenerating) {
             clearGenerationTimer();
             generationTimerMessage = message;
@@ -104,6 +109,26 @@
             clearGenerationTimer();
             generationStatus.textContent = '';
             generationStatus.className = 'status-line';
+        }
+    }
+
+    function setPromptEditorVisibility(isVisible) {
+        promptEditorWrap.classList.toggle('hidden', !isVisible);
+        togglePromptBtn.textContent = isVisible ? 'Hide Prompt' : 'View Prompt';
+        togglePromptBtn.setAttribute('aria-expanded', String(isVisible));
+    }
+
+    async function initializePromptEditor() {
+        try {
+            const response = await fetch('/api/youtube-quiz/prompt-template');
+            if (!response.ok) throw new Error('Unable to load prompt template.');
+            const payload = await response.json();
+            if (payload && typeof payload.promptTemplate === 'string') {
+                promptOverrideInput.value = payload.promptTemplate;
+            }
+        } catch (error) {
+            console.error('Failed to load default prompt template:', error);
+            showStatus('Could not load default prompt template. You can still type one manually.', 'error');
         }
     }
 
@@ -600,7 +625,10 @@
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ youtubeUrl })
+                body: JSON.stringify({
+                    youtubeUrl,
+                    promptOverride: promptOverrideInput.value.trim()
+                })
             });
 
             let payload;
@@ -732,6 +760,10 @@
     });
 
     generateBtn.addEventListener('click', generateQuizFromYouTube);
+    togglePromptBtn.addEventListener('click', () => {
+        const shouldShow = promptEditorWrap.classList.contains('hidden');
+        setPromptEditorVisibility(shouldShow);
+    });
     youtubeUrlInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
             event.preventDefault();
@@ -759,6 +791,8 @@
 
     loadUserSettings();
     revealChoicesToggleEl.checked = userSettings.hideChoicesUntilReveal;
+    setPromptEditorVisibility(false);
+    initializePromptEditor();
 
     const pendingQuizTitle = sessionStorage.getItem('loadQuizTitle');
     if (pendingQuizTitle) {

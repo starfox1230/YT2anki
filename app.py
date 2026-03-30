@@ -16,6 +16,7 @@ from openai import OpenAI  # Ensure you have the correct version installed
 from youtube_quiz import (
     YouTubeQuizError,
     generate_quiz_from_youtube_url,
+    get_video_generation_prompt_template,
 )
 
 app = Flask(__name__)
@@ -37,17 +38,23 @@ def youtube_quiz_page():
 def youtube_quiz_generate():
     payload = request.get_json(silent=True) or {}
     youtube_url = (payload.get("youtubeUrl") or "").strip()
+    prompt_override = (payload.get("promptOverride") or "").strip() or None
     if not youtube_url:
         return {"error": "Please enter a YouTube URL."}, 400
 
     try:
-        result = generate_quiz_from_youtube_url(youtube_url)
+        result = generate_quiz_from_youtube_url(youtube_url, custom_prompt=prompt_override)
         return result
     except YouTubeQuizError as exc:
         return {"error": exc.message}, exc.status_code
     except Exception as exc:
         logger.exception("Unexpected error while generating YouTube quiz")
         return {"error": "An unexpected error occurred while generating the quiz."}, 500
+
+
+@app.route("/api/youtube-quiz/prompt-template", methods=["GET"])
+def youtube_quiz_prompt_template():
+    return {"promptTemplate": get_video_generation_prompt_template()}
 #end adding for anki helper app
 
 # Set up logging
