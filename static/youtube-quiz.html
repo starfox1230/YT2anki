@@ -175,6 +175,46 @@
             margin-bottom: 20px;
         }
 
+        .prompt-toggle-wrap {
+            text-align: left;
+        }
+
+        .prompt-toggle-button {
+            padding: 8px 0;
+            background: none;
+            border: none;
+            color: var(--bright-blue);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.9em;
+            cursor: pointer;
+            text-decoration: underline;
+            text-underline-offset: 4px;
+        }
+
+        .prompt-toggle-button:hover:not(:disabled) {
+            color: #d6dbff;
+        }
+
+        .prompt-editor-wrap {
+            margin-top: 10px;
+        }
+
+        .prompt-editor-wrap.hidden {
+            display: none;
+        }
+
+        #promptOverrideInput {
+            min-height: 180px;
+            resize: vertical;
+        }
+
+        .prompt-helper-text {
+            margin-top: 8px;
+            margin-bottom: 0;
+            font-size: 0.88em;
+            color: #9fa5e8;
+        }
+
         .action-button,
         .secondary-button,
         .nav-button,
@@ -751,6 +791,15 @@
             <div class="button-group">
                 <button id="viewPastSessionsBtn" class="secondary-button" type="button">View Past Sessions</button>
                 <button id="generateBtn" class="action-button" type="button">Generate and View Quiz</button>
+            </div>
+
+            <div class="prompt-toggle-wrap">
+                <button id="togglePromptBtn" class="prompt-toggle-button" type="button" aria-expanded="false" aria-controls="promptEditorWrap">View Prompt</button>
+                <div id="promptEditorWrap" class="prompt-editor-wrap hidden">
+                    <label class="input-label" for="promptOverrideInput">Quiz generation prompt</label>
+                    <textarea id="promptOverrideInput" spellcheck="false"></textarea>
+                    <p class="prompt-helper-text">Edits here are used for the next quiz generation request.</p>
+                </div>
             </div>
         </div>
     </section>

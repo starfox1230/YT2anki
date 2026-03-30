@@ -83,7 +83,7 @@ def extract_youtube_video_id(raw_url_or_id: str) -> str:
     raise YouTubeQuizError("That does not look like a valid YouTube URL.", status_code=400)
 
 
-def _build_video_generation_prompt() -> str:
+def get_video_generation_prompt_template() -> str:
     return (
         "Based solely on the attached YouTube video, including its spoken content and any "
         "clearly inferable instructional context, first create a concise, descriptive title "
@@ -99,6 +99,12 @@ def _build_video_generation_prompt() -> str:
         'Format the output as a single JSON object with exactly two top-level properties: "title" and "questions".\n'
         'Do not include markdown, code fences, or commentary.'
     )
+
+
+def _build_video_generation_prompt(custom_prompt: str | None = None) -> str:
+    if custom_prompt and custom_prompt.strip():
+        return custom_prompt.strip()
+    return get_video_generation_prompt_template()
 
 
 def _extract_json_text(api_response: dict[str, Any]) -> str:
@@ -255,6 +261,7 @@ def _post_gemini_request(request_payload: dict[str, Any]) -> dict[str, Any]:
 
 def call_gemini_for_quiz_from_youtube_url(
     youtube_url: str,
+    custom_prompt: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     request_payload = {
         "systemInstruction": {
@@ -271,7 +278,7 @@ def call_gemini_for_quiz_from_youtube_url(
             {
                 "parts": [
                     {
-                        "text": _build_video_generation_prompt()
+                        "text": _build_video_generation_prompt(custom_prompt)
                     },
                     {
                         "file_data": {
@@ -313,9 +320,15 @@ def build_preview_cost_estimate(usage_metadata: dict[str, Any]) -> dict[str, Any
     }
 
 
-def generate_quiz_from_youtube_url(youtube_url: str) -> dict[str, Any]:
+def generate_quiz_from_youtube_url(
+    youtube_url: str,
+    custom_prompt: str | None = None,
+) -> dict[str, Any]:
     video_id = extract_youtube_video_id(youtube_url)
-    quiz_payload, usage_metadata = call_gemini_for_quiz_from_youtube_url(youtube_url)
+    quiz_payload, usage_metadata = call_gemini_for_quiz_from_youtube_url(
+        youtube_url,
+        custom_prompt=custom_prompt,
+    )
     cost_estimate = build_preview_cost_estimate(usage_metadata)
 
     return {
