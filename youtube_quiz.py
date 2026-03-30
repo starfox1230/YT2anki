@@ -200,14 +200,8 @@ def normalize_quiz_payload(raw_payload: dict[str, Any]) -> dict[str, Any]:
 
     normalized_questions = [
         _normalize_question(question, index)
-        for index, question in enumerate(questions[:30])
+        for index, question in enumerate(questions)
     ]
-
-    if len(normalized_questions) < 30:
-        raise YouTubeQuizError(
-            f"Gemini returned only {len(normalized_questions)} questions instead of 30.",
-            status_code=502,
-        )
 
     return {
         "title": title,
