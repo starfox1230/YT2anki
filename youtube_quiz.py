@@ -96,6 +96,13 @@ def get_video_generation_prompt_template() -> str:
         '2. "options": an array of four distinct answer strings.\n'
         '3. "correctAnswer": the one option that is correct and matches exactly one entry in "options".\n'
         '4. "explanation": a brief, board-style rationale grounded in the video content.\n\n'
+        "Multiple-choice writing best practices (STRICT):\n"
+        "- Keep all four options roughly similar in length and specificity. Avoid a pattern where the correct answer is noticeably longer or more detailed than distractors.\n"
+        "- Make every distractor plausible in the same domain as the correct answer. Avoid joke options or obviously irrelevant choices.\n"
+        "- Avoid absolute cue words unless content truly requires them (for example always or never), because they can make options easy to eliminate.\n"
+        "- Keep grammar parallel across options so the correct answer does not stand out by wording style.\n"
+        "- Avoid giving away the answer through overlap with the question stem.\n"
+        "- Ensure exactly one clearly best answer.\n\n"
         'Format the output as a single JSON object with exactly two top-level properties: "title" and "questions".\n'
         'Do not include markdown, code fences, or commentary.'
     )
