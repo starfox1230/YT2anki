@@ -1365,8 +1365,8 @@
       saveGeneratedFontSize(generatedFontSize);
     };
 
-    fontIncreaseBtn?.addEventListener("click", ()=>{ applyFontSize(editorFontSize + 1); ta.focus(); });
-    fontDecreaseBtn?.addEventListener("click", ()=>{ applyFontSize(editorFontSize - 1); ta.focus(); });
+    fontIncreaseBtn?.addEventListener("click", ()=>{ applyFontSize(editorFontSize + 1); focusEditor(); captureSelectionState(); });
+    fontDecreaseBtn?.addEventListener("click", ()=>{ applyFontSize(editorFontSize - 1); focusEditor(); captureSelectionState(); });
     briefFontIncreaseBtn?.addEventListener("click", () => applyGeneratedFontSize(generatedFontSize + 1));
     briefFontDecreaseBtn?.addEventListener("click", () => applyGeneratedFontSize(generatedFontSize - 1));
     ta.focus({ preventScroll: true });
@@ -1379,15 +1379,102 @@
     let lastInputType = null;
     let lastInputTime = 0;
     const MERGE_WINDOW = 1000;
+    const SELECTION_TOUCH_COOLDOWN = 450;
+    let selectionTouchCooldownUntil = 0;
+    const savedSelection = {
+      start: ta.value.length,
+      end: ta.value.length,
+      direction: "none",
+    };
 
     const resetMergeState = () => {
       lastInputType = null;
       lastInputTime = 0;
     };
 
+    const readLiveSelection = () => {
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      if (typeof start !== "number" || typeof end !== "number") return null;
+      return {
+        start,
+        end,
+        direction: ta.selectionDirection || "none",
+      };
+    };
+
+    const saveSelectionState = (selection, { markTouch = false } = {}) => {
+      if (!selection || typeof selection.start !== "number" || typeof selection.end !== "number") return null;
+      savedSelection.start = selection.start;
+      savedSelection.end = selection.end;
+      savedSelection.direction = selection.direction || "none";
+      if (markTouch) selectionTouchCooldownUntil = Date.now() + SELECTION_TOUCH_COOLDOWN;
+      return { ...savedSelection };
+    };
+
+    const captureSelectionState = (opts = {}) => saveSelectionState(readLiveSelection(), opts);
+
+    const getSavedSelection = () => {
+      if (typeof savedSelection.start !== "number" || typeof savedSelection.end !== "number") return null;
+      return {
+        start: savedSelection.start,
+        end: savedSelection.end,
+        direction: savedSelection.direction || "none",
+      };
+    };
+
+    const focusEditor = () => {
+      if (closingEditor) return;
+      try {
+        ta.focus({ preventScroll: true });
+      } catch {
+        ta.focus();
+      }
+    };
+
+    const setEditorSelection = (start, end = start, direction = "none") => {
+      try {
+        ta.setSelectionRange(start, end, direction);
+        saveSelectionState({ start, end, direction });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    const restoreTrackedSelection = () => {
+      const selection = getSavedSelection();
+      if (!selection) return false;
+      focusEditor();
+      return setEditorSelection(selection.start, selection.end, selection.direction);
+    };
+
+    const getPreferredSelection = () => {
+      const liveSelection = readLiveSelection();
+      const saved = getSavedSelection();
+      if (document.activeElement === ta) return liveSelection || saved;
+      return saved || liveSelection;
+    };
+
+    const getEditorSelection = ({ restoreSelection = false, fallbackToEnd = false } = {}) => {
+      if (restoreSelection) restoreTrackedSelection();
+      const selection = getPreferredSelection();
+      if (selection) return selection;
+      const pos = fallbackToEnd ? ta.value.length : 0;
+      return { start: pos, end: pos, direction: "none" };
+    };
+
+    const hasTrackedTextSelection = () => {
+      const selection = getPreferredSelection();
+      return !!selection && selection.start !== selection.end;
+    };
+
+    const isSelectionTouchCoolingDown = () => Date.now() < selectionTouchCooldownUntil;
+
     syncHtmlToggleUi();
     setEditorFromHtml(prev);
     history[0] = ta.value;
+    setEditorSelection(ta.value.length, ta.value.length);
 
     htmlToggleBtn?.addEventListener("click", ()=>{
       const htmlValue = getEditorHtmlValue();
@@ -1397,7 +1484,8 @@
       recordChange(ta.value);
       rebuildPlusMinusButtons();
       updateHintButton();
-      ta.focus({ preventScroll: true });
+      focusEditor();
+      captureSelectionState();
     });
 
     const recordChange = (newValue, { merge = false } = {}) => {
@@ -1566,7 +1654,8 @@
       recordChange(ta.value);
       rebuildPlusMinusButtons();
       updateHintButton();
-      ta.focus({ preventScroll: true });
+      focusEditor();
+      captureSelectionState();
     };
 
     const reviewUnambiguousSuggestion = () => {
@@ -1759,6 +1848,7 @@
         ta.value = history[historyIndex];
         rebuildPlusMinusButtons();
         updateHintButton();
+        captureSelectionState();
         resetMergeState();
       }
     }
@@ -1769,6 +1859,7 @@
         ta.value = history[historyIndex];
         rebuildPlusMinusButtons();
         updateHintButton();
+        captureSelectionState();
         resetMergeState();
       }
     }
@@ -1784,8 +1875,8 @@
       if (typeof onClose === "function") onClose();
     };
     area.querySelector("[data-x]").onclick = close;
-    area.querySelector("[data-undo]").onclick = () => { performUndo(); ta.focus(); };
-    area.querySelector("[data-redo]").onclick = () => { performRedo(); ta.focus(); };
+    area.querySelector("[data-undo]").onclick = () => { performUndo(); focusEditor(); captureSelectionState(); };
+    area.querySelector("[data-redo]").onclick = () => { performRedo(); focusEditor(); captureSelectionState(); };
 
     function getNums(text){ return getClozeNumbers(text); }
     function rebuildPlusMinusButtons(){
@@ -1813,32 +1904,32 @@
     }
 
     function addClozeAs(k){
-      const start = ta.selectionStart, end = ta.selectionEnd;
+      const { start, end } = getEditorSelection({ restoreSelection: true, fallbackToEnd: true });
       const txt = ta.value;
 
       if (start === end) {
         const active = findActiveCloze();
         if (active) {
-          if (active.num === k) { ta.focus(); return; }
+          if (active.num === k) { focusEditor(); return; }
           const updated = `{{c${k}::${active.body}${active.hint ? `::${active.hint}` : ""}}}`;
           ta.value = txt.slice(0, active.start) + updated + txt.slice(active.end);
           const pos = Math.min(active.start + updated.length, ta.value.length);
-          ta.setSelectionRange(pos, pos);
+          setEditorSelection(pos, pos);
           recordChange(ta.value);
           rebuildPlusMinusButtons();
           updateHintButton();
-          ta.focus();
+          focusEditor();
           return;
         }
 
         const shell = `{{c${k}::}}`;
         const caret = start + `{{c${k}::`.length;
         ta.value = txt.slice(0, start) + shell + txt.slice(end);
-        ta.setSelectionRange(caret, caret);
+        setEditorSelection(caret, caret);
         recordChange(ta.value);
         rebuildPlusMinusButtons();
         updateHintButton();
-        ta.focus();
+        focusEditor();
         return;
       }
 
@@ -1852,10 +1943,10 @@
       ta.value = txt.slice(0, start) + newCloze + trailingSpace + txt.slice(end);
       recordChange(ta.value);
       const pos = start + newCloze.length;
-      ta.setSelectionRange(pos, pos);
+      setEditorSelection(pos, pos);
       rebuildPlusMinusButtons();
       updateHintButton();
-      ta.focus();
+      focusEditor();
     }
 
     function removeAll(){
@@ -1863,7 +1954,8 @@
       recordChange(ta.value);
       rebuildPlusMinusButtons();
       updateHintButton();
-      ta.focus();
+      focusEditor();
+      captureSelectionState();
     }
 
     function removeCnum(k){
@@ -1880,12 +1972,12 @@
       recordChange(ta.value);
       rebuildPlusMinusButtons();
       updateHintButton();
-      ta.focus();
+      focusEditor();
+      captureSelectionState();
     }
 
-    function findActiveCloze(){
-      const start = ta.selectionStart;
-      const end = ta.selectionEnd;
+    function findActiveCloze({ restoreSelection = false } = {}){
+      const { start, end } = getEditorSelection({ restoreSelection });
       if (typeof start !== "number" || start !== end) return null;
       const re = /{{c(\d+)::([^]*?)(?:::([^]*?))?}}/g;
       let m;
@@ -1918,16 +2010,15 @@
         if (!navigator?.clipboard?.readText) throw new Error("Clipboard API unavailable");
         const text = await navigator.clipboard.readText();
         if (typeof text !== "string" || text.length === 0) return;
-        const start = ta.selectionStart ?? ta.value.length;
-        const end = ta.selectionEnd ?? start;
+        const { start, end } = getEditorSelection({ restoreSelection: true, fallbackToEnd: true });
         const next = ta.value.slice(0, start) + text + ta.value.slice(end);
         ta.value = next;
         const pos = start + text.length;
-        ta.setSelectionRange(pos, pos);
+        setEditorSelection(pos, pos);
         recordChange(next);
         rebuildPlusMinusButtons();
         updateHintButton();
-        ta.focus({ preventScroll: true });
+        focusEditor();
       } catch (err) {
         console.warn("Paste failed", err);
         alert("Clipboard access is blocked. Please paste manually.");
@@ -2124,16 +2215,16 @@
     area.querySelector("[data-removeAll]").onclick = removeAll;
     area.querySelector("[data-paste]").onclick = pasteFromClipboard;
     area.querySelector("[data-addHint]").onclick = ()=>{
-      const active = findActiveCloze();
+      const active = findActiveCloze({ restoreSelection: true });
       if (!active || active.hasHint) return;
       const insertion = active.end - 2;
       const next = ta.value.slice(0, insertion) + "::" + ta.value.slice(insertion);
       ta.value = next;
       const caret = insertion + 2;
-      ta.setSelectionRange(caret, caret);
+      setEditorSelection(caret, caret);
       recordChange(next);
       rebuildPlusMinusButtons();
-      ta.focus({ preventScroll: true });
+      focusEditor();
       updateHintButton();
     };
 
@@ -2151,18 +2242,39 @@
       toast("Saved");
     };
 
+    const preserveSelectionOnControlPress = (e) => {
+      if (closingEditor) return;
+      const target = getEventElementTarget(e);
+      const button = target?.closest?.("button");
+      if (!button || !backdrop.contains(button)) return;
+      if (!button.closest?.("[data-editor-shell], header")) return;
+      const selection = getPreferredSelection();
+      if (selection) {
+        saveSelectionState(selection, { markTouch: e.type === "touchstart" || e.pointerType === "touch" });
+      }
+      if (e.cancelable) e.preventDefault();
+    };
+
+    if (window.PointerEvent) {
+      backdrop.addEventListener("pointerdown", preserveSelectionOnControlPress, { capture: true });
+    } else {
+      backdrop.addEventListener("touchstart", preserveSelectionOnControlPress, { passive: false, capture: true });
+      backdrop.addEventListener("mousedown", preserveSelectionOnControlPress, { capture: true });
+    }
+
     // Aggressive Focus Retention Logic (Keyboard Keep-Alive)
     const trapFocus = (e) => {
       if (closingEditor) return;
       const target = getEventElementTarget(e);
       if (!target || target === ta) return;
       if (isInteractiveTarget(target)) return;
+      if (hasTrackedTextSelection() || isSelectionTouchCoolingDown()) return;
       const tappedEditorChrome = target === backdrop || !!target.closest?.('[data-editor-shell]');
       if (!tappedEditorChrome) return;
       if (e.cancelable) e.preventDefault();
       if (document.activeElement !== ta) {
         requestAnimationFrame(() => {
-          if (!closingEditor) ta.focus({ preventScroll: true });
+          if (!closingEditor && !hasTrackedTextSelection() && !isSelectionTouchCoolingDown()) focusEditor();
         });
       }
     };
@@ -2189,6 +2301,7 @@
       }
       rebuildPlusMinusButtons();
       updateHintButton();
+      captureSelectionState();
     });
 
     ta.addEventListener("keydown", (e)=>{
@@ -2228,16 +2341,16 @@
       else if (!e.altKey && !e.ctrlKey && !e.metaKey && key === 'enter') {
         if (!htmlModeEnabled) return;
         e.preventDefault();
-        const start = ta.selectionStart;
-        const end = ta.selectionEnd;
+        const { start, end } = getEditorSelection({ restoreSelection: true, fallbackToEnd: true });
         const before = ta.value.slice(0, start);
         const after = ta.value.slice(end);
         const insert = "<br>";
         ta.value = before + insert + after;
         const pos = start + insert.length;
-        ta.setSelectionRange(pos, pos);
+        setEditorSelection(pos, pos);
         recordChange(ta.value);
         rebuildPlusMinusButtons();
+        updateHintButton();
       }
       else if (e.ctrlKey || e.metaKey) {
         if (key === 'z' && !e.shiftKey) {
@@ -2253,16 +2366,41 @@
     });
 
     ta.addEventListener("mousedown", resetMergeState);
-    ta.addEventListener("mouseup", resetMergeState);
+    ta.addEventListener("mouseup", () => {
+      resetMergeState();
+      captureSelectionState();
+      updateHintButton();
+    });
     ta.addEventListener("blur", resetMergeState);
-
-    ["keyup","mouseup","select"].forEach(evt => ta.addEventListener(evt, updateHintButton));
+    ta.addEventListener("focus", () => {
+      captureSelectionState();
+      updateHintButton();
+    });
+    ta.addEventListener("select", () => {
+      captureSelectionState();
+      updateHintButton();
+    });
+    ta.addEventListener("keyup", () => {
+      captureSelectionState();
+      updateHintButton();
+    });
+    ta.addEventListener("touchend", () => {
+      window.setTimeout(() => {
+        captureSelectionState({ markTouch: true });
+        updateHintButton();
+      }, 0);
+    });
     updateHintButton();
 
     rebuildPlusMinusButtons();
     
     // Safety backup focus
-    setTimeout(() => { if (!closingEditor) ta.focus({ preventScroll: true }); }, 150);
+    setTimeout(() => {
+      if (!closingEditor) {
+        focusEditor();
+        captureSelectionState();
+      }
+    }, 150);
   }
   // Solo view
 
