@@ -19,7 +19,7 @@
     a{color:var(--accent);text-decoration:none}
     a:hover{text-decoration:underline}
     /* Prevent double-tap zoom on interactive controls */
-    html, body { touch-action: manipulation; -webkit-overflow-scrolling: touch; }
+    html, body { -webkit-overflow-scrolling: touch; }
     button, .btn, .segbtn, a, [role="button"] {
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
@@ -202,6 +202,36 @@
     .modalContent {
       overflow-y: auto;
       overscroll-behavior: contain;
+    }
+    .modalBackdrop[data-modal-kind="editor"].iphoneWebKitEditor{
+      overflow:hidden;
+      touch-action:auto;
+      padding-top:max(15px, env(safe-area-inset-top));
+      padding-bottom:max(12px, env(safe-area-inset-bottom));
+    }
+    .modalBackdrop[data-modal-kind="editor"].iphoneWebKitEditor .modal,
+    .modalBackdrop[data-modal-kind="editor"].iphoneWebKitEditor [data-editor-modal-shell],
+    .modalBackdrop[data-modal-kind="editor"].iphoneWebKitEditor .modalContent,
+    .modalBackdrop[data-modal-kind="editor"].iphoneWebKitEditor [data-editor-modal-content],
+    .modalBackdrop[data-modal-kind="editor"].iphoneWebKitEditor [data-editor-shell],
+    .modalBackdrop[data-modal-kind="editor"].iphoneWebKitEditor .editAreaWrap,
+    .modalBackdrop[data-modal-kind="editor"].iphoneWebKitEditor [data-editor-textarea]{
+      touch-action:auto;
+    }
+    .modalBackdrop[data-modal-kind="editor"].iphoneWebKitEditor .modal{
+      width:min(96vw,760px);
+      max-height:min(calc(var(--editor-viewport-height, 100dvh) - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px), 800px);
+    }
+    .modalBackdrop[data-modal-kind="editor"].iphoneWebKitEditor .modalContent{
+      flex:1 1 auto;
+      min-height:0;
+      overflow-y:auto;
+      -webkit-overflow-scrolling:touch;
+    }
+    .modalBackdrop[data-modal-kind="editor"].iphoneWebKitEditor [data-editor-textarea]{
+      -webkit-user-select:text;
+      user-select:text;
+      -webkit-touch-callout:default;
     }
     .modal header{border:0;background:transparent;flex-shrink:0;padding-bottom:8px}
     .f1{flex:1}
@@ -486,52 +516,66 @@
     try { localStorage.setItem(generatedFontSizeKey, String(clampGeneratedFont(size))); } catch {}
   }
 
-  // --- FIX: Stronger Scroll Lock for Modals ---
-  let savedScrollY = 0;
-  let modalLockDepth = 0;
+  let bodyFixedLockScrollY = 0;
+  let activeBodyLockMode = "none";
+  const modalLockStack = [];
 
-  function openModalBackdrop(div){
-    const alreadyLocked = modalLockDepth > 0;
-    modalLockDepth++;
+  function applyBodyLockMode(nextMode){
+    if (activeBodyLockMode === nextMode) return;
 
-    // Only capture/lock on the first modal. Nested modals must not stomp the scroll anchor.
-    if (!alreadyLocked) {
-      // 1. Record where we are
-      savedScrollY = window.scrollY;
+    if (activeBodyLockMode === "fixed-body") {
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+      window.scrollTo(0, bodyFixedLockScrollY);
+      bodyFixedLockScrollY = 0;
+    } else if (activeBodyLockMode === "overflow-hidden") {
+      document.body.style.overflow = '';
+    }
 
-      // 2. Physically lock the body so it CANNOT scroll.
-      // This prevents the input cursor from misaligning with the view.
+    if (nextMode === "fixed-body") {
+      bodyFixedLockScrollY = window.scrollY;
       document.body.style.position = 'fixed';
-      document.body.style.top = `-${savedScrollY}px`;
+      document.body.style.top = `-${bodyFixedLockScrollY}px`;
       document.body.style.width = '100%';
+      document.body.style.overflow = 'hidden';
+    } else if (nextMode === "overflow-hidden") {
       document.body.style.overflow = 'hidden';
     }
 
-    // 3. Show modal
+    activeBodyLockMode = nextMode;
+  }
+
+  function syncModalBackdropLock(){
+    const nextMode = modalLockStack.some(entry => entry.lockMode === "fixed-body")
+      ? "fixed-body"
+      : modalLockStack.some(entry => entry.lockMode === "overflow-hidden")
+        ? "overflow-hidden"
+        : "none";
+    applyBodyLockMode(nextMode);
+  }
+
+  function openModalBackdrop(div, opts = {}){
+    const lockMode = opts.lockMode || div.dataset.lockMode || "fixed-body";
+    div.dataset.lockMode = lockMode;
+    const existingIndex = modalLockStack.findIndex(entry => entry.element === div);
+    if (existingIndex >= 0) modalLockStack.splice(existingIndex, 1);
+    modalLockStack.push({ element: div, lockMode });
+    syncModalBackdropLock();
+
     div.style.pointerEvents = "auto";
     div.style.display = "flex";
     div.setAttribute("aria-hidden","false");
   }
 
   function closeModalBackdrop(div){
-    // 1. Hide modal
     div.style.pointerEvents = "none";
     div.style.display = "none";
     div.setAttribute("aria-hidden","true");
-
-    modalLockDepth = Math.max(0, modalLockDepth - 1);
-    const shouldUnlock = modalLockDepth === 0;
-
-    if (shouldUnlock) {
-      // 2. Unlock body
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.width = '';
-      document.body.style.overflow = '';
-
-      // 3. Instant jump back to original position
-      window.scrollTo(0, savedScrollY);
-    }
+    const existingIndex = modalLockStack.findIndex(entry => entry.element === div);
+    if (existingIndex >= 0) modalLockStack.splice(existingIndex, 1);
+    syncModalBackdropLock();
   }
 
   try {
@@ -562,6 +606,10 @@
   }
   function isInteractiveTarget(target){
     return !!target?.closest?.('button, .btn, .segbtn, a, input, textarea, select, label, summary, [role="button"], [contenteditable="true"]');
+  }
+  function isIPhoneWebKitBrowser(){
+    const ua = navigator.userAgent || "";
+    return /iPhone/.test(ua) && /AppleWebKit/.test(ua);
   }
   function disableMobileCorrections(field){
     if (!field) return;
@@ -1207,8 +1255,8 @@
     if (typeof note.originalHtml !== "string") note.originalHtml = prev;
     const area = document.createElement("div");
     area.innerHTML = `
-      <div class="modalBackdrop">
-        <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalBackdrop" data-modal-kind="editor">
+        <div class="modal" role="dialog" aria-modal="true" data-editor-modal-shell>
           <header class="row" style="gap:10px;">
             <div class="row f1" style="align-items:center;gap:8px;">
               <span>Edit Card</span>
@@ -1222,10 +1270,10 @@
             </div>
           </header>
           <div class="hr"></div>
-          <div class="modalContent">
+          <div class="modalContent" data-editor-modal-content>
             <div data-editor-shell>
               <div class="editAreaWrap">
-                <textarea class="input" id="editArea" style="width:100%;min-height:260px;font-size:24px;line-height:1.25" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-gramm="false">${escapeHtml(prev)}</textarea>
+                <textarea class="input" id="editArea" data-editor-textarea style="width:100%;min-height:260px;font-size:24px;line-height:1.25" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-gramm="false">${escapeHtml(prev)}</textarea>
               </div>
               <!-- Controls -->
               <div class="row" style="margin-top:10px;flex-wrap:wrap;align-items:center">
@@ -1299,6 +1347,8 @@
     document.body.appendChild(area);
     const backdrop = area.firstElementChild;
     const ta = area.querySelector("#editArea");
+    const usingIPhoneWebKitEditorPath = isIPhoneWebKitBrowser();
+    const visualViewport = window.visualViewport || null;
     disableMobileCorrections(ta);
     const fontLabel = area.querySelector("[data-font-label]");
     const fontIncreaseBtn = area.querySelector("[data-font-inc]");
@@ -1324,6 +1374,11 @@
     const briefFontIncreaseBtn = area.querySelector("[data-brief-font-inc]");
     const briefFontDecreaseBtn = area.querySelector("[data-brief-font-dec]");
     const htmlToggleBtn = area.querySelector("[data-html-toggle]");
+    const updateEditorViewportHeight = () => {
+      if (!usingIPhoneWebKitEditorPath) return;
+      const height = Math.round(visualViewport?.height || window.innerHeight || 0);
+      backdrop.style.setProperty("--editor-viewport-height", `${Math.max(0, height)}px`);
+    };
 
     let htmlModeEnabled = false;
     const toPlainEditorText = (html) => {
@@ -1347,7 +1402,14 @@
     };
     
     // Immediate show & sync focus for mobile keyboard
-    openModalBackdrop(backdrop);
+    if (usingIPhoneWebKitEditorPath) {
+      backdrop.classList.add("iphoneWebKitEditor");
+      updateEditorViewportHeight();
+      visualViewport?.addEventListener("resize", updateEditorViewportHeight);
+      visualViewport?.addEventListener("scroll", updateEditorViewportHeight);
+      window.addEventListener("resize", updateEditorViewportHeight);
+    }
+    openModalBackdrop(backdrop, { lockMode: usingIPhoneWebKitEditorPath ? "overflow-hidden" : "fixed-body" });
     let editorFontSize = loadEditorFontSize();
     const applyFontSize = (size)=>{
       editorFontSize = clampEditorFont(size);
@@ -1470,6 +1532,42 @@
     };
 
     const isSelectionTouchCoolingDown = () => Date.now() < selectionTouchCooldownUntil;
+    const preserveSelectionOnControlPress = (e) => {
+      if (!usingIPhoneWebKitEditorPath || closingEditor) return;
+      const selection = getPreferredSelection();
+      if (selection) {
+        saveSelectionState(selection, { markTouch: e.type === "touchstart" || e.pointerType === "touch" });
+      }
+      if (e.cancelable) e.preventDefault();
+    };
+    const bindEditorPressGuard = (button) => {
+      if (!usingIPhoneWebKitEditorPath || !button || button.dataset.editorPressGuard === "1") return;
+      button.dataset.editorPressGuard = "1";
+      if (window.PointerEvent) {
+        button.addEventListener("pointerdown", preserveSelectionOnControlPress);
+      } else {
+        button.addEventListener("touchstart", preserveSelectionOnControlPress, { passive: false });
+        button.addEventListener("mousedown", preserveSelectionOnControlPress);
+      }
+    };
+    const bindEditorControlGuards = () => {
+      if (!usingIPhoneWebKitEditorPath) return;
+      backdrop.querySelectorAll("header button, [data-editor-shell] button").forEach(bindEditorPressGuard);
+    };
+    const softRefocusEditor = (e) => {
+      if (!usingIPhoneWebKitEditorPath || closingEditor) return;
+      const target = getEventElementTarget(e);
+      if (!target || target === ta) return;
+      if (isInteractiveTarget(target)) return;
+      if (hasTrackedTextSelection() || isSelectionTouchCoolingDown()) return;
+      const tappedEditorChrome = target === backdrop || !!target.closest?.('[data-editor-modal-shell], [data-editor-modal-content], [data-editor-shell], header');
+      if (!tappedEditorChrome) return;
+      requestAnimationFrame(() => {
+        if (!closingEditor && document.activeElement !== ta && !hasTrackedTextSelection() && !isSelectionTouchCoolingDown()) {
+          focusEditor();
+        }
+      });
+    };
 
     syncHtmlToggleUi();
     setEditorFromHtml(prev);
@@ -1622,6 +1720,8 @@
           briefActions.innerHTML = "";
         }
       }
+
+      bindEditorControlGuards();
 
       briefOverlay.classList.remove("hidden");
       editorShell.classList.add("hidden");
@@ -1869,6 +1969,11 @@
 
     const close = ()=>{
       closingEditor = true;
+      if (usingIPhoneWebKitEditorPath) {
+        visualViewport?.removeEventListener("resize", updateEditorViewportHeight);
+        visualViewport?.removeEventListener("scroll", updateEditorViewportHeight);
+        window.removeEventListener("resize", updateEditorViewportHeight);
+      }
       closeModalBackdrop(backdrop);
       area.remove();
       document.removeEventListener('keydown', editorKeydownHandler);
@@ -1901,6 +2006,7 @@
         b.onclick = ()=> addClozeAs(k);
         plusRow.appendChild(b);
       }
+      bindEditorControlGuards();
     }
 
     function addClozeAs(k){
@@ -2242,27 +2348,6 @@
       toast("Saved");
     };
 
-    const preserveSelectionOnControlPress = (e) => {
-      if (closingEditor) return;
-      const target = getEventElementTarget(e);
-      const button = target?.closest?.("button");
-      if (!button || !backdrop.contains(button)) return;
-      if (!button.closest?.("[data-editor-shell], header")) return;
-      const selection = getPreferredSelection();
-      if (selection) {
-        saveSelectionState(selection, { markTouch: e.type === "touchstart" || e.pointerType === "touch" });
-      }
-      if (e.cancelable) e.preventDefault();
-    };
-
-    if (window.PointerEvent) {
-      backdrop.addEventListener("pointerdown", preserveSelectionOnControlPress, { capture: true });
-    } else {
-      backdrop.addEventListener("touchstart", preserveSelectionOnControlPress, { passive: false, capture: true });
-      backdrop.addEventListener("mousedown", preserveSelectionOnControlPress, { capture: true });
-    }
-
-    // Aggressive Focus Retention Logic (Keyboard Keep-Alive)
     const trapFocus = (e) => {
       if (closingEditor) return;
       const target = getEventElementTarget(e);
@@ -2278,8 +2363,12 @@
         });
       }
     };
-    backdrop.addEventListener('touchstart', trapFocus, { passive: false, capture: true });
-    backdrop.addEventListener('mousedown', trapFocus, { capture: true });
+    if (usingIPhoneWebKitEditorPath) {
+      backdrop.addEventListener("click", softRefocusEditor, { capture: true });
+    } else {
+      backdrop.addEventListener('touchstart', trapFocus, { passive: false, capture: true });
+      backdrop.addEventListener('mousedown', trapFocus, { capture: true });
+    }
     ta.addEventListener("input", (e) => {
       if (e.isComposing) return;
       const type = e.inputType || "";
@@ -2393,6 +2482,7 @@
     updateHintButton();
 
     rebuildPlusMinusButtons();
+    bindEditorControlGuards();
     
     // Safety backup focus
     setTimeout(() => {
