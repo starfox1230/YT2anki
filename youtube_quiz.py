@@ -83,7 +83,7 @@ def extract_youtube_video_id(raw_url_or_id: str) -> str:
     raise YouTubeQuizError("That does not look like a valid YouTube URL.", status_code=400)
 
 
-def _build_video_generation_prompt() -> str:
+def get_video_generation_prompt_template() -> str:
     return (
         "Based solely on the attached YouTube video, including its spoken content and any "
         "clearly inferable instructional context, first create a concise, descriptive title "
@@ -96,9 +96,22 @@ def _build_video_generation_prompt() -> str:
         '2. "options": an array of four distinct answer strings.\n'
         '3. "correctAnswer": the one option that is correct and matches exactly one entry in "options".\n'
         '4. "explanation": a brief, board-style rationale grounded in the video content.\n\n'
+        "Multiple-choice writing best practices (STRICT):\n"
+        "- Keep all four options roughly similar in length and specificity. Avoid a pattern where the correct answer is noticeably longer or more detailed than distractors.\n"
+        "- Make every distractor plausible in the same domain as the correct answer. Avoid joke options or obviously irrelevant choices.\n"
+        "- Avoid absolute cue words unless content truly requires them (for example always or never), because they can make options easy to eliminate.\n"
+        "- Keep grammar parallel across options so the correct answer does not stand out by wording style.\n"
+        "- Avoid giving away the answer through overlap with the question stem.\n"
+        "- Ensure exactly one clearly best answer.\n\n"
         'Format the output as a single JSON object with exactly two top-level properties: "title" and "questions".\n'
         'Do not include markdown, code fences, or commentary.'
     )
+
+
+def _build_video_generation_prompt(custom_prompt: str | None = None) -> str:
+    if custom_prompt and custom_prompt.strip():
+        return custom_prompt.strip()
+    return get_video_generation_prompt_template()
 
 
 def _extract_json_text(api_response: dict[str, Any]) -> str:
@@ -194,14 +207,8 @@ def normalize_quiz_payload(raw_payload: dict[str, Any]) -> dict[str, Any]:
 
     normalized_questions = [
         _normalize_question(question, index)
-        for index, question in enumerate(questions[:30])
+        for index, question in enumerate(questions)
     ]
-
-    if len(normalized_questions) < 30:
-        raise YouTubeQuizError(
-            f"Gemini returned only {len(normalized_questions)} questions instead of 30.",
-            status_code=502,
-        )
 
     return {
         "title": title,
@@ -255,6 +262,7 @@ def _post_gemini_request(request_payload: dict[str, Any]) -> dict[str, Any]:
 
 def call_gemini_for_quiz_from_youtube_url(
     youtube_url: str,
+    custom_prompt: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     request_payload = {
         "systemInstruction": {
@@ -271,7 +279,7 @@ def call_gemini_for_quiz_from_youtube_url(
             {
                 "parts": [
                     {
-                        "text": _build_video_generation_prompt()
+                        "text": _build_video_generation_prompt(custom_prompt)
                     },
                     {
                         "file_data": {
@@ -313,9 +321,15 @@ def build_preview_cost_estimate(usage_metadata: dict[str, Any]) -> dict[str, Any
     }
 
 
-def generate_quiz_from_youtube_url(youtube_url: str) -> dict[str, Any]:
+def generate_quiz_from_youtube_url(
+    youtube_url: str,
+    custom_prompt: str | None = None,
+) -> dict[str, Any]:
     video_id = extract_youtube_video_id(youtube_url)
-    quiz_payload, usage_metadata = call_gemini_for_quiz_from_youtube_url(youtube_url)
+    quiz_payload, usage_metadata = call_gemini_for_quiz_from_youtube_url(
+        youtube_url,
+        custom_prompt=custom_prompt,
+    )
     cost_estimate = build_preview_cost_estimate(usage_metadata)
 
     return {
