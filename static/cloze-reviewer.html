@@ -1605,6 +1605,8 @@
     let lastBriefOriginal = preAIVersion;
     let lastBriefSuggestion = "";
     let lastEvenMoreSuggestion = "";
+    let lastContrastOriginal = preAIVersion;
+    let lastContrastSuggestion = "";
     let lastUnambiguousOriginal = preAIVersion;
     let lastUnambiguousSuggestion = "";
     let lastSplitOriginal = preAIVersion;
@@ -1855,6 +1857,33 @@
 
     const formatCardForOverlay = (card) => formatCardTextForDisplay(card);
 
+    const reviewContrastingSuggestion = () => {
+      showBriefOverlay({
+        sections: [
+          null,
+          { label: "Contrasting card", text: formatCardForOverlay(lastContrastSuggestion) },
+          { label: "Original", text: formatCardForOverlay(lastContrastOriginal) },
+        ],
+        actions: [
+          {
+            label: "Add Contrasting Card",
+            className: "btn good",
+            onClick: () => {
+              insertContrastingCard(lastContrastSuggestion);
+              hideBriefOverlay();
+            },
+          },
+          {
+            label: "Keep Original",
+            className: "btn",
+            onClick: () => {
+              hideBriefOverlay();
+            },
+          },
+        ],
+      });
+    };
+
     const reviewSplitSuggestion = () => {
       const formatted = Array.isArray(lastSplitCards)
         ? lastSplitCards.map((c, i) => `${i + 1}) ${formatCardForOverlay(c)}`).join("\n\n")
@@ -1940,6 +1969,40 @@
       hideOriginalToggle();
       close();
       toast(`Added ${newNotes.length} card${newNotes.length > 1 ? "s" : ""}`);
+    };
+
+    const insertContrastingCard = (html) => {
+      const contrastingHtml = normalizeClozeBraces((html || "").trim());
+      const currentHtml = normalizeClozeBraces(getEditorHtmlValue());
+      if (!contrastingHtml) return;
+      if (!currentHtml.trim()) {
+        alert("Card is empty.");
+        return;
+      }
+
+      const idx = notes.findIndex((n) => n.id === note.id);
+      if (idx === -1) return;
+
+      note.html = currentHtml;
+
+      const baseCreated = Number.isFinite(note.createdAt) ? note.createdAt : Date.now();
+      const tagCopy = Array.isArray(note.tags) ? [...note.tags] : [];
+      const newNote = {
+        id: uid(),
+        html: contrastingHtml,
+        originalHtml: contrastingHtml,
+        tags: tagCopy,
+        status: "new",
+        fav: false,
+        createdAt: baseCreated + 0.001,
+      };
+
+      notes.splice(idx + 1, 0, newNote);
+      scrollTargetId = newNote.id;
+      save();
+      renderList();
+      close();
+      toast("Added contrasting card");
     };
 
     function performUndo() {
@@ -2277,7 +2340,38 @@
       }
     }
 
-    async function openAiMenu(){
+    async function requestContrastingCard(){
+      if (!aiBtn || aiInFlight) return;
+      const current = ta.value.trim();
+      if (!current) { alert("Card is empty."); return; }
+
+      lastContrastOriginal = current;
+      lastContrastSuggestion = "";
+      setAiLoading(true, "Creating Contrast...");
+      try {
+        const res = await fetch("/make_contrasting_card", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: current })
+        });
+        if (!res.ok) throw new Error(`Server responded with ${res.status}`);
+        const data = await res.json();
+        const suggestion = (data?.suggestion || "").trim();
+        if (!suggestion) throw new Error("Empty suggestion");
+        if (normalizeClozeBraces(suggestion) === normalizeClozeBraces(current)) {
+          throw new Error("Suggestion matched original");
+        }
+        lastContrastSuggestion = suggestion;
+        reviewContrastingSuggestion();
+      } catch (err) {
+        console.error("Contrasting card request failed", err);
+        alert("Could not generate a contrasting card. Please try again.");
+      } finally {
+        setAiLoading(false);
+      }
+    }
+
+    async function openAiMenuLegacy(){
       if (aiInFlight) return;
       const action = await choiceModal({
         title: "Use AI",
@@ -2306,6 +2400,52 @@
       if (action === "split") {
         const howMany = await choiceModal({
           title: "Split into how many cards?",
+          message: "Choose between 2 and 4 cards.",
+          options: [
+            { label: "2 cards", value: 2 },
+            { label: "3 cards", value: 3 },
+            { label: "4 cards", value: 4 },
+          ],
+          cancelLabel: "Cancel",
+        });
+        if (howMany) await requestSplitCard(howMany);
+      }
+    }
+
+    async function openAiMenu(){
+      if (aiInFlight) return;
+      const action = await choiceModal({
+        title: "Use AI",
+        message: "Choose what you want to do with this card.",
+        options: [
+          { label: "Make into Sentence", value: "sentence" },
+          { label: "Make Unambiguous", value: "unambiguous" },
+          { label: "Make Brief", value: "brief" },
+          { label: "Add Contrasting Card", value: "contrast" },
+          { label: "Divide into Multiple Cards", value: "split" },
+        ],
+        cancelLabel: "Cancel",
+      });
+      if (!action) return;
+      if (action === "sentence") {
+        requestSentenceCard();
+        return;
+      }
+      if (action === "unambiguous") {
+        requestUnambiguousCard();
+        return;
+      }
+      if (action === "brief") {
+        requestBrieferCard();
+        return;
+      }
+      if (action === "contrast") {
+        requestContrastingCard();
+        return;
+      }
+      if (action === "split") {
+        const howMany = await choiceModal({
+          title: "Divide into how many cards?",
           message: "Choose between 2 and 4 cards.",
           options: [
             { label: "2 cards", value: 2 },

@@ -473,6 +473,17 @@ def fix_cloze_formatting(card):
     card = re.sub(r"\}{3,}", "}}", card)
     return card
 
+
+def normalize_card_text_for_comparison(card):
+    """Normalize card text enough to detect duplicate AI output."""
+    if not isinstance(card, str):
+        return ""
+
+    normalized = fix_cloze_formatting(card)
+    normalized = re.sub(r"<br\s*/?>", "<br>", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized.lower()
+
 def get_anki_cards_for_chunk(transcript_chunk, user_preferences="", model="gpt-4o"):
     """
     Calls the OpenAI API with a transcript chunk and returns a list of Anki cloze deletion flashcards.
@@ -762,6 +773,72 @@ Output:
 
     suggestion = (response.choices[0].message.content or "").strip()
     return fix_cloze_formatting(suggestion)
+
+
+def make_contrasting_card(card_text, model="gpt-4.1"):
+    """Use OpenAI to create a companion card that tests the contrasting side of a fact."""
+    if not card_text or not card_text.strip():
+        raise ValueError("Card text is empty.")
+
+    prompt = f"""
+You are creating ONE additional Anki cloze-deletion card that pairs with an existing card by testing the contrasting, opposite, or complementary side of the same fact.
+
+Goal:
+- Return a single companion card that helps the learner study the other side of the same idea.
+- The new card should feel like a matched pair with the original card.
+
+Rules:
+1. Keep the same topic as the original card, but test the contrasting or counterpart fact instead of restating the same fact.
+2. Preserve the original card's wording pattern, sentence structure, and overall format whenever possible.
+   - If the original card is a sentence, keep the companion as a sentence.
+   - If the original card uses question/answer format with <br><br>, keep that format if it still fits.
+3. Mirror the original cloze pattern when natural.
+   - If the original card has one cloze, prefer one cloze.
+   - If the original card has multiple parallel clozes, preserve that pattern when it still makes sense.
+   - If matching the exact cloze count would make the new card awkward or unclear, prioritize clarity.
+4. Keep the new card self-contained and unambiguous on its own.
+5. Do not invent unsupported facts. Use the clearest, most standard contrasting or counterpart fact that naturally matches the original.
+6. Keep valid cloze HTML and ensure every cloze uses exactly two curly braces on both sides (for example, {{{{c1::answer}}}}).
+7. In the new card, start cloze numbering at c1 unless more than one cloze is genuinely needed inside that one card.
+8. Output ONLY the new card text. No commentary, bullets, markdown, quotes, or JSON.
+
+Example 1:
+Original:
+Turning the knob on the {{c1::right}} of the thermostat will {{c2::increase}} the temperature.
+
+Good companion:
+Turning the knob on the {{c1::left}} of the thermostat will {{c2::decrease}} the temperature.
+
+Example 2:
+Original:
+Which heart chamber pumps blood into the systemic circulation?<br><br>{{c1::Left ventricle}}
+
+Good companion:
+Which heart chamber pumps blood into the pulmonary circulation?<br><br>{{c1::Right ventricle}}
+
+Original card:
+{card_text.strip()}
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.4,
+            max_tokens=900,
+            timeout=60,
+        )
+    except Exception as exc:
+        logger.error("OpenAI API error while making contrasting card: %s", exc)
+        raise
+
+    suggestion = fix_cloze_formatting((response.choices[0].message.content or "").strip())
+    if normalize_card_text_for_comparison(suggestion) == normalize_card_text_for_comparison(card_text):
+        raise ValueError("Could not generate a distinct contrasting card.")
+    return suggestion
 
 
 def split_card_into_multiple(card_text, num_cards=2, model="gpt-4.1"):
@@ -2499,6 +2576,27 @@ def make_sentence():
     except Exception as exc:
         logger.error("Failed to convert card to sentence: %s", exc)
         return {"error": "Failed to convert card."}, 500
+
+
+@app.route("/make_contrasting_card", methods=["POST"])
+def make_contrasting_card_route():
+    data = request.get_json() or {}
+    text = (data.get("text") or "").strip()
+    model = (data.get("model") or "gpt-4.1").strip() or "gpt-4.1"
+
+    if not text:
+        return {"error": "Card text is required."}, 400
+
+    try:
+        suggestion = make_contrasting_card(text, model=model)
+        if not suggestion:
+            raise ValueError("Empty response from model")
+        return {"suggestion": suggestion}
+    except ValueError as err:
+        return {"error": str(err)}, 400
+    except Exception as exc:
+        logger.error("Failed to generate contrasting card: %s", exc)
+        return {"error": "Failed to generate a contrasting card."}, 500
 
 
 @app.route("/split_card", methods=["POST"])
