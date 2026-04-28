@@ -914,16 +914,19 @@ def make_cards_uniform(cards, model="gpt-4.1"):
 
     prompt = f"""
 You are rewriting a small set of related Anki cloze-deletion cards so they become highly uniform and parallel.
+The first card is the reference/original card. Treat its format as the target pattern wherever possible.
 
 Goal:
 - Return exactly {len(cleaned_cards)} rewritten cards, in the same order as the originals.
-- Each rewritten card should still test its own original fact, but the cards should now share very similar wording and structure.
+- Leave card 1 as close to unchanged as possible; it defines the rough format, sentence/question style, HTML rhythm, and cloze pattern to follow.
+- Rewrite card 2 and any later cards so each still tests its own original fact while roughly following card 1's format wherever that works.
+- If card 1's exact format does not work for a later card, adapt only as much as needed for clarity and correctness.
 - The cards should differ mainly in the information being recalled inside or immediately around the cloze deletion(s).
 
 Rules:
 - Preserve the factual meaning of each original card. Do not invent facts.
 - Keep each card self-contained, clear, and unambiguous on its own.
-- Use the same sentence template or question template across the set whenever possible.
+- Use card 1's sentence template or question template across the set whenever possible.
 - Minimize incidental clues that make one card easier than the others; keep non-answer wording as parallel as possible.
 - Preserve each card's existing cloze numbering whenever reasonably possible so the note still behaves the same.
 - Keep the answer text inside each cloze as close to the original as possible unless a tiny grammatical adjustment is necessary.

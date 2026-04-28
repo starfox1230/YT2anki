@@ -361,7 +361,7 @@
   <div class="selectionBarContent">
     <div class="selectionSummary">
       <strong><span id="selectionCount">0</span> card<span id="selectionCountSuffix">s</span> selected</strong>
-      <div class="selectionHint" id="selectionHint">Select at least 2 cards to use AI.</div>
+      <div class="selectionHint" id="selectionHint">Select the reference card first, then the card to rewrite.</div>
     </div>
     <div class="selectionActions">
       <button class="btn" id="selectionCancelBtn" type="button">Cancel</button>
@@ -758,9 +758,9 @@
     if (selectionCountEl) selectionCountEl.textContent = String(count);
     if (selectionCountSuffixEl) selectionCountSuffixEl.textContent = count === 1 ? "" : "s";
     if (selectionHintEl) {
-      if (!count) selectionHintEl.textContent = "Select at least 2 cards to use AI.";
-      else if (needed > 0) selectionHintEl.textContent = `Select ${needed} more card${needed === 1 ? "" : "s"} to enable AI.`;
-      else selectionHintEl.textContent = "Ready to rewrite these cards into a more uniform set.";
+      if (!count) selectionHintEl.textContent = "Select the reference card first, then the card to rewrite.";
+      else if (needed > 0) selectionHintEl.textContent = "Now select the card that should follow the first card's format.";
+      else selectionHintEl.textContent = "Ready: the first selected card is the format reference; the later selected card(s) will follow it.";
     }
     if (selectionUseAiBtn) {
       selectionUseAiBtn.disabled = uniformAiInFlight || count < 2;
@@ -796,7 +796,9 @@
 
   function getSelectedNotes(){
     if (!selectedCardIds.size) return [];
-    return notes.filter(n => selectedCardIds.has(n.id));
+    return Array.from(selectedCardIds)
+      .map(id => notes.find(n => n.id === id))
+      .filter(Boolean);
   }
 
   function closeUniformReview(){
