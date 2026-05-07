@@ -73,6 +73,8 @@
     .btn.blue { background:#4a90e2; border-color:transparent; color:#0b0d12 }
     .btn.red { background:#e74c3c; border-color:transparent; color:#0b0d12 }
     .btn.green { background:#2ecc71; border-color:transparent; color:#0b0d12 }
+    .btn.pink { background:#ff7ab6; border-color:transparent; color:#0b0d12 }
+    .btn.pinkAlt { background:#f05aa1; border-color:transparent; color:#0b0d12 }
     .seg{display:flex;gap:6px;background:var(--panel);padding:6px;border-radius:10px;border:1px solid #293042}
     .seg .segbtn{
       background:transparent;border:2px solid transparent;color:var(--muted);padding:8px 12px;border-radius:8px;cursor:pointer
@@ -319,6 +321,8 @@
     <div class="searchRow hidden" data-advanced="true">
       <input class="input" id="search" placeholder="Search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-gramm="false">
       <button class="btn" id="toggleTagsBtn" data-advanced="true" title="Show/Hide tags">Show Tags</button>
+      <button class="btn pink" id="storeBatchBtn" data-advanced="true" title="Store the current cards and clear the screen">Store Batch</button>
+      <button class="btn pinkAlt" id="loadBatchBtn" data-advanced="true" title="Load a previously stored batch">Load Stored Batch</button>
     </div>
     <div class="row">
       <button class="btn" id="seeMoreBtn" type="button">See More</button>
@@ -440,6 +444,7 @@
   const el = sel => document.querySelector(sel);
   const els = sel => Array.from(document.querySelectorAll(sel));
   const storeKey = "cloze-reviewer-v1";
+  const batchStoreKey = "cloze-reviewer-batches-v1";
   const tagsKey = "cloze-reviewer-tags-visible";
   const fontSizeKey = "cloze-reviewer-editor-font-size";
   const generatedFontSizeKey = "cloze-reviewer-generated-font-size";
@@ -596,6 +601,98 @@
 
   function uid(){ return "n_" + Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
   function save(){ localStorage.setItem(storeKey, JSON.stringify(notes)); }
+  function deepCloneJson(value){ return JSON.parse(JSON.stringify(value)); }
+  function loadBatches(){
+    try {
+      const parsed = JSON.parse(localStorage.getItem(batchStoreKey) || "[]");
+      return Array.isArray(parsed) ? parsed.filter(b => b && Array.isArray(b.notes)) : [];
+    } catch {
+      return [];
+    }
+  }
+  function saveBatches(batches){ localStorage.setItem(batchStoreKey, JSON.stringify(batches)); }
+  function lastTagSegment(tag){
+    const parts = String(tag || "").split("::").map(p => p.trim()).filter(Boolean);
+    return (parts[parts.length - 1] || String(tag || "").trim()).replace(/^#+/, "");
+  }
+  function formatBatchDate(d){
+    const pad = n => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  function makeBatchName(batchNotes, createdAt = Date.now()){
+    const labels = [];
+    const seen = new Set();
+    batchNotes.forEach(n => {
+      (Array.isArray(n.tags) ? n.tags : []).forEach(tag => {
+        const label = lastTagSegment(tag);
+        const key = label.toLowerCase();
+        if (label && !seen.has(key)) {
+          seen.add(key);
+          labels.push(label);
+        }
+      });
+    });
+    const tagSummary = labels.length ? labels.slice(0, 4).join(", ") + (labels.length > 4 ? ` +${labels.length - 4}` : "") : "Untagged";
+    return `${formatBatchDate(new Date(createdAt))} - ${tagSummary}`;
+  }
+  function storeCurrentBatch({ quiet = false } = {}){
+    if (!notes.length) {
+      if (!quiet) toast("No cards to store.");
+      return null;
+    }
+    const createdAt = Date.now();
+    const batchNotes = deepCloneJson(combinedJson());
+    const batch = {
+      id: "b_" + Math.random().toString(36).slice(2,10) + createdAt.toString(36),
+      name: makeBatchName(batchNotes, createdAt),
+      createdAt,
+      notes: batchNotes
+    };
+    const batches = loadBatches();
+    batches.unshift(batch);
+    saveBatches(batches);
+    notes = [];
+    Object.keys(uiState).forEach(id => delete uiState[id]);
+    selectedCardIds.clear();
+    lastInteractedCardId = null;
+    save();
+    renderList();
+    if (!quiet) toast(`Stored batch: ${batch.name}`);
+    return batch;
+  }
+  async function loadStoredBatch(){
+    const batches = loadBatches().sort((a,b) => (Number(b.createdAt)||0) - (Number(a.createdAt)||0));
+    if (!batches.length) { alert("No stored batches yet."); return; }
+    if (notes.length) {
+      const ok = await confirmModal("To load a stored batch, the current cards must be stored first. Store the current batch now?");
+      if (!ok) return;
+      const stored = storeCurrentBatch({ quiet: true });
+      if (!stored) return;
+    }
+    const options = batches.map(batch => ({
+      label: `${batch.name || makeBatchName(batch.notes, batch.createdAt)} (${batch.notes.length})`,
+      value: batch.id
+    }));
+    const batchId = await choiceModal({
+      title: "Load Stored Batch",
+      message: "Most recent batches are listed first.",
+      options,
+      cancelLabel: "Cancel"
+    });
+    if (!batchId) return;
+    const freshBatches = loadBatches();
+    const batch = freshBatches.find(b => b.id === batchId);
+    if (!batch) { alert("That stored batch could not be found."); return; }
+    notes = normalizeInput(deepCloneJson(batch.notes));
+    Object.keys(uiState).forEach(id => delete uiState[id]);
+    selectedCardIds.clear();
+    lastInteractedCardId = null;
+    view = "all";
+    els('.seg[aria-label="Views"] .segbtn').forEach(x=>x.classList.toggle("active", x.dataset.view === "all"));
+    save();
+    renderList();
+    toast(`Loaded batch: ${batch.name || makeBatchName(batch.notes, batch.createdAt)}`);
+  }
   function trimHtml(s){ return (s||"").toString().trim(); }
   function escapeHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   function getEventElementTarget(evt){
@@ -3041,6 +3138,13 @@
     try { localStorage.setItem(tagsKey, tagsVisible ? "1" : "0"); } catch {}
     renderList();
   });
+  el("#storeBatchBtn").addEventListener("click", async ()=>{
+    if (!notes.length) { toast("No cards to store."); return; }
+    const ok = await confirmModal("Store the current cards as a batch and clear them from the screen?");
+    if (!ok) return;
+    storeCurrentBatch();
+  });
+  el("#loadBatchBtn").addEventListener("click", loadStoredBatch);
 
   // Prefetch prompt text so clipboard copy works immediately on first click
   loadPromptText().catch(err => console.error('Prompt preload failed', err));
