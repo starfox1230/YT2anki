@@ -3267,7 +3267,7 @@
       const blob = await res.blob();
       downloadBlob("cards.apkg", blob);
     }catch(e){
-      alert("Deck download failed. Is the backend running at /apkg?\n" + e.message);
+      alert("Deck download failed. Is the backend running at /download_apkg?\n" + e.message);
     }
   });
 
