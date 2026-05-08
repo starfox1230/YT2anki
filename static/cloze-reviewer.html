@@ -1215,7 +1215,8 @@
     update();
 
     root.addEventListener("pointerdown", e => {
-      if (multiSelectMode || e.pointerType === "mouse") return;
+      if (multiSelectMode) return;
+      if (e.pointerType === "mouse" && e.button !== 0) return;
       const target = getEventElementTarget(e);
       if (!target || isInteractiveTarget(target) || target.closest(".clozeTop")) return;
       longPressTriggered = false;
