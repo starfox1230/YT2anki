@@ -669,16 +669,7 @@
       const stored = storeCurrentBatch({ quiet: true });
       if (!stored) return;
     }
-    const options = batches.map(batch => ({
-      label: `${batch.name || makeBatchName(batch.notes, batch.createdAt)} (${batch.notes.length})`,
-      value: batch.id
-    }));
-    const batchId = await choiceModal({
-      title: "Load Stored Batch",
-      message: "Most recent batches are listed first.",
-      options,
-      cancelLabel: "Cancel"
-    });
+    const batchId = await batchChoiceModal();
     if (!batchId) return;
     const freshBatches = loadBatches();
     const batch = freshBatches.find(b => b.id === batchId);
@@ -692,6 +683,64 @@
     save();
     renderList();
     toast(`Loaded batch: ${batch.name || makeBatchName(batch.notes, batch.createdAt)}`);
+  }
+  function batchChoiceModal(){
+    return new Promise(resolve => {
+      const wrap = document.createElement("div");
+      wrap.className = "modalBackdrop";
+      const render = () => {
+        const batches = loadBatches().sort((a,b) => (Number(b.createdAt)||0) - (Number(a.createdAt)||0));
+        const rows = batches.map(batch => {
+          const name = batch.name || makeBatchName(batch.notes, batch.createdAt);
+          return `
+            <div class="row" style="align-items:center;flex-wrap:nowrap;width:100%;">
+              <button class="btn bad small" data-delete-batch="${escapeHtml(batch.id)}" title="Delete stored batch" style="min-width:34px;">X</button>
+              <button class="btn" data-load-batch="${escapeHtml(batch.id)}" style="flex:1;justify-content:flex-start;text-align:left;white-space:normal;">
+                ${escapeHtml(name)} (${batch.notes.length})
+              </button>
+            </div>`;
+        }).join("");
+        wrap.innerHTML = `
+          <div class="modal" role="dialog" aria-modal="true" aria-label="Load Stored Batch">
+            <header class="row"><div class="f1">Load Stored Batch</div></header>
+            <div class="hr"></div>
+            <div class="modalContent">
+              <p style="margin:8px 0 16px 0;">Most recent batches are listed first. Deleting a stored batch cannot be undone.</p>
+              <div class="row" style="flex-direction:column;align-items:stretch;">
+                ${rows || `<div class="mutedLabel">No stored batches remain.</div>`}
+              </div>
+              <div class="row" style="margin-top:14px;">
+                <button class="btn" data-cancel>Cancel</button>
+              </div>
+            </div>
+          </div>`;
+      };
+      const done = (val)=>{ closeModalBackdrop(wrap); wrap.remove(); resolve(val); };
+      render();
+      document.body.appendChild(wrap);
+      openModalBackdrop(wrap);
+      wrap.addEventListener("click", async (e) => {
+        if (e.target === wrap) { done(null); return; }
+        const target = getEventElementTarget(e);
+        const cancel = target?.closest?.("[data-cancel]");
+        if (cancel) { done(null); return; }
+        const loadBtn = target?.closest?.("[data-load-batch]");
+        if (loadBtn) { done(loadBtn.getAttribute("data-load-batch")); return; }
+        const deleteBtn = target?.closest?.("[data-delete-batch]");
+        if (deleteBtn) {
+          const batchId = deleteBtn.getAttribute("data-delete-batch");
+          const batches = loadBatches();
+          const batch = batches.find(b => b.id === batchId);
+          if (!batch) { render(); return; }
+          const name = batch.name || makeBatchName(batch.notes, batch.createdAt);
+          const ok = await confirmModal(`Delete stored batch "${name}"? This cannot be undone.`);
+          if (!ok) return;
+          saveBatches(batches.filter(b => b.id !== batchId));
+          render();
+          toast("Stored batch deleted");
+        }
+      }, { capture: true });
+    });
   }
   function trimHtml(s){ return (s||"").toString().trim(); }
   function escapeHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
