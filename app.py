@@ -3,8 +3,11 @@ import re
 import json
 import logging
 import tempfile
+import base64
+import binascii
 import genanki
 from flask import Flask, request, redirect, url_for, flash, render_template_string, send_file
+from sacloze_plusplus import MODEL as SACLOZE_PLUSPLUS_MODEL
 
 #adding for new anki helper app
 from flask import send_from_directory
@@ -2696,15 +2699,18 @@ def download_apkg():
     deck_name = data.get("deck_name", "Saved Cards Deck")
 
     deck = genanki.Deck(2059400110, deck_name)
-    model_id = resolve_sacloze_model_id(data)
-    model = genanki.Model(
-        model_id,
-        SACLOZE_MODEL_NAME,
-        fields=SACLOZE_FIELDS,
-        templates=SACLOZE_TEMPLATES,
-        model_type=genanki.Model.CLOZE,
-        css=SACLOZE_CSS,
-    )
+    if data.get("note_type_style") == "saCloze++":
+        model = SACLOZE_PLUSPLUS_MODEL
+    else:
+        model_id = resolve_sacloze_model_id(data)
+        model = genanki.Model(
+            model_id,
+            SACLOZE_MODEL_NAME,
+            fields=SACLOZE_FIELDS,
+            templates=SACLOZE_TEMPLATES,
+            model_type=genanki.Model.CLOZE,
+            css=SACLOZE_CSS,
+        )
     for it in items:
         note = genanki.Note(
             model=model,
@@ -2716,7 +2722,46 @@ def download_apkg():
     package = genanki.Package(deck)
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".apkg")
     temp_file.close()
-    package.write_to_file(temp_file.name)
+    raw_media = data.get("media") or []
+    if not isinstance(raw_media, list):
+        return {"error": "media must be an array"}, 400
+    try:
+        with tempfile.TemporaryDirectory(prefix="yt2anki_media_") as media_dir:
+            media_paths = []
+            seen_media = {}
+            total_media_bytes = 0
+            for index, item in enumerate(raw_media, start=1):
+                if not isinstance(item, dict):
+                    return {"error": f"media item {index} is invalid"}, 400
+                filename = str(item.get("filename") or "").strip()
+                encoded = str(item.get("content_base64") or "")
+                if not filename or filename != os.path.basename(filename) or not re.fullmatch(r"[A-Za-z0-9._-]{1,180}", filename):
+                    return {"error": f"media item {index} has an invalid filename"}, 400
+                try:
+                    payload = base64.b64decode(encoded, validate=True)
+                except (ValueError, binascii.Error):
+                    return {"error": f"media item {index} is not valid base64"}, 400
+                total_media_bytes += len(payload)
+                if total_media_bytes > 75 * 1024 * 1024:
+                    return {"error": "Media payload exceeds 75 MB"}, 413
+                previous = seen_media.get(filename)
+                if previous is not None and previous != payload:
+                    return {"error": f"Conflicting media contents for {filename}"}, 400
+                if previous is not None:
+                    continue
+                seen_media[filename] = payload
+                media_path = os.path.join(media_dir, filename)
+                with open(media_path, "wb") as handle:
+                    handle.write(payload)
+                media_paths.append(media_path)
+            package.media_files = media_paths
+            package.write_to_file(temp_file.name)
+    except Exception:
+        try:
+            os.remove(temp_file.name)
+        except OSError:
+            pass
+        raise
 
     from flask import after_this_request
     @after_this_request
