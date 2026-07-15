@@ -2543,7 +2543,11 @@ def make_brief():
         suggestion = make_card_briefer(text, model=model)
         if not suggestion:
             raise ValueError("Empty response from model")
-        return {"suggestion": suggestion}
+        return {
+            "suggestion": suggestion,
+            "model": model,
+            "reasoningEffort": "none",
+        }
     except ValueError as err:
         return {"error": str(err)}, 400
     except Exception as exc:
@@ -2567,7 +2571,11 @@ def make_more_concise():
         suggestion = make_card_even_more_concise(original, concise, model=model)
         if not suggestion:
             raise ValueError("Empty response from model")
-        return {"suggestion": suggestion}
+        return {
+            "suggestion": suggestion,
+            "model": model,
+            "reasoningEffort": "none",
+        }
     except ValueError as err:
         return {"error": str(err)}, 400
     except Exception as exc:
@@ -2588,7 +2596,11 @@ def make_unambiguous():
         suggestion = make_card_unambiguous(text, model=model)
         if not suggestion:
             raise ValueError("Empty response from model")
-        return {"suggestion": suggestion}
+        return {
+            "suggestion": suggestion,
+            "model": model,
+            "reasoningEffort": "low",
+        }
     except ValueError as err:
         return {"error": str(err)}, 400
     except Exception as exc:
@@ -2609,7 +2621,11 @@ def make_sentence():
         suggestion = convert_to_sentence(text, model=model)
         if not suggestion:
             raise ValueError("Empty response from model")
-        return {"suggestion": suggestion}
+        return {
+            "suggestion": suggestion,
+            "model": model,
+            "reasoningEffort": "none",
+        }
     except ValueError as err:
         return {"error": str(err)}, 400
     except Exception as exc:
@@ -2630,7 +2646,11 @@ def make_contrasting_card_route():
         suggestion = make_contrasting_card(text, model=model)
         if not suggestion:
             raise ValueError("Empty response from model")
-        return {"suggestion": suggestion}
+        return {
+            "suggestion": suggestion,
+            "model": model,
+            "reasoningEffort": "low",
+        }
     except ValueError as err:
         return {"error": str(err)}, 400
     except Exception as exc:
@@ -2657,7 +2677,11 @@ def split_card():
 
     try:
         cards = split_card_into_multiple(text, num_cards=count_int, model=model)
-        return {"cards": cards}
+        return {
+            "cards": cards,
+            "model": model,
+            "reasoningEffort": "low",
+        }
     except ValueError as err:
         return {"error": str(err)}, 400
     except Exception as exc:
@@ -2680,7 +2704,11 @@ def make_uniform_cards():
 
     try:
         rewritten_cards = make_cards_uniform(cards, model=model)
-        return {"cards": rewritten_cards}
+        return {
+            "cards": rewritten_cards,
+            "model": model,
+            "reasoningEffort": "low",
+        }
     except ValueError as err:
         return {"error": str(err)}, 400
     except Exception as exc:
