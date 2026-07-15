@@ -67,6 +67,35 @@ logger = logging.getLogger(__name__)
 # Initialize the OpenAI client
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
+# Reviewer rewrite defaults. Environment overrides allow a rapid rollback or
+# controlled model evaluation without changing the endpoint contract.
+ANKI_REVIEWER_FAST_MODEL = os.environ.get(
+    "ANKI_REVIEWER_FAST_MODEL", "gpt-5.4-mini"
+)
+ANKI_REVIEWER_CONTRAST_MODEL = os.environ.get(
+    "ANKI_REVIEWER_CONTRAST_MODEL", "gpt-5.6-terra"
+)
+
+
+def create_reviewer_completion(
+    *, model, messages, max_tokens, reasoning_effort="none", temperature=0.4
+):
+    """Create a reviewer rewrite using parameters compatible with its model."""
+    request_args = {
+        "model": model,
+        "messages": messages,
+        "timeout": 60,
+    }
+    if model.startswith(("gpt-5.4", "gpt-5.5", "gpt-5.6")):
+        request_args["max_completion_tokens"] = max_tokens
+        request_args["reasoning_effort"] = reasoning_effort
+    else:
+        # Preserve compatibility when a caller explicitly evaluates an older
+        # model through the same endpoint.
+        request_args["max_tokens"] = max_tokens
+        request_args["temperature"] = temperature
+    return client.chat.completions.create(**request_args)
+
 SACLOZE_MODEL_ID_DEFAULT = 1607392319
 SACLOZE_MODEL_NAME = "saCloze+"
 SACLOZE_FIELDS = [
@@ -588,7 +617,7 @@ Transcript:
         return []
 
 
-def make_card_briefer(card_text, model="gpt-4.1"):
+def make_card_briefer(card_text, model=ANKI_REVIEWER_FAST_MODEL):
     """Use OpenAI to produce a more concise version of a cloze Anki card."""
     if not card_text or not card_text.strip():
         raise ValueError("Card text is empty.")
@@ -609,7 +638,7 @@ Original card text:
 """
 
     try:
-        response = client.chat.completions.create(
+        response = create_reviewer_completion(
             model=model,
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
@@ -617,7 +646,7 @@ Original card text:
             ],
             temperature=0.5,
             max_tokens=800,
-            timeout=60,
+            reasoning_effort="none",
         )
     except Exception as exc:
         logger.error("OpenAI API error while making card brief: %s", exc)
@@ -627,7 +656,9 @@ Original card text:
     return fix_cloze_formatting(suggestion)
 
 
-def make_card_even_more_concise(original_text, concise_text, model="gpt-4.1"):
+def make_card_even_more_concise(
+    original_text, concise_text, model=ANKI_REVIEWER_FAST_MODEL
+):
     """Use OpenAI to make an already concise cloze card even shorter."""
 
     if not original_text or not original_text.strip():
@@ -656,7 +687,7 @@ First concise attempt:
 """
 
     try:
-        response = client.chat.completions.create(
+        response = create_reviewer_completion(
             model=model,
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
@@ -664,7 +695,7 @@ First concise attempt:
             ],
             temperature=0.4,
             max_tokens=800,
-            timeout=60,
+            reasoning_effort="none",
         )
     except Exception as exc:
         logger.error("OpenAI API error while making card more concise: %s", exc)
@@ -674,7 +705,7 @@ First concise attempt:
     return fix_cloze_formatting(suggestion)
 
 
-def make_card_unambiguous(card_text, model="gpt-4.1"):
+def make_card_unambiguous(card_text, model=ANKI_REVIEWER_FAST_MODEL):
     """
     Use OpenAI to make a cloze card non-vague and non-guessy,
     by adding just enough context so the cloze answer is clearly
@@ -708,7 +739,7 @@ Original card:
 """
 
     try:
-        response = client.chat.completions.create(
+        response = create_reviewer_completion(
             model=model,
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
@@ -716,7 +747,7 @@ Original card:
             ],
             temperature=0.4,
             max_tokens=800,
-            timeout=60,
+            reasoning_effort="low",
         )
     except Exception as exc:
         logger.error("OpenAI API error while making card unambiguous: %s", exc)
@@ -726,7 +757,7 @@ Original card:
     return fix_cloze_formatting(suggestion)
 
 
-def convert_to_sentence(card_text, model="gpt-4o"):
+def convert_to_sentence(card_text, model=ANKI_REVIEWER_FAST_MODEL):
     """
     Convert a Q&A style card into a declarative sentence card.
     Example: "What is X? {{c1::Y}}" -> "{{c1::Y}} is {{c2::X}}."
@@ -760,7 +791,7 @@ Output:
 """
 
     try:
-        response = client.chat.completions.create(
+        response = create_reviewer_completion(
             model=model,
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
@@ -768,7 +799,7 @@ Output:
             ],
             temperature=0.3,
             max_tokens=800,
-            timeout=60,
+            reasoning_effort="none",
         )
     except Exception as exc:
         logger.error("OpenAI API error while converting to sentence: %s", exc)
@@ -778,7 +809,7 @@ Output:
     return fix_cloze_formatting(suggestion)
 
 
-def make_contrasting_card(card_text, model="gpt-4.1"):
+def make_contrasting_card(card_text, model=ANKI_REVIEWER_CONTRAST_MODEL):
     """Use OpenAI to create a companion card that tests the contrasting side of a fact."""
     if not card_text or not card_text.strip():
         raise ValueError("Card text is empty.")
@@ -824,7 +855,7 @@ Original card:
 """
 
     try:
-        response = client.chat.completions.create(
+        response = create_reviewer_completion(
             model=model,
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
@@ -832,7 +863,7 @@ Original card:
             ],
             temperature=0.4,
             max_tokens=900,
-            timeout=60,
+            reasoning_effort="low",
         )
     except Exception as exc:
         logger.error("OpenAI API error while making contrasting card: %s", exc)
@@ -844,7 +875,9 @@ Original card:
     return suggestion
 
 
-def split_card_into_multiple(card_text, num_cards=2, model="gpt-4.1"):
+def split_card_into_multiple(
+    card_text, num_cards=2, model=ANKI_REVIEWER_FAST_MODEL
+):
     """Use OpenAI to split a single cloze card into multiple simple cards."""
     if not card_text or not card_text.strip():
         raise ValueError("Card text is empty.")
@@ -869,7 +902,7 @@ Original card text:
 """
 
     try:
-        response = client.chat.completions.create(
+        response = create_reviewer_completion(
             model=model,
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
@@ -877,7 +910,7 @@ Original card text:
             ],
             temperature=0.4,
             max_tokens=1200,
-            timeout=60,
+            reasoning_effort="low",
         )
     except Exception as exc:
         logger.error("OpenAI API error while splitting card: %s", exc)
@@ -897,7 +930,7 @@ Original card text:
         raise ValueError("Invalid response while generating multiple cards")
 
 
-def make_cards_uniform(cards, model="gpt-4.1"):
+def make_cards_uniform(cards, model=ANKI_REVIEWER_FAST_MODEL):
     """Use OpenAI to rewrite related cloze cards into a parallel, uniform set."""
     if not isinstance(cards, list) or len(cards) < 2:
         raise ValueError("At least two cards are required.")
@@ -942,7 +975,7 @@ Original cards:
 """
 
     try:
-        response = client.chat.completions.create(
+        response = create_reviewer_completion(
             model=model,
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
@@ -950,7 +983,7 @@ Original cards:
             ],
             temperature=0.4,
             max_tokens=2000,
-            timeout=60,
+            reasoning_effort="low",
         )
     except Exception as exc:
         logger.error("OpenAI API error while making cards uniform: %s", exc)
@@ -2501,7 +2534,7 @@ def generate():
 def make_brief():
     data = request.get_json() or {}
     text = (data.get("text") or "").strip()
-    model = (data.get("model") or "gpt-4.1").strip() or "gpt-4.1"
+    model = (data.get("model") or ANKI_REVIEWER_FAST_MODEL).strip() or ANKI_REVIEWER_FAST_MODEL
 
     if not text:
         return {"error": "Card text is required."}, 400
@@ -2523,7 +2556,7 @@ def make_more_concise():
     data = request.get_json() or {}
     original = (data.get("original") or "").strip()
     concise = (data.get("concise") or "").strip()
-    model = (data.get("model") or "gpt-4.1").strip() or "gpt-4.1"
+    model = (data.get("model") or ANKI_REVIEWER_FAST_MODEL).strip() or ANKI_REVIEWER_FAST_MODEL
 
     if not original:
         return {"error": "Original card text is required."}, 400
@@ -2546,7 +2579,7 @@ def make_more_concise():
 def make_unambiguous():
     data = request.get_json() or {}
     text = (data.get("text") or "").strip()
-    model = (data.get("model") or "gpt-4.1").strip() or "gpt-4.1"
+    model = (data.get("model") or ANKI_REVIEWER_FAST_MODEL).strip() or ANKI_REVIEWER_FAST_MODEL
 
     if not text:
         return {"error": "Card text is required."}, 400
@@ -2567,7 +2600,7 @@ def make_unambiguous():
 def make_sentence():
     data = request.get_json() or {}
     text = (data.get("text") or "").strip()
-    model = (data.get("model") or "gpt-4o").strip() or "gpt-4o"
+    model = (data.get("model") or ANKI_REVIEWER_FAST_MODEL).strip() or ANKI_REVIEWER_FAST_MODEL
 
     if not text:
         return {"error": "Card text is required."}, 400
@@ -2588,7 +2621,7 @@ def make_sentence():
 def make_contrasting_card_route():
     data = request.get_json() or {}
     text = (data.get("text") or "").strip()
-    model = (data.get("model") or "gpt-4.1").strip() or "gpt-4.1"
+    model = (data.get("model") or ANKI_REVIEWER_CONTRAST_MODEL).strip() or ANKI_REVIEWER_CONTRAST_MODEL
 
     if not text:
         return {"error": "Card text is required."}, 400
@@ -2610,7 +2643,7 @@ def split_card():
     data = request.get_json() or {}
     text = (data.get("text") or "").strip()
     count = data.get("count")
-    model = (data.get("model") or "gpt-4.1").strip() or "gpt-4.1"
+    model = (data.get("model") or ANKI_REVIEWER_FAST_MODEL).strip() or ANKI_REVIEWER_FAST_MODEL
 
     try:
         count_int = int(count)
@@ -2636,7 +2669,7 @@ def split_card():
 def make_uniform_cards():
     data = request.get_json() or {}
     raw_cards = data.get("cards")
-    model = (data.get("model") or "gpt-4.1").strip() or "gpt-4.1"
+    model = (data.get("model") or ANKI_REVIEWER_FAST_MODEL).strip() or ANKI_REVIEWER_FAST_MODEL
 
     if not isinstance(raw_cards, list):
         return {"error": "Cards must be provided as a list."}, 400
