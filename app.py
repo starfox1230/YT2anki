@@ -617,43 +617,164 @@ Transcript:
         return []
 
 
+BRIEF_FORBIDDEN_AUDIO_SYMBOLS = (":", ";", "→", "←", "↔", "•", "|", "/", "\\", "*", "#", "=", "—", "–")
+
+
+def card_visible_text(card_text):
+    """Return the spoken portion of a card without cloze or HTML markup."""
+    text = re.sub(
+        r"\{\{c\d+::(.*?)(?:::[^{}]*?)?\}\}",
+        r"\1",
+        card_text or "",
+        flags=re.DOTALL,
+    )
+    text = re.sub(r"<br\s*/?>", " ", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def card_word_count(card_text):
+    return len(re.findall(r"[A-Za-z0-9]+(?:['’-][A-Za-z0-9]+)*", card_visible_text(card_text)))
+
+
+def brief_rewrite_issues(original_text, suggestion):
+    """Identify failures that merit one automatic corrective rewrite."""
+    issues = []
+    suggestion = (suggestion or "").strip()
+    if not suggestion:
+        return ["The rewrite was empty."]
+
+    if re.search(r"\{\{c\d+::", original_text) and not re.search(
+        r"\{\{c\d+::", suggestion
+    ):
+        issues.append("The rewrite removed every cloze deletion.")
+
+    visible = card_visible_text(suggestion)
+    used_symbols = sorted({symbol for symbol in BRIEF_FORBIDDEN_AUDIO_SYMBOLS if symbol in visible})
+    if used_symbols:
+        issues.append(
+            "The rewrite used audio-unfriendly punctuation or symbols: "
+            + " ".join(used_symbols)
+            + "."
+        )
+
+    original_words = card_word_count(original_text)
+    suggestion_words = card_word_count(suggestion)
+    if original_words >= 12 and suggestion_words > max(6, int(original_words * 0.75)):
+        issues.append(
+            f"The rewrite was not substantially shorter ({suggestion_words} words versus {original_words})."
+        )
+    elif original_words >= 8 and suggestion_words >= original_words:
+        issues.append(
+            f"The rewrite was not shorter ({suggestion_words} words versus {original_words})."
+        )
+    return issues
+
+
 def make_card_briefer(card_text, model=ANKI_REVIEWER_FAST_MODEL):
-    """Use OpenAI to produce a more concise version of a cloze Anki card."""
+    """Distill a cloze card to its central, audio-friendly recall point."""
     if not card_text or not card_text.strip():
         raise ValueError("Card text is empty.")
 
+    original = card_text.strip()
     prompt = f"""
-You are refining an existing Anki cloze-deletion card that the user feels is too wordy.
-Task: Rewrite the card to be as brief and clear as possible while preserving every key fact and keeping the same cloze numbering.
-Context: This is a Cloze deletion Anki card where clozes look like {{c1::answer}} and the final output must remain valid cloze HTML.
-Behavior requirements:
-- Keep all important information but use fewer words.
-- Keep the same cloze numbers so the card still works in Anki.
-- Ensure every cloze uses double curly braces on both sides (e.g., {{c1::answer}}). A single brace on either side is invalid.
-- Do not add hints, commentary, or formatting outside the card itself.
-- Output ONLY the revised card text with no quotes, no markdown, and no JSON.
+You are distilling an overly wordy Anki cloze-deletion card into its essential testable point.
 
-Original card text:
-{card_text.strip()}
+Primary goal:
+Produce a substantially shorter, simpler card that tests the central fact. Do not merely rephrase or compress every detail.
+
+Instructions:
+1. Identify the single most important recall point represented by the cloze deletion or deletions.
+2. Treat the content inside the cloze as the intended recall target. Keep only enough surrounding text to cue that answer unambiguously.
+3. When there is one cloze, do not retain additional un-clozed teaching facts merely because they appeared in the original. They are usually explanation, not the recall target.
+4. Retain only the minimum context needed to make that recall point clear and unambiguous.
+5. Remove secondary facts, explanatory clauses, redundant wording, setup phrases, parenthetical details, and unnecessary qualifications.
+6. Write one natural sentence that sounds clear when read aloud.
+7. Prefer ordinary spoken language over shorthand.
+8. Do not introduce colons, semicolons, arrows, slashes, bullets, labels, mathematical-style notation, em dashes, or other symbolic formatting.
+9. Avoid parentheses unless they are medically necessary.
+10. Do not turn the card into a heading, label, outline, or sentence fragment.
+11. Shorten text inside a cloze when it contains unnecessary wording, but preserve its essential meaning.
+12. Preserve multiple clozes only when they jointly test the same central fact. Remove clozes that test secondary facts.
+13. If clozes are removed, renumber the remaining clozes consecutively beginning with c1.
+14. Every cloze must use valid double braces, such as {{{{c1::answer}}}}.
+15. Aim to reduce the card's word count by at least one third when this can be done without making it ambiguous.
+16. If the card is already irreducibly concise, return it unchanged.
+17. Output only the revised card. Do not include commentary, quotation marks, markdown, or JSON.
+
+Example:
+Original: When a Segond fracture is identified on radiographs, the radiologist should recommend {{{{c1::MRI}}}} because of its association with internal derangement and ACL injury.
+Good rewrite: A Segond fracture should prompt {{{{c1::MRI}}}}.
+
+Original card:
+{original}
 """
 
-    try:
+    def request_rewrite(rewrite_prompt):
         response = create_reviewer_completion(
             model=model,
             messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": prompt},
+                {
+                    "role": "system",
+                    "content": "You distill Anki cloze cards into concise, natural, audio-friendly sentences.",
+                },
+                {"role": "user", "content": rewrite_prompt},
             ],
             temperature=0.5,
             max_tokens=800,
             reasoning_effort="none",
         )
+        return fix_cloze_formatting(
+            (response.choices[0].message.content or "").strip()
+        )
+
+    try:
+        suggestion = request_rewrite(prompt)
+        issues = brief_rewrite_issues(original, suggestion)
+        if not issues:
+            return suggestion
+
+        corrective_prompt = f"""
+The first rewrite below did not satisfy the brevity and audio-readability requirements.
+
+Problems to correct:
+{chr(10).join(f"- {issue}" for issue in issues)}
+
+Rewrite it one more time. Treat the cloze content as the intended recall target and retain only enough surrounding text to cue it unambiguously. Do not preserve un-clozed supporting facts merely because they appeared in the original. Use one natural spoken sentence and remove secondary details. Do not use colons, semicolons, arrows, slashes, bullets, labels, symbolic shorthand, or dashes. Preserve at least one valid cloze using double braces such as {{{{c1::answer}}}}. Output only the corrected card.
+
+Original card:
+{original}
+
+Rejected first rewrite:
+{suggestion}
+"""
+        corrected = request_rewrite(corrective_prompt)
+        remaining_issues = brief_rewrite_issues(original, corrected)
+        if not remaining_issues:
+            return corrected
+
+        critical_issues = [
+            issue
+            for issue in remaining_issues
+            if "empty" in issue
+            or "removed every cloze" in issue
+            or "audio-unfriendly" in issue
+        ]
+        if not critical_issues and card_word_count(corrected) < card_word_count(original):
+            logger.warning(
+                "Brief rewrite remained short of the target reduction but was safely shorter: %s",
+                remaining_issues,
+            )
+            return corrected
+
+        logger.warning(
+            "Brief rewrite failed guardrails twice; returning the original card: %s",
+            remaining_issues,
+        )
+        return original
     except Exception as exc:
         logger.error("OpenAI API error while making card brief: %s", exc)
         raise
-
-    suggestion = (response.choices[0].message.content or "").strip()
-    return fix_cloze_formatting(suggestion)
 
 
 def make_card_even_more_concise(
